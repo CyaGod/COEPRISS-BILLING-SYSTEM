@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=device-width, initial-scale=device-width">
+    <title>COEPRISS Sinaloa - Sistema de Facturación y Timbrado</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 1. Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo-container">
+                    <svg class="sidebar-logo" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" stroke="#B38E5D" stroke-width="2" fill="none" />
+                        <path d="M50 15 L80 35 L80 65 L50 85 L20 65 L20 35 Z" fill="#B38E5D" opacity="0.3" />
+                        <path d="M50 20 L50 80 M20 50 L80 50" stroke="#B38E5D" stroke-width="2" />
+                        <polygon points="50,30 55,42 68,42 58,50 62,62 50,54 38,62 42,50 32,42 45,42" fill="#B38E5D" />
+                        <path d="M35 75 Q50 65 65 75" stroke="#B38E5D" stroke-width="3" fill="none" />
+                    </svg>
+                </div>
+                <h1 class="sidebar-title">COEPRISS</h1>
+                <span class="sidebar-subtitle">SINALOA</span>
+            </div>
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item" id="nav-inicio">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                            Inicio
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-solicitud">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Nueva solicitud
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-proceso">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            En proceso
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-timbradas">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            Facturas timbradas
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-correos">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            Historial de correos
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-reportes">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Reportes
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-clientes">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            Clientes
+                        </a>
+                    </li>
+                    <li class="nav-item" id="nav-config">
+                        <a href="#">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            Configuración
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-avatar">
+                    <svg fill="currentColor" viewBox="0 0 20 20" style="width: 20px; height: 20px;"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/></svg>
+                </div>
+                <div class="user-info">
+                    <span class="user-name">Brenda González</span>
+                    <span class="user-role">Administrador</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 2. Main content wrapper -->
+        <div class="main-wrapper">
+            <!-- Stepper Header (Interactive navigation shortcut) -->
+            <header class="stepper-header" id="wizard-stepper-header">
+                <nav class="stepper-list">
+                    <div class="stepper-progress-line" id="stepper-progress"></div>
+                    <div class="step-node active" data-step="1">
+                        <div class="step-circle">1</div>
+                        <div class="step-label">Recepción</div>
+                    </div>
+                    <div class="step-node" data-step="2">
+                        <div class="step-circle">2</div>
+                        <div class="step-label">Extracción</div>
+                    </div>
+                    <div class="step-node" data-step="3">
+                        <div class="step-circle">3</div>
+                        <div class="step-label">Vista previa</div>
+                    </div>
+                    <div class="step-node" data-step="4">
+                        <div class="step-circle">4</div>
+                        <div class="step-label">Generación XML</div>
+                    </div>
+                    <div class="step-node" data-step="5">
+                        <div class="step-circle">5</div>
+                        <div class="step-label">Carga SAT</div>
+                    </div>
+                    <div class="step-node" data-step="6">
+                        <div class="step-circle">6</div>
+                        <div class="step-label">Timbrado</div>
+                    </div>
+                    <div class="step-node" data-step="7">
+                        <div class="step-circle">7</div>
+                        <div class="step-label">Reporte</div>
+                    </div>
+                </nav>
+            </header>
+
+            <!-- Main Content Area -->
+            <main class="content-area">
+
+                <!-- SIDEBAR MENU: 1. INICIO PANEL -->
+                <section class="step-panel" id="panel-inicio">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">D</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Inicio - Panel General</h2>
+                            <p class="step-header-desc">Resumen del estado de la facturación electrónica en COEPRISS.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid-3" style="margin-bottom: 20px;">
+                        <div class="app-card" style="border-left: 5px solid var(--primary-color);">
+                            <span class="form-label">Facturas Timbradas</span>
+                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--primary-color); margin: 10px 0;">42</div>
+                            <span style="font-size: 0.75rem; color: var(--success-color); font-weight: 600;">&uarr; 12% este mes</span>
+                        </div>
+                        <div class="app-card" style="border-left: 5px solid var(--warning-color);">
+                            <span class="form-label">Solicitudes en Proceso</span>
+                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--warning-color); margin: 10px 0;" id="dash-proc-count">3</div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Requieren atención</span>
+                        </div>
+                        <div class="app-card" style="border-left: 5px solid var(--info-color);">
+                            <span class="form-label">Correos Enviados</span>
+                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--info-color); margin: 10px 0;">38</div>
+                            <span style="font-size: 0.75rem; color: var(--success-color); font-weight: 600;">100% de éxito de entrega</span>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="app-card">
+                            <h3 class="form-label" style="margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Accesos Rápidos</h3>
+                            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+                                <button class="btn btn-primary" onclick="triggerSidebarClick('nav-solicitud')" style="width: 100%; justify-content: flex-start;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                    Iniciar Nueva Solicitud de Factura
+                                </button>
+                                <button class="btn btn-secondary" onclick="triggerSidebarClick('nav-timbradas')" style="width: 100%; justify-content: flex-start;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--primary-color);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Ver Historial de Facturas Timbradas
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="app-card">
+                            <h3 class="form-label" style="margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Actividad Reciente</h3>
+                            <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 0.8rem; color: #495057; padding-top: 5px;">
+                                <li style="display: flex; gap: 10px; align-items: flex-start;">
+                                    <span class="badge badge-success" style="font-size: 0.65rem;">Éxito</span>
+                                    <div>
+                                        <strong>F-00045 timbrada correctamente</strong>. Enviada a facturacion@empresaejemplo.com.
+                                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">Hace 5 minutos</div>
+                                    </div>
+                                </li>
+                                <li style="display: flex; gap: 10px; align-items: flex-start;">
+                                    <span class="badge badge-success" style="font-size: 0.65rem;">Éxito</span>
+                                    <div>
+                                        <strong>F-00044 timbrada correctamente</strong>. Descargado XML y PDF.
+                                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">Hace 1 hora</div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SIDEBAR MENU: 2. EN PROCESO PANEL -->
+                <section class="step-panel" id="panel-proceso">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">P</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Solicitudes en Proceso</h2>
+                            <p class="step-header-desc">Documentos recibidos que se encuentran en alguna etapa de procesamiento.</p>
+                        </div>
+                    </div>
+
+                    <div class="report-table-wrapper">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Folio Recibo</th>
+                                    <th>Cliente / Remitente</th>
+                                    <th>Fecha Recibido</th>
+                                    <th>Fase del Proceso</th>
+                                    <th style="text-align: center;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>REC-000245</td>
+                                    <td>cliente@empresaejemplo.com</td>
+                                    <td>16/07/2026 10:22 a.m.</td>
+                                    <td><span class="badge badge-warning" style="background-color: var(--info-bg); color: var(--info-text); border-color: var(--info-border);">1. Recepción (Listo para escanear)</span></td>
+                                    <td style="text-align: center;">
+                                        <button class="btn btn-primary" onclick="resumeFlowAtStep(1)" style="padding: 6px 14px; font-size: 0.75rem;">Reanudar</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>REC-000246</td>
+                                    <td>proveedor@sistemasinaloa.mx</td>
+                                    <td>16/07/2026 05:40 p.m.</td>
+                                    <td><span class="badge badge-warning" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">2. Extracción de Datos</span></td>
+                                    <td style="text-align: center;">
+                                        <button class="btn btn-primary" onclick="resumeFlowAtStep(2)" style="padding: 6px 14px; font-size: 0.75rem;">Reanudar</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SIDEBAR MENU: 3. HISTORIAL DE CORREOS PANEL -->
+                <section class="step-panel" id="panel-correos">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">C</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Historial de Correos</h2>
+                            <p class="step-header-desc">Registro de facturas (XML y PDF) enviadas a los correos de los clientes.</p>
+                        </div>
+                    </div>
+
+                    <div class="report-table-wrapper">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha y Hora</th>
+                                    <th>Destinatario</th>
+                                    <th>Folio Factura</th>
+                                    <th>Archivos Adjuntos</th>
+                                    <th style="text-align: center;">Estatus</th>
+                                    <th style="text-align: center;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>16/07/2026 12:16 p.m.</td>
+                                    <td>facturacion@empresaejemplo.com</td>
+                                    <td class="col-folio">F-00045</td>
+                                    <td>FACTURA_REC000245.pdf, .xml</td>
+                                    <td style="text-align: center;"><span class="badge badge-success">Entregado</span></td>
+                                    <td style="text-align: center;">
+                                        <button class="btn btn-secondary" onclick="resendEmail('facturacion@empresaejemplo.com', 'F-00045')" style="padding: 5px 10px; font-size: 0.72rem;">Reenviar</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SIDEBAR MENU: 4. CLIENTES PANEL -->
+                <section class="step-panel" id="panel-clientes">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">D</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Directorio de Clientes</h2>
+                            <p class="step-header-desc">Base de datos de contribuyentes registrados para facturación rápida.</p>
+                        </div>
+                    </div>
+
+                    <div class="report-table-wrapper">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>RFC</th>
+                                    <th>Razón Social</th>
+                                    <th>Régimen Fiscal</th>
+                                    <th>Código Postal</th>
+                                    <th>Correo de Envío</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: 600;">EEM010101XXX</td>
+                                    <td class="col-cliente">Empresa Ejemplo, S.A. de C.V.</td>
+                                    <td>601 - General de Ley Personas Morales</td>
+                                    <td>80000</td>
+                                    <td>facturacion@empresaejemplo.com</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SIDEBAR MENU: 5. CONFIGURACION PANEL -->
+                <section class="step-panel" id="panel-config">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">C</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Configuración del Sistema</h2>
+                            <p class="step-header-desc">Ajustes generales, credenciales del SAT y servidores de correo.</p>
+                        </div>
+                    </div>
+
+                    <div class="app-card grid-2">
+                        <div>
+                            <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Datos del Emisor</h3>
+                            <div class="form-group">
+                                <label class="form-label">RFC Emisor</label>
+                                <input type="text" class="form-control" value="CEP050915XXX" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Razón Social</label>
+                                <input type="text" class="form-control" value="COMISION ESTATAL PARA LA PROTECCION CONTRA RIESGOS SANITARIOS DE SINALOA" readonly>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Configuración SMTP</h3>
+                            <div class="form-group">
+                                <label class="form-label">Servidor SMTP</label>
+                                <input type="text" class="form-control" value="smtp.sinaloa.gob.mx">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Puerto</label>
+                                <input type="text" class="form-control" value="587">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="btn-container" style="border-top: none; padding-top: 10px; justify-content: flex-end;">
+                        <button class="btn btn-primary" onclick="showToast('Configuración SMTP guardada con éxito.', 'success')">Guardar Servidor Correo</button>
+                    </div>
+                </section>
+
+
+                <!-- --- WIZARD STEPS --- -->
+
+                <!-- STEP 1 PANEL -->
+                <section class="step-panel" id="step-panel-1">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">1</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Recepción de documentos</h2>
+                            <p class="step-header-desc">El cliente envía los documentos por correo.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="app-card" style="padding: 20px 24px;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 20px; font-weight: 500;">Nueva solicitud de factura</h3>
+                        <div class="grid-2" style="gap: 40px; margin-bottom: 5px;">
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.76rem; color: #495057; font-weight: 600;">Correo del cliente</label>
+                                <div style="font-size: 0.88rem; color: #212529; padding: 4px 0;">cliente@empresaejemplo.com</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.76rem; color: #495057; font-weight: 600;">Fecha de recepción</label>
+                                <div style="font-size: 0.88rem; color: #212529; padding: 4px 0;">16/07/2026 10:22 a.m.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 24px;">
+                        <h3 class="form-label" style="font-size: 0.76rem; color: #495057; font-weight: 700; margin-bottom: 16px;">Documentos recibidos</h3>
+                        <div class="doc-grid" style="margin-top: 0; margin-bottom: 24px;">
+                            <!-- Doc 1 -->
+                            <div class="doc-card">
+                                <div class="doc-icon-container doc-icon-pdf">
+                                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 6H8v6H6.5v-1.5H5v-1.5h1.5V9H5V7.5h4.5V9zm5 4.5c0 .83-.67 1.5-1.5 1.5h-2.5V7.5H13c.83 0 1.5.67 1.5 1.5v4.5zm5-3H18v1.5h1.5V12H18v3h-1.5V7.5h3v2.5zm-6.5-1.5H11.5v3H13c.28 0 .5-.22.5-.5V9c0-.28-.22-.5-.5-.5z"/></svg>
+                                </div>
+                                <span class="doc-title" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 2px;">Constancia de situación fiscal</span>
+                                <span class="doc-filename" style="font-size: 0.68rem; margin-bottom: 10px;"><a href="#" style="color: #6c757d;" onclick="return false;">SAT_CSF_123456.pdf</a></span>
+                                <span class="badge badge-success doc-status-badge" style="font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Leído correctamente</span>
+                                <button class="doc-view-btn" onclick="previewDocument('SAT_CSF_123456.pdf', 'PDF')" style="position: absolute; bottom: 12px; right: 12px;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </button>
+                            </div>
+                            <!-- Doc 2 -->
+                            <div class="doc-card">
+                                <div class="doc-icon-container doc-icon-pdf">
+                                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 6H8v6H6.5v-1.5H5v-1.5h1.5V9H5V7.5h4.5V9zm5 4.5c0 .83-.67 1.5-1.5 1.5h-2.5V7.5H13c.83 0 1.5.67 1.5 1.5v4.5zm5-3H18v1.5h1.5V12H18v3h-1.5V7.5h3v2.5zm-6.5-1.5H11.5v3H13c.28 0 .5-.22.5-.5V9c0-.28-.22-.5-.5-.5z"/></svg>
+                                </div>
+                                <span class="doc-title" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 2px;">Recibo del CIS</span>
+                                <span class="doc-filename" style="font-size: 0.68rem; margin-bottom: 10px;"><a href="#" style="color: #6c757d;" onclick="return false;">RECIBO_CIS_000245.pdf</a></span>
+                                <span class="badge badge-success doc-status-badge" style="font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Leído correctamente</span>
+                                <button class="doc-view-btn" onclick="previewDocument('RECIBO_CIS_000245.pdf', 'PDF')" style="position: absolute; bottom: 12px; right: 12px;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </button>
+                            </div>
+                            <!-- Doc 3 -->
+                            <div class="doc-card">
+                                <div class="doc-icon-container doc-icon-img">
+                                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z"/></svg>
+                                </div>
+                                <span class="doc-title" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 2px;">Transferencia bancaria</span>
+                                <span class="doc-filename" style="font-size: 0.68rem; margin-bottom: 10px;"><a href="#" style="color: #6c757d;" onclick="return false;">TRANSFERENCIA_2456.jpg</a></span>
+                                <span class="badge badge-success doc-status-badge" style="font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Leído correctamente</span>
+                                <button class="doc-view-btn" onclick="previewDocument('TRANSFERENCIA_2456.jpg', 'Imagen')" style="position: absolute; bottom: 12px; right: 12px;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dropzone Area -->
+                        <div class="upload-dropzone" id="dropzone-step1" style="border: 1px dashed var(--primary-color); border-radius: 4px; background-color: #fffafc; padding: 25px;">
+                            <div class="scan-overlay" id="laser-scanner">
+                                <div class="scan-laser"></div>
+                            </div>
+                            <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--primary-color); width: 32px; height: 32px; margin-bottom: 4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                            <p class="upload-text" style="font-size: 0.8rem; font-weight: 500; color: #495057;">Arrastra más archivos aquí o <span style="color: var(--primary-color); text-decoration: none; font-weight: 700;">selecciona</span></p>
+                            <p class="upload-hint" style="font-size: 0.68rem; color: #868e96;">PDF, JPG, PNG (máx. 10 MB c/u)</p>
+                        </div>
+                    </div>
+
+                    <div class="btn-container" style="border-top: none; padding-top: 5px;">
+                        <button class="btn btn-primary" id="btn-scan" onclick="startScanAnimation()" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">
+                            Escanear / Leer documentos
+                        </button>
+                    </div>
+                </section>
+
+                <!-- STEP 2 PANEL -->
+                <section class="step-panel" id="step-panel-2">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">2</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Extracción de datos</h2>
+                            <p class="step-header-desc">El sistema escanea y extrae la información.</p>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Extracción automática de datos</h3>
+                    </div>
+
+                    <div class="app-alert app-alert-success" style="background-color: #E2F0D9; border: 1px solid #c8e6c9; border-left: 4px solid var(--success-color); color: #385723; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <svg class="app-alert-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: var(--success-color);"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 700; font-size: 0.78rem;">Datos extraídos correctamente</span>
+                                <span style="font-size: 0.72rem; opacity: 0.9;">Revisa la información y confirma para continuar.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+                        <!-- Fiscal Data Section -->
+                        <div class="data-card-section" style="border-bottom: 1px solid #eaeaea; padding-bottom: 20px; margin-bottom: 0;">
+                            <div class="section-card-header">
+                                <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Datos fiscales</h3>
+                                <button class="btn-link" onclick="openEditModal()" style="background: none; border: none; color: #d93025; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                    Editar
+                                </button>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-top: 10px;">
+                                <div style="color: #6c757d; font-weight: 500;">RFC:</div>
+                                <div id="val-rfc" style="font-weight: 600; color: #212529;">EEM010101XXX</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Razón social:</div>
+                                <div id="val-razon" style="font-weight: 600; color: #212529;">Empresa Ejemplo, S.A. de C.V.</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Régimen fiscal:</div>
+                                <div id="val-regimen" style="font-weight: 600; color: #212529;">601 - General de Ley Personas Morales</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Código postal:</div>
+                                <div id="val-cp" style="font-weight: 600; color: #212529;">80000</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Uso CFDI:</div>
+                                <div id="val-cfdi" style="font-weight: 600; color: #212529;">G03 - Gastos en general</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Correo:</div>
+                                <div id="val-correo" style="font-weight: 600; color: #212529; text-decoration: underline;">facturacion@empresaejemplo.com</div>
+                            </div>
+                        </div>
+
+                        <!-- CIS Receipt Section -->
+                        <div class="data-card-section" style="border-bottom: 1px solid #eaeaea; padding-bottom: 20px; margin-bottom: 0;">
+                            <div class="section-card-header">
+                                <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Datos del pago (Recibo CIS)</h3>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-top: 10px;">
+                                <div style="color: #6c757d; font-weight: 500;">Folio recibo:</div>
+                                <div style="font-weight: 600; color: #212529;">REC-000245</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Fecha:</div>
+                                <div style="font-weight: 600; color: #212529;">16/07/2026</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Concepto:</div>
+                                <div style="font-weight: 600; color: #212529;">Servicio de trámite</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Importe pagado:</div>
+                                <div style="font-weight: 700; color: var(--primary-color);">$1,160.00 MXN</div>
+                            </div>
+                        </div>
+
+                        <!-- Transfer Section -->
+                        <div class="data-card-section" style="border-bottom: none; padding-bottom: 0; margin-bottom: 0;">
+                            <div class="section-card-header">
+                                <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Datos de la transferencia</h3>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-top: 10px;">
+                                <div style="color: #6c757d; font-weight: 500;">Banco:</div>
+                                <div style="font-weight: 600; color: #212529;">BBVA México</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Fecha:</div>
+                                <div style="font-weight: 600; color: #212529;">16/07/2026 09:15 a.m.</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Importe:</div>
+                                <div style="font-weight: 600; color: #212529;">$1,160.00</div>
+
+                                <div style="color: #6c757d; font-weight: 500;">Referencia:</div>
+                                <div style="font-weight: 600; color: #212529;">TRASPASO 2456</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-container" style="border-top: none; padding-top: 5px;">
+                        <button class="btn btn-primary" onclick="goToStep(3)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">
+                            Confirmar y continuar
+                        </button>
+                    </div>
+                </section>
+
+                <!-- STEP 3 PANEL -->
+                <section class="step-panel" id="step-panel-3">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">3</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Vista previa de datos</h2>
+                            <p class="step-header-desc">Se muestra la información que se llevará al SAT.</p>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Vista previa de la factura</h3>
+                    </div>
+
+                    <div class="app-card" style="padding: 24px;">
+                        <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Datos del receptor</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-bottom: 24px;">
+                            <div style="color: #6c757d; font-weight: 500;">RFC:</div>
+                            <div class="preview-rfc" style="font-weight: 600; color: #212529;">EEM010101XXX</div>
+
+                            <div style="color: #6c757d; font-weight: 500;">Razón social:</div>
+                            <div class="preview-razon" style="font-weight: 600; color: #212529;">Empresa Ejemplo, S.A. de C.V.</div>
+
+                            <div style="color: #6c757d; font-weight: 500;">Régimen fiscal:</div>
+                            <div class="preview-regimen" style="font-weight: 600; color: #212529;">601 - General de Ley Personas Morales</div>
+
+                            <div style="color: #6c757d; font-weight: 500;">Código postal:</div>
+                            <div class="preview-cp" style="font-weight: 600; color: #212529;">80000</div>
+
+                            <div style="color: #6c757d; font-weight: 500;">Uso CFDI:</div>
+                            <div class="preview-cfdi" style="font-weight: 600; color: #212529;">G03 - Gastos en general</div>
+
+                            <div style="color: #6c757d; font-weight: 500;">Correo:</div>
+                            <div class="preview-correo" style="font-weight: 600; color: #212529; text-decoration: underline;">facturacion@empresaejemplo.com</div>
+                        </div>
+
+                        <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Concepto a facturar</h3>
+                        <div class="preview-table-container" style="border: 1px solid #eaeaea; border-radius: 4px; overflow: hidden; margin-top: 0;">
+                            <table class="preview-table">
+                                <thead style="background-color: #fcfcfc;">
+                                    <tr>
+                                        <th style="font-size: 0.72rem; text-transform: uppercase; padding: 10px 16px;">Clave Prod/Serv</th>
+                                        <th style="font-size: 0.72rem; text-transform: uppercase; padding: 10px 16px;">Descripción</th>
+                                        <th style="font-size: 0.72rem; text-transform: uppercase; text-align: center; padding: 10px 16px;">Cantidad</th>
+                                        <th style="font-size: 0.72rem; text-transform: uppercase; padding: 10px 16px;">Unidad</th>
+                                        <th style="font-size: 0.72rem; text-transform: uppercase; text-align: right; padding: 10px 16px;">Valor unitario</th>
+                                        <th style="font-size: 0.72rem; text-transform: uppercase; text-align: right; padding: 10px 16px;">Importe</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="font-size: 0.8rem; padding: 12px 16px;">90101500</td>
+                                        <td style="font-size: 0.8rem; padding: 12px 16px;">Servicio de trámite</td>
+                                        <td style="font-size: 0.8rem; text-align: center; padding: 12px 16px;">1</td>
+                                        <td style="font-size: 0.8rem; padding: 12px 16px;">E48</td>
+                                        <td style="font-size: 0.8rem; text-align: right; padding: 12px 16px;">$1,000.00</td>
+                                        <td style="font-size: 0.8rem; text-align: right; padding: 12px 16px;">$1,000.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="totals-panel" style="margin-top: 20px;">
+                            <div class="total-row" style="grid-template-columns: 80px 100px; font-size: 0.84rem;">
+                                <span style="color: #6c757d;">Subtotal:</span>
+                                <strong style="color: #212529;">$1,000.00</strong>
+                            </div>
+                            <div class="total-row" style="grid-template-columns: 80px 100px; font-size: 0.84rem; margin-top: 4px;">
+                                <span style="color: #6c757d;">IVA (16%):</span>
+                                <strong style="color: #212529;">$160.00</strong>
+                            </div>
+                            <div class="total-row grand-total" style="grid-template-columns: 80px 100px; border-top: 1px solid #dee2e6; padding-top: 10px; margin-top: 8px; font-size: 0.95rem;">
+                                <span style="color: #212529; font-weight: 600;">Total:</span>
+                                <span style="font-weight: 700; color: var(--primary-color);">$1,160.00 MXN</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
+                        <button class="btn btn-secondary" onclick="goToStep(2)" style="padding: 10px 24px; border-radius: 4px; font-weight: 500;">Regresar</button>
+                        <button class="btn btn-primary" onclick="goToStep(4)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px; font-weight: 500;">Continuar</button>
+                    </div>
+                </section>
+
+                <!-- STEP 4 PANEL -->
+                <section class="step-panel" id="step-panel-4">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">4</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Generación de XML y portal SAT</h2>
+                            <p class="step-header-desc">Se genera el XML y se abre el portal oficial del SAT.</p>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Generación de XML</h3>
+                    </div>
+
+                    <div class="app-card xml-gen-card" style="padding: 30px; border-radius: 4px;">
+                        <div class="success-check-icon" style="background-color: #e8f5e9; color: var(--success-color); width: 48px; height: 48px; margin-bottom: 12px;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <h3 class="panel-title" style="font-size: 1rem; font-weight: 700; margin-bottom: 4px; color: #212529;">XML generado correctamente</h3>
+                        <p class="panel-subtitle" style="font-size: 0.8rem; color: #6c757d; margin-bottom: 20px;">El archivo está listo para timbrar.</p>
+
+                        <div class="xml-info-box" style="margin: 0 0 24px 0; border: 1px solid #eaeaea; border-radius: 4px; padding: 16px; background-color: #fafafa;">
+                            <h4 class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 12px; border-bottom: 1px solid #eaeaea; padding-bottom: 6px;">Información del XML</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 8px 10px; font-size: 0.8rem;">
+                                <div style="color: #6c757d;">Archivo:</div>
+                                <div style="font-weight: 600; color: #212529; font-family: monospace;">FACTURA_REC000245.xml</div>
+
+                                <div style="color: #6c757d;">Tamaño:</div>
+                                <div style="font-weight: 600; color: #212529;">12.45 KB</div>
+
+                                <div style="color: #6c757d;">Fecha de generación:</div>
+                                <div style="font-weight: 600; color: #212529;">16/07/2026 11:30 a.m.</div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 14px; width: 100%; max-width: 450px; justify-content: center;">
+                            <button class="btn btn-secondary" onclick="downloadXML()" style="flex: 1; border-radius: 4px; font-weight: 500; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px solid var(--primary-color); color: var(--primary-color);">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                Descargar XML
+                            </button>
+                            <button class="btn btn-primary" onclick="openSatPortal()" style="flex: 1; background-color: var(--primary-color); border-radius: 4px; font-weight: 500; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                                Abrir portal del SAT
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 16px; border: none; border-left: 4px solid var(--warning-color); background-color: #FFF2CC; border-radius: 4px;">
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <svg class="warning-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 20px; height: 20px; color: #d6b656; flex-shrink: 0;"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                            <div>
+                                <h4 style="font-weight: 700; font-size: 0.8rem; color: #806000; margin-bottom: 2px;">Importante</h4>
+                                <p style="font-size: 0.75rem; color: #806000; line-height: 1.4;">Inicia sesión en el portal del SAT y carga este XML para timbrar la factura. Una vez timbrada, descarga el XML y PDF para continuar en el sistema.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
+                        <button class="btn btn-secondary" onclick="goToStep(1)" style="padding: 10px 24px; border-radius: 4px;">Regresar al inicio</button>
+                        <button class="btn btn-primary" onclick="goToStep(5)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">Siguiente: Cargar timbrados &rarr;</button>
+                    </div>
+                </section>
+
+                <!-- STEP 5 PANEL -->
+                <section class="step-panel" id="step-panel-5">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">5</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Carga de archivos timbrados</h2>
+                            <p class="step-header-desc">Se suben el XML y PDF que descargaste del SAT.</p>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Cargar archivos timbrados</h3>
+                    </div>
+
+                    <div class="app-alert app-alert-info" style="background-color: #E8F0FE; border: 1px solid #d2e3fc; border-left: 4px solid var(--info-color); color: #1a73e8; padding: 12px 16px; border-radius: 4px;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <svg class="app-alert-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: var(--info-color);"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                            <span style="font-size: 0.78rem; font-weight: 500;">Descarga del portal del SAT el XML y PDF timbrados y súbelos aquí.</span>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+                        <div>
+                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">XML timbrado *</label>
+                            <div class="file-upload-card success-upload" style="border: 1px solid #c8e6c9; border-radius: 4px; padding: 12px 16px;">
+                                <div class="file-upload-info">
+                                    <div class="file-icon file-icon-xml" style="background-color: #e8f5e9; color: #2e7d32; font-size: 0.7rem; font-weight: 700; border-radius: 4px; width: 36px; height: 36px;">XML</div>
+                                    <div class="file-details">
+                                        <span class="file-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">FACTURA_REC000245_TIMBRADO.xml</span>
+                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">34.5 KB</span>
+                                    </div>
+                                </div>
+                                <div class="file-upload-actions" style="gap: 16px;">
+                                    <svg class="file-check-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: var(--success-color);"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                    <button class="file-delete-btn" onclick="removeUpload('xml')" style="color: #d93025;">
+                                        <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">PDF timbrado *</label>
+                            <div class="file-upload-card success-upload" style="border: 1px solid #c8e6c9; border-radius: 4px; padding: 12px 16px;">
+                                <div class="file-upload-info">
+                                    <div class="file-icon file-icon-pdf" style="background-color: #fce8e6; color: #d93025; font-size: 0.7rem; font-weight: 700; border-radius: 4px; width: 36px; height: 36px;">PDF</div>
+                                    <div class="file-details">
+                                        <span class="file-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">FACTURA_REC000245.pdf</span>
+                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">256 KB</span>
+                                    </div>
+                                </div>
+                                <div class="file-upload-actions" style="gap: 16px;">
+                                    <svg class="file-check-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: var(--success-color);"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                    <button class="file-delete-btn" onclick="removeUpload('pdf')" style="color: #d93025;">
+                                        <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
+                        <button class="btn btn-secondary" onclick="goToStep(4)" style="padding: 10px 24px; border-radius: 4px;">Cancelar</button>
+                        <button class="btn btn-primary" onclick="goToStep(6)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">Cargar y continuar</button>
+                    </div>
+                </section>
+
+                <!-- STEP 6 PANEL -->
+                <section class="step-panel" id="step-panel-6">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">6</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Factura timbrada</h2>
+                            <p class="step-header-desc">El sistema lee el XML y muestra los datos del timbrado.</p>
+                        </div>
+                    </div>
+
+                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Factura timbrada correctamente</h3>
+                    </div>
+
+                    <div class="app-alert app-alert-success" style="background-color: #E2F0D9; border: 1px solid #c8e6c9; border-left: 4px solid var(--success-color); color: #385723; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <svg class="app-alert-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: var(--success-color);"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <span style="font-weight: 700; font-size: 0.78rem;">La factura fue timbrada con éxito.</span>
+                        </div>
+                    </div>
+
+                    <div class="stamp-grid" style="gap: 30px;">
+                        <div class="app-card" style="padding: 24px;">
+                            <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Información del timbrado</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px 20px; font-size: 0.84rem;">
+                                <div style="color: #6c757d;">Folio fiscal (UUID):</div>
+                                <div style="font-family: monospace; font-weight: 600; color: #212529; word-break: break-all;">BAB3F6E2-4D78-4C1A-B06D-D7ABBD2F123</div>
+
+                                <div style="color: #6c757d;">Fecha de timbrado:</div>
+                                <div style="font-weight: 600; color: #212529;">16/07/2026 12:15 p.m.</div>
+
+                                <div style="color: #6c757d;">No. de serie CSD del SAT:</div>
+                                <div style="font-family: monospace; font-weight: 600; color: #212529;">00001000000508646663</div>
+
+                                <div style="color: #6c757d; align-self: center;">Estatus:</div>
+                                <div>
+                                    <span class="badge badge-success" style="font-size: 0.72rem; padding: 2px 10px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Timbrada</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="app-card" style="padding: 24px;">
+                            <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Archivos disponibles</h3>
+                            <div class="download-list" style="margin-top: 5px;">
+                                <a href="#" class="download-item" onclick="triggerDownload('FACTURA_REC000245.pdf'); return false;" style="border-radius: 4px; padding: 10px 14px;">
+                                    <div class="download-item-left">
+                                        <div class="file-icon file-icon-pdf" style="background-color: #fce8e6; color: #d93025; font-size: 0.65rem; font-weight: 700; width: 30px; height: 30px; border-radius: 4px;">PDF</div>
+                                        <div class="file-details">
+                                            <span class="file-name" style="font-size: 0.78rem; font-weight: 600;">FACTURA_REC000245.pdf</span>
+                                            <span class="file-size" style="font-size: 0.68rem; color: #868e96;">256 KB</span>
+                                        </div>
+                                    </div>
+                                    <svg class="download-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: #868e96;"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                </a>
+                                <a href="#" class="download-item" onclick="triggerDownload('FACTURA_REC000245.xml'); return false;" style="border-radius: 4px; padding: 10px 14px;">
+                                    <div class="download-item-left">
+                                        <div class="file-icon file-icon-xml" style="background-color: #e8f5e9; color: #2e7d32; font-size: 0.65rem; font-weight: 700; width: 30px; height: 30px; border-radius: 4px;">XML</div>
+                                        <div class="file-details">
+                                            <span class="file-name" style="font-size: 0.78rem; font-weight: 600;">FACTURA_REC000245.xml</span>
+                                            <span class="file-size" style="font-size: 0.68rem; color: #868e96;">12 KB</span>
+                                        </div>
+                                    </div>
+                                    <svg class="download-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: #868e96;"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
+                        <button class="btn btn-secondary" onclick="openInvoicePreviewModal()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--primary-color); color: var(--primary-color);">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            Ver factura (Vista previa)
+                        </button>
+                        <button class="btn btn-primary" onclick="sendInvoiceByEmail()" style="background-color: var(--primary-color); border-radius: 4px; display: inline-flex; align-items: center; gap: 6px;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            Enviar por correo al cliente
+                        </button>
+                    </div>
+                </section>
+
+                <!-- STEP 7 PANEL -->
+                <section class="step-panel" id="step-panel-7">
+                    <div class="step-header-banner">
+                        <div class="step-header-badge">7</div>
+                        <div class="step-header-text">
+                            <h2 class="step-header-title">Registro en el reporte</h2>
+                            <p class="step-header-desc">La factura queda registrada en el sistema.</p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 class="panel-title" style="font-size: 1.25rem; font-weight: 500; margin-bottom: 0;">Facturas timbradas</h3>
+                        <button class="btn btn-primary" onclick="restartProcess()" style="background-color: var(--primary-color); border-radius: 4px; padding: 8px 18px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                            Nueva solicitud
+                        </button>
+                    </div>
+
+                    <div class="table-actions-header" style="margin-bottom: 12px;">
+                        <div class="search-filter-container" style="max-width: 400px; gap: 10px;">
+                            <div class="search-box-wrapper" style="flex: 1;">
+                                <svg class="search-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; left: 10px; color: #868e96;"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                                <input type="text" class="form-control search-input" id="search-report" placeholder="Buscar..." oninput="filterReportTable()" style="border-radius: 4px; padding: 8px 10px 8px 34px; font-size: 0.82rem; background-color: #ffffff; border: 1px solid #ced4da;">
+                            </div>
+                            <button class="btn btn-secondary" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 8px 16px; border: 1px solid #ced4da; background-color: #ffffff; color: #495057;">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                                Filtros
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="report-table-wrapper" style="border: 1px solid #eaeaea; border-radius: 4px; box-shadow: none;">
+                        <table class="report-table" id="table-invoices">
+                            <thead>
+                                <tr style="background-color: #fcfcfc;">
+                                    <th style="font-size: 0.72rem; padding: 12px 16px;">Folio Interno</th>
+                                    <th style="font-size: 0.72rem; padding: 12px 16px;">Folio Recibo</th>
+                                    <th style="font-size: 0.72rem; padding: 12px 16px;">Cliente</th>
+                                    <th style="font-size: 0.72rem; padding: 12px 16px;">Fecha Solicitud</th>
+                                    <th style="font-size: 0.72rem; padding: 12px 16px; text-align: right;">Importe</th>
+                                    <th style="font-size: 0.72rem; padding: 12px 16px; text-align: center;">Estatus</th>
+                                    <th style="font-size: 0.72rem; padding: 12px 16px; text-align: center;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="col-folio" style="font-size: 0.8rem; padding: 14px 16px;">F-00045</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px;">REC-000245</td>
+                                    <td class="col-cliente" style="font-size: 0.8rem; padding: 14px 16px; font-weight: 500;">Empresa Ejemplo, S.A. de C.V.</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; color: #6c757d;">16/07/2026 10:22 a.m.</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; text-align: right; font-weight: 700; color: #212529;">$1,160.00</td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <span class="badge badge-success" style="font-size: 0.68rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Timbrada</span>
+                                    </td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <div class="action-icon-group" style="justify-content: center; gap: 8px;">
+                                            <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal()" title="Ver factura" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_REC000245.pdf')" title="Descargar PDF" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_REC000245.xml')" title="Descargar XML" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-email" onclick="sendInvoiceByEmail()" title="Enviar por correo" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-folio" style="font-size: 0.8rem; padding: 14px 16px;">F-00044</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px;">REC-000244</td>
+                                    <td class="col-cliente" style="font-size: 0.8rem; padding: 14px 16px; font-weight: 500;">Juan Pérez López</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; color: #6c757d;">16/07/2026 10:10 a.m.</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; text-align: right; font-weight: 700; color: #212529;">$850.00</td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <span class="badge badge-success" style="font-size: 0.68rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Timbrada</span>
+                                    </td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <div class="action-icon-group" style="justify-content: center; gap: 8px;">
+                                            <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal('F-00044', 'Juan Pérez López', '$850.00')" title="Ver factura" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_REC000244.pdf')" title="Descargar PDF" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_REC000244.xml')" title="Descargar XML" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-email" onclick="sendInvoiceByEmail()" title="Enviar por correo" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-folio" style="font-size: 0.8rem; padding: 14px 16px;">F-00043</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px;">REC-000243</td>
+                                    <td class="col-cliente" style="font-size: 0.8rem; padding: 14px 16px; font-weight: 500;">Comercial del Norte, S.A. de C.V.</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; color: #6c757d;">16/07/2026 09:05 a.m.</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; text-align: right; font-weight: 700; color: #212529;">$1,450.00</td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <span class="badge badge-success" style="font-size: 0.68rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Timbrada</span>
+                                    </td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <div class="action-icon-group" style="justify-content: center; gap: 8px;">
+                                            <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal('F-00043', 'Comercial del Norte, S.A. de C.V.', '$1,450.00')" title="Ver factura" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_REC000243.pdf')" title="Descargar PDF" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_REC000243.xml')" title="Descargar XML" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-email" onclick="sendInvoiceByEmail()" title="Enviar por correo" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="col-folio" style="font-size: 0.8rem; padding: 14px 16px;">F-00042</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px;">REC-000242</td>
+                                    <td class="col-cliente" style="font-size: 0.8rem; padding: 14px 16px; font-weight: 500;">María García Sánchez</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; color: #6c757d;">15/07/2026 04:35 p.m.</td>
+                                    <td style="font-size: 0.8rem; padding: 14px 16px; text-align: right; font-weight: 700; color: #212529;">$550.00</td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <span class="badge badge-success" style="font-size: 0.68rem; padding: 2px 8px; border-radius: 4px; background-color: #E2F0D9; color: #385723; border: none; font-weight: 500;">Timbrada</span>
+                                    </td>
+                                    <td style="text-align: center; padding: 14px 16px;">
+                                        <div class="action-icon-group" style="justify-content: center; gap: 8px;">
+                                            <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal('F-00042', 'María García Sánchez', '$550.00')" title="Ver factura" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_REC000242.pdf')" title="Descargar PDF" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_REC000242.xml')" title="Descargar XML" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                                            <button class="action-icon-btn btn-email" onclick="sendInvoiceByEmail()" title="Enviar por correo" style="color: #6c757d;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="table-footer" style="padding: 16px; font-size: 0.78rem;">
+                            <span id="showing-results-text">Mostrando 1 a 4 de 42 resultados</span>
+                            <ul class="pagination" style="gap: 2px;">
+                                <li class="page-item disabled"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg></a></li>
+                                <li class="page-item active"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem; background-color: var(--primary-color); border-color: var(--primary-color);">1</a></li>
+                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">2</a></li>
+                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">3</a></li>
+                                <li class="page-item dots"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">...</a></li>
+                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">11</a></li>
+                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg></a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL: EDITAR DATOS FISCALES -->
+    <div class="modal-overlay" id="modal-edit-fiscal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Datos Fiscales</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-edit-fiscal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-edit-fiscal" onsubmit="saveFiscalData(event)">
+                    <div class="form-group">
+                        <label class="form-label" for="edit-rfc">RFC</label>
+                        <input type="text" id="edit-rfc" class="form-control" value="EEM010101XXX" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit-razon">Razón social</label>
+                        <input type="text" id="edit-razon" class="form-control" value="Empresa Ejemplo, S.A. de C.V." required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit-regimen">Régimen fiscal</label>
+                        <input type="text" id="edit-regimen" class="form-control" value="601 - General de Ley Personas Morales" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit-cp">Código postal</label>
+                        <input type="text" id="edit-cp" class="form-control" value="80000" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit-cfdi">Uso CFDI</label>
+                        <input type="text" id="edit-cfdi" class="form-control" value="G03 - Gastos en general" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="edit-correo">Correo electrónico</label>
+                        <input type="email" id="edit-correo" class="form-control" value="facturacion@empresaejemplo.com" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-edit-fiscal')">Cancelar</button>
+                <button class="btn btn-primary" type="submit" form="form-edit-fiscal">Guardar cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: PREVISUALIZAR FACTURA (PDF MOCKUP) -->
+    <div class="modal-overlay" id="modal-invoice-preview">
+        <div class="modal-container" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Previsualización de Factura</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-invoice-preview')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="pdf-mockup">
+                    <div class="pdf-header">
+                        <div>
+                            <div class="pdf-logo-stub">COEPRISS SINALOA</div>
+                            <div>Comisión Estatal para la Protección</div>
+                            <div>contra Riesgos Sanitarios de Sinaloa</div>
+                            <div>RFC: CEP050915XXX</div>
+                        </div>
+                        <div class="pdf-meta">
+                            <strong>FACTURA (Ingreso)</strong><br>
+                            Folio: <span id="pdf-folio">F-00045</span><br>
+                            Fecha: 16/07/2026 12:15 p.m.<br>
+                            Lugar exp.: 80000 (Culiacán, Sin.)
+                        </div>
+                    </div>
+                    
+                    <div class="pdf-section-title">Receptor</div>
+                    <div class="pdf-grid-2">
+                        <div>
+                            <strong>Razón Social:</strong> <span id="pdf-receptor-name">Empresa Ejemplo, S.A. de C.V.</span><br>
+                            <strong>RFC:</strong> <span id="pdf-receptor-rfc">EEM010101XXX</span>
+                        </div>
+                        <div>
+                            <strong>Régimen Fiscal:</strong> <span id="pdf-receptor-regimen">601</span><br>
+                            <strong>Uso CFDI:</strong> <span id="pdf-receptor-cfdi">G03 - Gastos en general</span>
+                        </div>
+                    </div>
+
+                    <div class="pdf-section-title">Conceptos</div>
+                    <table class="pdf-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;">Clave Prod</th>
+                                <th style="width: 45%;">Descripción</th>
+                                <th style="text-align: center; width: 10%;">Cant</th>
+                                <th style="width: 10%;">Unidad</th>
+                                <th style="text-align: right; width: 20%;">Precio U.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>90101500</td>
+                                <td>Servicio de trámite de COEPRISS Sinaloa</td>
+                                <td style="text-align: center;">1</td>
+                                <td>E48</td>
+                                <td style="text-align: right;" id="pdf-unit-price">$1,000.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="pdf-totals">
+                        <div class="pdf-total-row">
+                            <span>Subtotal:</span>
+                            <span id="pdf-subtotal">$1,000.00</span>
+                        </div>
+                        <div class="pdf-total-row">
+                            <span>IVA (16%):</span>
+                            <span id="pdf-iva">$160.00</span>
+                        </div>
+                        <div class="pdf-total-row" style="font-weight: bold; border-top: 1px solid #333; padding-top: 4px; margin-top: 2px;">
+                            <span>Total:</span>
+                            <span id="pdf-total">$1,160.00</span>
+                        </div>
+                    </div>
+                    <div style="clear: both;"></div>
+
+                    <div class="pdf-uuid">
+                        <strong>Folio Fiscal (UUID):</strong> BAB3F6E2-4D78-4C1A-B06D-D7ABBD2F123<br>
+                        <strong>No. de Serie del Certificado del SAT:</strong> 00001000000508646663<br>
+                        <strong>Sello Digital del SAT:</strong> f8X9dJ1kLmNoPqRsTuVwXyZ...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-invoice-preview')">Cerrar</button>
+                <button class="btn btn-primary" onclick="triggerDownload('FACTURA_RECONSTITUIDA.pdf')">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Descargar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
