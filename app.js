@@ -119,7 +119,41 @@ function goToPanel(panelId) {
         }
     }
 
+    // Update dynamic breadcrumbs
+    updateBreadcrumb(panelId);
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateBreadcrumb(panelId) {
+    const breadcrumbEl = document.getElementById('dynamic-breadcrumb');
+    if (!breadcrumbEl) return;
+
+    let path = 'Inicio';
+    if (panelId === 'panel-inicio') {
+        path = 'Inicio › <strong>Panel General</strong>';
+    } else if (panelId === 'panel-proceso') {
+        path = 'Inicio › <strong>En proceso</strong>';
+    } else if (panelId === 'panel-correos') {
+        path = 'Inicio › <strong>Historial de correos</strong>';
+    } else if (panelId === 'panel-clientes') {
+        path = 'Inicio › <strong>Clientes</strong>';
+    } else if (panelId === 'panel-config') {
+        path = 'Inicio › <strong>Configuración</strong>';
+    } else if (panelId.startsWith('step-panel-')) {
+        const stepNum = panelId.split('-').pop();
+        const stepNames = {
+            '1': 'Recepción',
+            '2': 'Extracción',
+            '3': 'Vista previa',
+            '4': 'Generación XML',
+            '5': 'Carga SAT',
+            '6': 'Timbrado',
+            '7': 'Reporte'
+        };
+        path = `Inicio › Nueva solicitud › <strong>Paso ${stepNum}: ${stepNames[stepNum]}</strong>`;
+    }
+    breadcrumbEl.innerHTML = path;
 }
 
 // Wizard-specific navigation (steps 1 to 7)
