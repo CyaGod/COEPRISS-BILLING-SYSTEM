@@ -2,25 +2,193 @@
 
 // Application State
 const state = {
-    rfc: 'EEM010101XXX',
-    razonSocial: 'Empresa Ejemplo, S.A. de C.V.',
-    regimenFiscal: '601 - General de Ley Personas Morales',
-    codigoPostal: '80000',
-    usoCfdi: 'G03 - Gastos en general',
-    correo: 'facturacion@empresaejemplo.com',
+    // Current Wizard Active Dossier (loaded from presets or created from scratch)
+    activeExpediente: null,
+    
+    // Logged-in Employee Session Profiles
+    currentUser: {
+        id: 'brenda',
+        name: 'Brenda González',
+        role: 'Administrador de Facturación',
+        avatar: 'BG'
+    },
+
+    // CSD Certificate State
+    csd: {
+        uploaded: true,
+        certName: 'CSD_COEPRISS_2026.cer',
+        keyName: 'CSD_COEPRISS_2026.key',
+        expiry: '2028-09-12',
+        password: 'SinaloaFacturas2026'
+    },
+
+    // In Process Dossiers (Expedientes) Mock Database
+    expedientes: [
+        {
+            folio: 'REC-000245',
+            cliente: 'Empresa Ejemplo, S.A. de C.V.',
+            rfc: 'EEM010101XXX',
+            regimenFiscal: '601 - General de Ley Personas Morales',
+            codigoPostal: '80000',
+            usoCfdi: 'G03 - Gastos en general',
+            correo: 'facturacion@empresaejemplo.com',
+            importe: 1160.00,
+            fechaRecibo: '16/07/2026 10:22 a.m.',
+            banco: 'BBVA México',
+            fechaPago: '16/07/2026 09:15 a.m.',
+            referencia: 'TRASPASO 2456',
+            estatus: 'Recibido', // Recibido | Pago pendiente | Pago validado | Autorizado | Timbrado | Entregado
+            tipoCfdi: 'ingreso',
+            uuid: '',
+            archivos: [
+                { name: 'SAT_CSF_EEM01.pdf', type: 'Constancia de situación fiscal', status: 'Listo para escanear' },
+                { name: 'RECIBO_CIS_245.pdf', type: 'Recibo del CIS', status: 'Listo para escanear' },
+                { name: 'TRANSFERENCIA_BBVA_2456.jpg', type: 'Transferencia bancaria', status: 'Listo para escanear' }
+            ],
+            auditoria: [
+                '[16/07/2026 10:22 a.m.] Trámite recibido. Creado por Brenda González.'
+            ]
+        },
+        {
+            folio: 'REC-000246',
+            cliente: 'Sistemas Sinaloa, S.A. de C.V.',
+            rfc: 'SPS090909AAA',
+            regimenFiscal: '601 - General de Ley Personas Morales',
+            codigoPostal: '81000',
+            usoCfdi: 'G03 - Gastos en general',
+            correo: 'proveedor@sistemasinaloa.mx',
+            importe: 3450.00,
+            fechaRecibo: '16/07/2026 05:40 p.m.',
+            banco: 'Santander',
+            fechaPago: '16/07/2026 11:20 a.m.',
+            referencia: 'REF-9908',
+            estatus: 'Pago pendiente',
+            tipoCfdi: 'ingreso',
+            uuid: '',
+            archivos: [
+                { name: 'SAT_CSF_SPS09.pdf', type: 'Constancia de situación fiscal', status: 'Listo para escanear' },
+                { name: 'RECIBO_CIS_246.pdf', type: 'Recibo del CIS', status: 'Listo para escanear' },
+                { name: 'DEPOSITO_SANTANDER.png', type: 'Transferencia bancaria', status: 'Listo para escanear' }
+            ],
+            auditoria: [
+                '[16/07/2026 05:40 p.m.] Trámite recibido. Creado por Brenda González.'
+            ]
+        },
+        {
+            folio: 'REC-000247',
+            cliente: 'Gas Sinaloa, S.A.',
+            rfc: 'GSI121212BBB',
+            regimenFiscal: '601 - General de Ley Personas Morales',
+            codigoPostal: '80100',
+            usoCfdi: 'G03 - Gastos en general',
+            correo: 'contacto@gassinaloa.com',
+            importe: 7800.00,
+            fechaRecibo: '17/07/2026 09:05 a.m.',
+            banco: 'Banamex',
+            fechaPago: '17/07/2026 01:10 p.m.',
+            referencia: 'REF-5431',
+            estatus: 'Pago validado',
+            tipoCfdi: 'ingreso',
+            uuid: '',
+            archivos: [
+                { name: 'SAT_CSF_GSI12.pdf', type: 'Constancia de situación fiscal', status: 'Leído correctamente (OCR)' },
+                { name: 'RECIBO_CIS_247.pdf', type: 'Recibo del CIS', status: 'Leído correctamente (OCR)' },
+                { name: 'COMPROBANTE_BANAMEX.pdf', type: 'Transferencia bancaria', status: 'Leído correctamente (OCR)' }
+            ],
+            auditoria: [
+                '[17/07/2026 09:05 a.m.] Trámite recibido. Creado por Brenda González.',
+                '[17/07/2026 10:15 a.m.] Pago validado mediante API bancaria (Banamex). Estatus: Pago Validado.'
+            ]
+        }
+    ],
+
+    // Stamped Invoices Database
+    facturas: [
+        {
+            folioInterno: 'F-00045',
+            folioRecibo: 'REC-000245',
+            cliente: 'Empresa Ejemplo, S.A. de C.V.',
+            fecha: '16/07/2026 10:22 a.m.',
+            importe: 1160.00,
+            estatus: 'Timbrada',
+            uuid: 'BAB3F6E2-4D78-4C1A-B06D-D7ABBD2F123'
+        },
+        {
+            folioInterno: 'F-00044',
+            folioRecibo: 'REC-000244',
+            cliente: 'Juan Pérez López',
+            fecha: '16/07/2026 10:10 a.m.',
+            importe: 850.00,
+            estatus: 'Timbrada',
+            uuid: 'A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D'
+        },
+        {
+            folioInterno: 'F-00043',
+            folioRecibo: 'REC-000243',
+            cliente: 'Comercial del Norte, S.A. de C.V.',
+            fecha: '16/07/2026 09:05 a.m.',
+            importe: 1450.00,
+            estatus: 'Timbrada',
+            uuid: 'F1E2D3C4-B5A6-9F8E-7D6C-5B4A3F2E1D0C'
+        },
+        {
+            folioInterno: 'F-00042',
+            folioRecibo: 'REC-000242',
+            cliente: 'María García Sánchez',
+            fecha: '15/07/2026 04:35 p.m.',
+            importe: 550.00,
+            estatus: 'Timbrada',
+            uuid: 'C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F'
+        }
+    ],
+
+    // Sent Emails Log Database
+    historialCorreos: [
+        {
+            fecha: '16/07/2026 12:16 p.m.',
+            destinatario: 'facturacion@empresaejemplo.com',
+            folio: 'F-00045',
+            adjuntos: 'FACTURA_REC000245.pdf, .xml',
+            estatus: 'Entregado'
+        }
+    ],
+
+    // Security & Audit Log
+    bitacoraSeguridad: [
+        {
+            fecha: '20/07/2026 09:30 a.m.',
+            usuario: 'Brenda González',
+            accion: 'Inicio de sesión',
+            detalles: 'Sesión iniciada con éxito en Culiacán, Sin.'
+        },
+        {
+            fecha: '20/07/2026 09:32 a.m.',
+            usuario: 'Brenda González',
+            accion: 'Acceso a CSD',
+            detalles: 'Verificación de vigencia de sello CSD_COEPRISS_2026.'
+        }
+    ],
+
     currentStep: 1,
-    xmlUploaded: true,
-    pdfUploaded: true
+    xmlUploaded: false,
+    pdfUploaded: false
 };
 
-// Document Load Init
+// Document Log Init
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initDragAndDrop();
     
+    // Render dynamic data in tables
+    renderProcesoTable();
+    renderCorreosTable();
+    renderClientesTable();
+    renderBitacoraTable();
+    renderReportTable();
+    updateDashboardCounts();
+    
     // Start at Dashboard
     goToPanel('panel-inicio');
-    updatePreviewFields();
 });
 
 // 1. Navigation & Panel Control
@@ -30,7 +198,12 @@ function initNavigation() {
     stepNodes.forEach(node => {
         node.addEventListener('click', () => {
             const step = parseInt(node.getAttribute('data-step'));
-            goToStep(step);
+            // If active dossier is loaded, allow navigation; otherwise warn
+            if (state.activeExpediente) {
+                goToStep(step);
+            } else {
+                showToast('Selecciona un preset de demostración para iniciar el expediente del trámite.', 'warning');
+            }
         });
     });
 
@@ -47,24 +220,34 @@ function initNavigation() {
                 goToPanel('panel-inicio');
             } else if (id === 'nav-solicitud') {
                 item.classList.add('active-pulse');
+                if (!state.activeExpediente) {
+                    // Create default dummy dossier if none loaded
+                    loadPresetDossier(0);
+                }
                 goToStep(1); // Wizard step 1
             } else if (id === 'nav-proceso') {
                 item.classList.add('active');
+                renderProcesoTable();
                 goToPanel('panel-proceso');
             } else if (id === 'nav-timbradas') {
                 item.classList.add('active');
+                renderReportTable();
                 goToStep(7); // Wizard step 7 represents "Facturas timbradas"
             } else if (id === 'nav-correos') {
                 item.classList.add('active');
+                renderCorreosTable();
                 goToPanel('panel-correos');
             } else if (id === 'nav-reportes') {
                 item.classList.add('active');
+                renderReportTable();
                 goToStep(7); // Wizard step 7 is the general report
             } else if (id === 'nav-clientes') {
                 item.classList.add('active');
+                renderClientesTable();
                 goToPanel('panel-clientes');
             } else if (id === 'nav-config') {
                 item.classList.add('active');
+                renderBitacoraTable();
                 goToPanel('panel-config');
             }
         });
@@ -79,13 +262,30 @@ function triggerSidebarClick(navId) {
     }
 }
 
-function resumeFlowAtStep(wizardStep) {
-    showToast(`Reanudando flujo en el paso ${wizardStep}...`, 'info');
+function resumeFlowAtStep(wizardStep, folio) {
+    // Find expediente
+    const exp = state.expedientes.find(e => e.folio === folio);
+    if (exp) {
+        state.activeExpediente = exp;
+        updatePreviewFields();
+        updateStep2Fields();
+        renderDocumentList();
+        renderTimeline();
+    }
+    
+    showToast(`Reanudando expediente ${folio} en el paso ${wizardStep}...`, 'info');
     
     // Highlight "Nueva solicitud" sidebar link
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active', 'active-pulse'));
     const navSolicitud = document.getElementById('nav-solicitud');
     if (navSolicitud) navSolicitud.classList.add('active-pulse');
+
+    // Enable scan button if resuming
+    const btnScan = document.getElementById('btn-scan');
+    if (btnScan) btnScan.disabled = false;
+
+    // Check payment validation button toggles
+    updatePaymentValidationUI();
 
     goToStep(wizardStep);
 }
@@ -94,6 +294,16 @@ function resendEmail(email, folio) {
     showToast(`Reenviando factura ${folio} a: ${email}...`, 'info');
     setTimeout(() => {
         showToast(`✓ Factura reenviada con éxito a: ${email}`, 'success');
+        // Add log
+        state.historialCorreos.unshift({
+            fecha: getCurrentDateTimeString(),
+            destinatario: email,
+            folio: folio,
+            adjuntos: `FACTURA_${folio.replace('-', '')}.pdf, .xml`,
+            estatus: 'Entregado'
+        });
+        renderCorreosTable();
+        updateDashboardCounts();
     }, 1000);
 }
 
@@ -220,78 +430,333 @@ function startScanAnimation() {
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
             Escanear / Leer documentos
         `;
-        showToast('Documentos procesados con éxito. Datos extraídos.', 'success');
-        goToStep(2);
         
-        // Remove from pending in process tab as simulated state progression
-        const dashProc = document.getElementById('dash-proc-count');
-        if (dashProc) dashProc.textContent = '2';
+        // Mark files as scanned (OCR)
+        if (state.activeExpediente) {
+            state.activeExpediente.archivos.forEach(file => file.status = 'Leído correctamente (OCR)');
+            state.activeExpediente.estatus = 'Pago pendiente';
+            addAuditLogToActive('Documentos leídos mediante OCR.');
+            
+            // Register safety log
+            addSecurityLog('OCR Escaneo', `Escaneo de expediente ${state.activeExpediente.folio} finalizado.`);
+        }
+
+        showToast('Documentos procesados con éxito. Datos extraídos.', 'success');
+        
+        // Re-render views
+        renderDocumentList();
+        updateStep2Fields();
+        updatePreviewFields();
+        renderTimeline();
+        updatePaymentValidationUI();
+        
+        goToStep(2);
     }, 1800);
 }
 
-// 3. Step 2: Edit Fiscal Data Modals
-function openEditModal() {
-    document.getElementById('edit-rfc').value = state.rfc;
-    document.getElementById('edit-razon').value = state.razonSocial;
-    document.getElementById('edit-regimen').value = state.regimenFiscal;
-    document.getElementById('edit-cp').value = state.codigoPostal;
-    document.getElementById('edit-cfdi').value = state.usoCfdi;
-    document.getElementById('edit-correo').value = state.correo;
-
-    document.getElementById('modal-edit-fiscal').classList.add('open');
-}
-
-function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('open');
-}
-
-function saveFiscalData(event) {
-    event.preventDefault();
+// Load presets of test invoices
+function loadPresetDossier(presetIndex) {
+    const defaultData = state.expedientes[presetIndex];
+    if (!defaultData) return;
     
-    state.rfc = document.getElementById('edit-rfc').value.trim().toUpperCase();
-    state.razonSocial = document.getElementById('edit-razon').value.trim();
-    state.regimenFiscal = document.getElementById('edit-regimen').value.trim();
-    state.codigoPostal = document.getElementById('edit-cp').value.trim();
-    state.usoCfdi = document.getElementById('edit-cfdi').value.trim();
-    state.correo = document.getElementById('edit-correo').value.trim();
+    // Deep clone the preset data to allow mutations
+    state.activeExpediente = JSON.parse(JSON.stringify(defaultData));
+    
+    // Set view headers
+    document.getElementById('lbl-cliente-correo').textContent = state.activeExpediente.correo;
+    document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
+    
+    // Enable the scan button
+    const btnScan = document.getElementById('btn-scan');
+    if (btnScan) btnScan.disabled = false;
 
-    // Update Step 2 View Fields
-    document.getElementById('val-rfc').textContent = state.rfc;
-    document.getElementById('val-razon').textContent = state.razonSocial;
-    document.getElementById('val-regimen').textContent = state.regimenFiscal;
-    document.getElementById('val-cp').textContent = state.codigoPostal;
-    document.getElementById('val-cfdi').textContent = state.usoCfdi;
-    document.getElementById('val-correo').textContent = state.correo;
+    // Render files
+    renderDocumentList();
+    renderTimeline();
 
-    // Update Step 3 Preview Fields
-    updatePreviewFields();
+    showToast(`Preset "${state.activeExpediente.cliente}" cargado. Listo para escanear.`, 'success');
+}
 
-    closeModal('modal-edit-fiscal');
-    showToast('Datos fiscales actualizados correctamente.', 'success');
+function renderDocumentList() {
+    const listContainer = document.getElementById('doc-list-container');
+    if (!listContainer || !state.activeExpediente) return;
+
+    listContainer.innerHTML = '';
+    state.activeExpediente.archivos.forEach(file => {
+        const isPdf = file.name.endsWith('.pdf');
+        const iconClass = isPdf ? 'doc-icon-pdf' : 'doc-icon-img';
+        const iconSvg = isPdf 
+            ? `<svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 6H8v6H6.5v-1.5H5v-1.5h1.5V9H5V7.5h4.5V9zm5 4.5c0 .83-.67 1.5-1.5 1.5h-2.5V7.5H13c.83 0 1.5.67 1.5 1.5v4.5zm5-3H18v1.5h1.5V12H18v3h-1.5V7.5h3v2.5zm-6.5-1.5H11.5v3H13c.28 0 .5-.22.5-.5V9c0-.28-.22-.5-.5-.5z"/></svg>`
+            : `<svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z"/></svg>`;
+
+        const isScanned = file.status.includes('OCR');
+        const badgeClass = isScanned ? 'badge-success' : 'badge-warning';
+        const badgeIcon = isScanned 
+            ? `<svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>`
+            : `<svg class="badge-icon-stroke" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+
+        const docCard = document.createElement('div');
+        docCard.className = 'doc-card';
+        docCard.innerHTML = `
+            <div class="doc-icon-container ${iconClass}">
+                ${iconSvg}
+            </div>
+            <span class="doc-title">${file.type}</span>
+            <span class="doc-filename"><a href="#" onclick="return false;">${file.name}</a></span>
+            <span class="badge ${badgeClass} doc-status-badge">
+                ${badgeIcon}
+                ${file.status}
+            </span>
+            <button class="doc-view-btn" onclick="previewDocument('${file.name}', '${isPdf ? 'PDF' : 'Imagen'}')" style="position: absolute; bottom: 12px; right: 12px;">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            </button>
+        `;
+        listContainer.appendChild(docCard);
+    });
+}
+
+function updateStep2Fields() {
+    if (!state.activeExpediente) return;
+    document.getElementById('val-rfc').textContent = state.activeExpediente.rfc;
+    document.getElementById('val-razon').textContent = state.activeExpediente.cliente;
+    document.getElementById('val-regimen').textContent = state.activeExpediente.regimenFiscal;
+    document.getElementById('val-cp').textContent = state.activeExpediente.codigoPostal;
+    document.getElementById('val-cfdi').textContent = state.activeExpediente.usoCfdi;
+    document.getElementById('val-correo').textContent = state.activeExpediente.correo;
+
+    // Load bank values
+    document.getElementById('val-banco').textContent = state.activeExpediente.banco;
+    document.getElementById('val-banco-fecha').textContent = state.activeExpediente.fechaPago;
+    document.getElementById('val-banco-importe').textContent = `$${state.activeExpediente.importe.toFixed(2)} MXN`;
+    document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia;
+}
+
+// 3. Step 2: Payment API and Manual Validation
+function validatePaymentViaAPI() {
+    if (!state.activeExpediente) return;
+
+    const apiBtn = document.getElementById('btn-api-banco');
+    apiBtn.disabled = true;
+    apiBtn.innerHTML = `
+        <svg class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" stroke-width="4"></circle><path d="M4 12a8 8 0 018-8v8H4z" fill="currentColor"></path></svg>
+        Buscando en BBVA/Recaudación...
+    `;
+
+    showToast(`Consultando movimientos bancarios del banco ${state.activeExpediente.banco}...`, 'info');
+
+    // Simulate API query delay
+    setTimeout(() => {
+        apiBtn.disabled = false;
+        apiBtn.innerHTML = 'Consultar Pago en Banco (API)';
+
+        state.activeExpediente.estatus = 'Pago validado';
+        addAuditLogToActive(`Pago validado mediante API bancaria (${state.activeExpediente.banco}). Estatus: Conciliado.`);
+        addSecurityLog('Validación Pago API', `Pago validado automáticamente vía API para el folio ${state.activeExpediente.folio}.`);
+
+        showToast(`✓ Pago validado con éxito. Depósito de $${state.activeExpediente.importe.toFixed(2)} confirmado.`, 'success');
+        
+        // Update views
+        updatePaymentValidationUI();
+        renderTimeline();
+    }, 1400);
+}
+
+function validatePaymentManual() {
+    if (!state.activeExpediente) return;
+
+    state.activeExpediente.estatus = 'Pago validado';
+    addAuditLogToActive(`Pago validado manualmente. Autorizado por: ${state.currentUser.name}.`);
+    addSecurityLog('Validación Pago Manual', `Validación contable manual para el folio ${state.activeExpediente.folio}.`);
+
+    showToast('✓ Pago validado manualmente de forma contable.', 'success');
+
+    // Update views
+    updatePaymentValidationUI();
+    renderTimeline();
+}
+
+function updatePaymentValidationUI() {
+    if (!state.activeExpediente) return;
+
+    const valBox = document.getElementById('box-validacion-pago');
+    const valTitle = document.getElementById('lbl-validacion-pago-title');
+    const valDesc = document.getElementById('lbl-validacion-pago-desc');
+    const valIcon = document.getElementById('icon-validacion-pago');
+    const confirmBtn = document.getElementById('btn-confirm-step2');
+
+    if (state.activeExpediente.estatus === 'Pago validado' || state.activeExpediente.estatus === 'Autorizado' || state.activeExpediente.estatus === 'Timbrado' || state.activeExpediente.estatus === 'Entregado') {
+        valBox.style.borderColor = 'var(--success-color)';
+        valBox.style.backgroundColor = 'var(--success-bg)';
+        valTitle.textContent = 'Pago Conciliado y Validado';
+        valTitle.style.color = 'var(--success-color)';
+        valDesc.textContent = `confirmado en la cuenta estatal por $${state.activeExpediente.importe.toFixed(2)} MXN.`;
+        valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
+        valIcon.setAttribute('class', 'badge-icon text-success');
+        confirmBtn.disabled = false;
+    } else {
+        valBox.style.borderColor = '#dee2e6';
+        valBox.style.backgroundColor = '#f8f9fa';
+        valTitle.textContent = 'Pendiente de Conciliación Bancaria';
+        valTitle.style.color = '#495057';
+        valDesc.textContent = 'El pago debe ser validado contra el estado de cuenta.';
+        valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
+        valIcon.setAttribute('class', 'badge-icon-stroke text-warning');
+        confirmBtn.disabled = true;
+    }
+}
+
+function confirmStep2() {
+    if (!state.activeExpediente) return;
+    
+    state.activeExpediente.estatus = 'Autorizado';
+    addAuditLogToActive('Trámite autorizado. Expediente listo para timbrar.');
+    
+    goToStep(3);
+}
+
+// Timeline auditoria
+function renderTimeline() {
+    const timeline = document.getElementById('timeline-expediente');
+    if (!timeline || !state.activeExpediente) return;
+
+    timeline.innerHTML = '';
+    state.activeExpediente.auditoria.forEach(log => {
+        const logItem = document.createElement('div');
+        logItem.style.display = 'flex';
+        logItem.style.gap = '10px';
+        logItem.style.alignItems = 'flex-start';
+        logItem.innerHTML = `
+            <span style="color: var(--secondary-color); font-weight: 700;">•</span>
+            <div>${log}</div>
+        `;
+        timeline.appendChild(logItem);
+    });
+}
+
+function addAuditLogToActive(message) {
+    if (state.activeExpediente) {
+        state.activeExpediente.auditoria.push(`[${getCurrentDateTimeString()}] ${message}`);
+    }
+}
+
+// 4. Step 3: CFDI Selection & Preview
+function changeCfdiTipo(val) {
+    if (!state.activeExpediente) return;
+    
+    state.activeExpediente.tipoCfdi = val;
+    
+    // Update preview labels
+    if (val === 'pago') {
+        showToast('Tipo de CFDI seleccionado: Complemento de Pago.', 'info');
+    } else {
+        showToast('Tipo de CFDI seleccionado: Ingreso (Factura por Derechos).', 'info');
+    }
 }
 
 function updatePreviewFields() {
-    document.querySelectorAll('.preview-rfc').forEach(el => el.textContent = state.rfc);
-    document.querySelectorAll('.preview-razon').forEach(el => el.textContent = state.razonSocial);
-    document.querySelectorAll('.preview-regimen').forEach(el => el.textContent = state.regimenFiscal);
-    document.querySelectorAll('.preview-cp').forEach(el => el.textContent = state.codigoPostal);
-    document.querySelectorAll('.preview-cfdi').forEach(el => el.textContent = state.usoCfdi);
-    document.querySelectorAll('.preview-correo').forEach(el => el.textContent = state.correo);
+    if (!state.activeExpediente) return;
+    
+    document.querySelectorAll('.preview-rfc').forEach(el => el.textContent = state.activeExpediente.rfc);
+    document.querySelectorAll('.preview-razon').forEach(el => el.textContent = state.activeExpediente.cliente);
+    document.querySelectorAll('.preview-regimen').forEach(el => el.textContent = state.activeExpediente.regimenFiscal);
+    document.querySelectorAll('.preview-cp').forEach(el => el.textContent = state.activeExpediente.codigoPostal);
+    document.querySelectorAll('.preview-cfdi').forEach(el => el.textContent = state.activeExpediente.usoCfdi);
+    document.querySelectorAll('.preview-correo').forEach(el => el.textContent = state.activeExpediente.correo);
+    
+    // Update XML details
+    const xmlFilename = document.getElementById('pac-xml-filename');
+    if (xmlFilename) {
+        xmlFilename.textContent = `FACTURA_${state.activeExpediente.folio.replace('-', '')}.xml`;
+    }
 }
 
-// 4. Step 4: Generación XML & SAT
+// 5. Step 4: PAC Automatic Timbrado
+function stampInvoiceViaPAC() {
+    if (!state.activeExpediente) return;
+
+    const csdPassword = document.getElementById('pac-csd-password').value;
+    if (!csdPassword) {
+        showToast('Ingresa la contraseña del archivo CSD para firmar el XML.', 'warning');
+        return;
+    }
+
+    const loaderBox = document.getElementById('pac-loading-box');
+    const stampBtn = document.getElementById('btn-pac-stamp');
+    const loadTitle = document.getElementById('pac-loading-title');
+    const loadDesc = document.getElementById('pac-loading-desc');
+
+    stampBtn.disabled = true;
+    loaderBox.style.display = 'flex';
+
+    // Simulated API call sequence
+    setTimeout(() => {
+        loadTitle.textContent = 'Generando firma con Sello CSD...';
+        loadDesc.textContent = 'Sellando la cadena original del CFDI 4.0.';
+        
+        setTimeout(() => {
+            loadTitle.textContent = 'Enviando a API del PAC...';
+            loadDesc.textContent = 'Estableciendo comunicación segura cifrada.';
+            
+            setTimeout(() => {
+                loadTitle.textContent = 'Factura Certificada ante el SAT';
+                loadDesc.textContent = 'Obteniendo sello del SAT y UUID fiscal.';
+                
+                setTimeout(() => {
+                    // Generate Mock Stamped Data
+                    const mockUUID = generateMockUUID();
+                    state.activeExpediente.uuid = mockUUID;
+                    state.activeExpediente.estatus = 'Timbrado';
+                    
+                    addAuditLogToActive(`Factura timbrada con éxito vía PAC. Folio Fiscal UUID: ${mockUUID}.`);
+                    
+                    // Add invoice to report table database
+                    const nextFolioInterno = `F-000${state.facturas.length + 42}`;
+                    state.facturas.unshift({
+                        folioInterno: nextFolioInterno,
+                        folioRecibo: state.activeExpediente.folio,
+                        cliente: state.activeExpediente.cliente,
+                        fecha: getCurrentDateTimeString(),
+                        importe: state.activeExpediente.importe,
+                        estatus: 'Timbrada',
+                        uuid: mockUUID
+                    });
+
+                    // Add safety log
+                    addSecurityLog('Timbrado Automático PAC', `Factura ${nextFolioInterno} timbrada vía PAC. UUID: ${mockUUID}.`);
+
+                    showToast('✓ ¡La factura ha sido timbrada con éxito vía PAC!', 'success');
+                    
+                    // Reset UI
+                    loaderBox.style.display = 'none';
+                    stampBtn.disabled = false;
+                    
+                    // Go to Step 6 (Stamped Details View)
+                    openInvoicePreviewModal(nextFolioInterno, state.activeExpediente.cliente, `$${state.activeExpediente.importe.toFixed(2)}`);
+                    goToStep(6);
+                    
+                    // Refresh logs
+                    renderReportTable();
+                    updateDashboardCounts();
+                }, 800);
+            }, 800);
+        }, 800);
+    }, 500);
+}
+
 function downloadXML() {
+    if (!state.activeExpediente) return;
+    
     showToast('Generando archivo XML...', 'info');
     
     const mockXML = `<?xml version="1.0" encoding="utf-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0" Serie="F" Folio="00045" Fecha="2026-07-16T11:30:00" SubTotal="1000.00" Total="1160.00" Moneda="MXN" TipoDeComprobante="I" Exportacion="01" MetodoPago="PUE" LugarExpedicion="80000">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0" Serie="F" Folio="${state.activeExpediente.folio.split('-')[1]}" Fecha="2026-07-20T10:30:00" SubTotal="${(state.activeExpediente.importe / 1.16).toFixed(2)}" Total="${state.activeExpediente.importe.toFixed(2)}" Moneda="MXN" TipoDeComprobante="${state.activeExpediente.tipoCfdi === 'ingreso' ? 'I' : 'P'}" Exportacion="01" MetodoPago="PUE" LugarExpedicion="80000">
     <cfdi:Emisor Rfc="CEP050915XXX" Nombre="COMISION ESTATAL PARA LA PROTECCION CONTRA RIESGOS SANITARIOS DE SINALOA" RegimenFiscal="603"/>
-    <cfdi:Receptor Rfc="${state.rfc}" Nombre="${state.razonSocial.toUpperCase()}" DomicilioFiscalReceptor="${state.codigoPostal}" RegimenFiscalReceptor="${state.regimenFiscal.split(' ')[0]}" UsoCFDI="${state.usoCfdi.split(' ')[0]}"/>
+    <cfdi:Receptor Rfc="${state.activeExpediente.rfc}" Nombre="${state.activeExpediente.cliente.toUpperCase()}" DomicilioFiscalReceptor="${state.activeExpediente.codigoPostal}" RegimenFiscalReceptor="601" UsoCFDI="G03"/>
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="90101500" Cantidad="1" ClaveUnidad="E48" Unidad="Servicio" Descripcion="Servicio de tramite de COEPRISS" ValorUnitario="1000.00" Importe="1000.00" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="90101500" Cantidad="1" ClaveUnidad="E48" Unidad="Servicio" Descripcion="Servicio de tramite de COEPRISS" ValorUnitario="${(state.activeExpediente.importe / 1.16).toFixed(2)}" Importe="${(state.activeExpediente.importe / 1.16).toFixed(2)}" ObjetoImp="02">
             <cfdi:Impuestos>
                 <cfdi:Traslados>
-                    <cfdi:Traslado Base="1000.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="160.00"/>
+                    <cfdi:Traslado Base="${(state.activeExpediente.importe / 1.16).toFixed(2)}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="${(state.activeExpediente.importe - (state.activeExpediente.importe / 1.16)).toFixed(2)}"/>
                 </cfdi:Traslados>
             </cfdi:Impuestos>
         </cfdi:Concepto>
@@ -299,19 +764,21 @@ function downloadXML() {
 </cfdi:Comprobante>`;
 
     setTimeout(() => {
-        triggerBrowserDownload('FACTURA_REC000245.xml', mockXML, 'text/xml');
+        triggerBrowserDownload(`FACTURA_${state.activeExpediente.folio.replace('-', '')}.xml`, mockXML, 'text/xml');
         showToast('✓ XML descargado correctamente.', 'success');
+        addSecurityLog('Descarga XML', `Descarga de XML pre-generado para el trámite ${state.activeExpediente.folio}.`);
     }, 600);
 }
 
 function openSatPortal() {
     showToast('Abriendo portal oficial del SAT en una pestaña nueva...', 'info');
+    addSecurityLog('Redirección SAT', 'Apertura del portal de facturación del SAT.');
     setTimeout(() => {
         window.open('https://www.sat.gob.mx/', '_blank');
     }, 800);
 }
 
-// 5. Step 5: Carga de archivos timbrados
+// 6. Step 5: Manual XML Stamping Upload
 function removeUpload(type) {
     if (type === 'xml') {
         state.xmlUploaded = false;
@@ -346,17 +813,70 @@ function initDragAndDrop() {
         const files = dt.files;
         if (files.length > 0) {
             showToast(`Archivo "${files[0].name}" cargado correctamente para análisis.`, 'success');
+            
+            // Generate dummy active dossier if none loaded
+            if (!state.activeExpediente) {
+                state.activeExpediente = {
+                    folio: 'REC-000248',
+                    cliente: 'Contribuyente Particular',
+                    rfc: 'XAXX010101000',
+                    regimenFiscal: '605 - Sueldos y Salarios',
+                    codigoPostal: '80000',
+                    usoCfdi: 'G03 - Gastos en general',
+                    correo: 'correo@contribuyente.com',
+                    importe: 500.00,
+                    fechaRecibo: getCurrentDateTimeString(),
+                    banco: 'Banco del Bienestar',
+                    fechaPago: getCurrentDateTimeString(),
+                    referencia: 'DEP-8890',
+                    estatus: 'Recibido',
+                    tipoCfdi: 'ingreso',
+                    uuid: '',
+                    archivos: [
+                        { name: files[0].name, type: 'Documento cargado', status: 'Listo para escanear' }
+                    ],
+                    auditoria: [
+                        `[${getCurrentDateTimeString()}] Trámite recibido. Creado por Brenda González.`
+                    ]
+                };
+                document.getElementById('lbl-cliente-correo').textContent = state.activeExpediente.correo;
+                document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
+                
+                const btnScan = document.getElementById('btn-scan');
+                if (btnScan) btnScan.disabled = false;
+            } else {
+                state.activeExpediente.archivos.push({
+                    name: files[0].name,
+                    type: 'Archivo adicional',
+                    status: 'Listo para escanear'
+                });
+            }
+            renderDocumentList();
         }
     }, false);
 }
 
-// 6. Step 6: Factura Timbrada Actions
-function openInvoicePreviewModal(folio = 'F-00045', clientName = state.razonSocial, totalVal = '$1,160.00') {
+// 7. Step 6: Invoice Preview & Stamped Verification
+function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = '$1,160.00') {
+    if (!clientName && state.activeExpediente) {
+        clientName = state.activeExpediente.cliente;
+    }
+    
+    // Find matching invoice uuid
+    const matchedFac = state.facturas.find(f => f.folioInterno === folio);
+    const mockUUID = matchedFac ? matchedFac.uuid : (state.activeExpediente ? state.activeExpediente.uuid : 'BAB3F6E2-4D78-4C1A-B06D-D7ABBD2F123');
+
     document.getElementById('pdf-folio').textContent = folio;
     document.getElementById('pdf-receptor-name').textContent = clientName;
-    document.getElementById('pdf-receptor-rfc').textContent = clientName === state.razonSocial ? state.rfc : 'XAXX010101000';
-    document.getElementById('pdf-receptor-cfdi').textContent = clientName === state.razonSocial ? state.usoCfdi : 'G03 - Gastos en general';
+    document.getElementById('pdf-receptor-rfc').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? state.activeExpediente.rfc : 'XAXX010101000';
+    document.getElementById('pdf-receptor-cfdi').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? state.activeExpediente.usoCfdi : 'G03 - Gastos en general';
     
+    // Set UUID in box
+    const uuidBox = document.getElementById('pdf-uuid-val');
+    if (uuidBox) {
+        uuidBox.textContent = mockUUID;
+    }
+
     const numericTotal = parseFloat(totalVal.replace('$', '').replace(',', ''));
     const numericSubtotal = numericTotal / 1.16;
     const numericIva = numericTotal - numericSubtotal;
@@ -369,19 +889,45 @@ function openInvoicePreviewModal(folio = 'F-00045', clientName = state.razonSoci
     document.getElementById('modal-invoice-preview').classList.add('open');
 }
 
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('open');
+}
+
 function sendInvoiceByEmail() {
-    showToast(`Enviando factura por correo a: ${state.correo}...`, 'info');
+    if (!state.activeExpediente) return;
+    
+    showToast(`Enviando factura por correo a: ${state.activeExpediente.correo}...`, 'info');
     
     setTimeout(() => {
-        showToast(`✓ Factura enviada con éxito a: ${state.correo}`, 'success');
+        showToast(`✓ Factura enviada con éxito a: ${state.activeExpediente.correo}`, 'success');
         
+        // Find folio Interno from state.facturas
+        const matched = state.facturas.find(f => f.folioRecibo === state.activeExpediente.folio);
+        const folioInterno = matched ? matched.folioInterno : 'F-00045';
+
+        // Add history log
+        state.historialCorreos.unshift({
+            fecha: getCurrentDateTimeString(),
+            destinatario: state.activeExpediente.correo,
+            folio: folioInterno,
+            adjuntos: `FACTURA_${state.activeExpediente.folio.replace('-', '')}.pdf, .xml`,
+            estatus: 'Entregado'
+        });
+
+        // Add safety log
+        addSecurityLog('Envío Correo', `Factura ${folioInterno} enviada a ${state.activeExpediente.correo}.`);
+
+        renderCorreosTable();
+        updateDashboardCounts();
+
         setTimeout(() => {
+            closeModal('modal-invoice-preview');
             goToStep(7);
         }, 800);
     }, 1200);
 }
 
-// Helper to trigger dummy download
+// Helper to trigger dummy file download
 function triggerDownload(filename) {
     showToast(`Descargando archivo: ${filename}...`, 'info');
     setTimeout(() => {
@@ -401,7 +947,7 @@ function triggerDownload(filename) {
     }, 800);
 }
 
-// Actual browser trigger downloader
+// Browser downloader
 function triggerBrowserDownload(filename, text, mimeType) {
     const element = document.createElement('a');
     const file = new Blob([text], {type: mimeType});
@@ -412,7 +958,7 @@ function triggerBrowserDownload(filename, text, mimeType) {
     document.body.removeChild(element);
 }
 
-// 7. Step 7: Filter table and dashboard controls
+// 8. Step 7: Filter table and real CSV Excel Export
 function filterReportTable() {
     const input = document.getElementById('search-report');
     const filter = input.value.toLowerCase();
@@ -424,6 +970,7 @@ function filterReportTable() {
         let rowMatch = false;
         const tds = tr[i].getElementsByTagName('td');
         
+        // Skip header and action column
         for (let j = 0; j < tds.length - 1; j++) {
             if (tds[j]) {
                 const txtValue = tds[j].textContent || tds[j].innerText;
@@ -448,19 +995,341 @@ function filterReportTable() {
     }
 }
 
-function restartProcess() {
-    goToStep(1);
-    showToast('Nueva solicitud iniciada.', 'info');
+function exportReportToExcel() {
+    showToast('Generando reporte Excel/CSV...', 'info');
+
+    // Create a real CSV from table database
+    let csvContent = '\uFEFF'; // UTF-8 BOM
+    csvContent += 'Folio Interno,Folio Recibo,Cliente / Contribuyente,Fecha de Stamping,Importe,UUID Fiscal\n';
+
+    let totalSum = 0;
+    state.facturas.forEach(f => {
+        csvContent += `"${f.folioInterno}","${f.folioRecibo}","${f.cliente}","${f.fecha}","${f.importe.toFixed(2)}","${f.uuid}"\n`;
+        totalSum += f.importe;
+    });
+
+    csvContent += `\n,,TOTAL FACTURADO,,${totalSum.toFixed(2)},\n`;
+
+    setTimeout(() => {
+        triggerBrowserDownload('Reporte_Facturas_COEPRISS.csv', csvContent, 'text/csv;charset=utf-8;');
+        showToast('✓ Reporte Excel (CSV) descargado con éxito.', 'success');
+        addSecurityLog('Exportación Reporte', `Exportación de reporte de facturación (${state.facturas.length} registros).`);
+    }, 800);
 }
 
-// Custom Document Preview handler (Simulation)
+function restartProcess() {
+    state.activeExpediente = null;
+    document.getElementById('lbl-cliente-correo').textContent = 'Seleccione un preset o arrastre archivos...';
+    document.getElementById('lbl-cliente-fecha').textContent = '--/--/---- --:--';
+    
+    const btnScan = document.getElementById('btn-scan');
+    if (btnScan) btnScan.disabled = true;
+    
+    // Clear dynamic Step 1 doc lists
+    const listContainer = document.getElementById('doc-list-container');
+    if (listContainer) {
+        listContainer.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; color: #868e96; padding: 30px 0; font-size: 0.82rem;">
+                Selecciona uno de los presets anteriores o arrastra archivos para iniciar el expediente.
+            </div>
+        `;
+    }
+
+    goToStep(1);
+    showToast('Nueva solicitud de facturación iniciada.', 'info');
+}
+
+// Employee Role Switcher & Config Panel Management
+function changeUserRole(roleId) {
+    if (roleId === 'brenda') {
+        state.currentUser = {
+            id: 'brenda',
+            name: 'Brenda González',
+            role: 'Administrador de Facturación',
+            avatar: 'BG'
+        };
+    } else if (roleId === 'jose') {
+        state.currentUser = {
+            id: 'jose',
+            name: 'José Pérez',
+            role: 'Auditor Contable',
+            avatar: 'JP'
+        };
+    }
+
+    // Update Topbar
+    document.querySelector('.user-avatar-gold').textContent = state.currentUser.avatar;
+    document.querySelector('.user-name-top').textContent = state.currentUser.name;
+    document.querySelector('.user-role-top').textContent = state.currentUser.role;
+
+    // Add security log
+    addSecurityLog('Cambio de Rol', `Sesión asumida por el usuario: ${state.currentUser.name}.`);
+    renderBitacoraTable();
+
+    showToast(`Rol cambiado: Bienvenido, ${state.currentUser.name}.`, 'success');
+}
+
+function saveConfiguration() {
+    const smtpHost = document.getElementById('smtp-host').value;
+    const smtpPort = document.getElementById('smtp-port').value;
+
+    showToast('Guardando configuraciones...', 'info');
+
+    setTimeout(() => {
+        addSecurityLog('Configuración Actualizada', `Ajustes SMTP actualizados a ${smtpHost}:${smtpPort}.`);
+        renderBitacoraTable();
+        showToast('✓ Configuraciones generales guardadas correctamente.', 'success');
+    }, 600);
+}
+
+// 9. Tables Dynamic Rendering Core Functions
+function renderProcesoTable() {
+    const tbody = document.getElementById('tbody-proceso');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    // Show only non-completed dossiers (not Timbrado / Entregado)
+    const inProcess = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado');
+    
+    if (inProcess.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#868e96;">No hay solicitudes pendientes en proceso.</td></tr>`;
+        return;
+    }
+
+    inProcess.forEach(e => {
+        const tr = document.createElement('tr');
+        
+        let wizardStep = 1;
+        if (e.estatus === 'Pago pendiente') wizardStep = 2;
+        if (e.estatus === 'Pago validado') wizardStep = 3;
+        if (e.estatus === 'Autorizado') wizardStep = 4;
+
+        tr.innerHTML = `
+            <td>${e.folio}</td>
+            <td>${e.cliente}</td>
+            <td>${e.fechaRecibo}</td>
+            <td>
+                <span class="badge badge-info">
+                    <svg class="badge-icon-stroke" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Fase ${wizardStep}: ${e.estatus}
+                </span>
+            </td>
+            <td style="text-align: center;">
+                <button class="btn btn-primary" onclick="resumeFlowAtStep(${wizardStep}, '${e.folio}')" style="padding: 6px 14px; font-size: 0.75rem;">Reanudar</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderCorreosTable() {
+    const tbody = document.getElementById('tbody-correos');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    state.historialCorreos.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${c.fecha}</td>
+            <td>${c.destinatario}</td>
+            <td class="col-folio">${c.folio}</td>
+            <td>${c.adjuntos}</td>
+            <td style="text-align: center;">
+                <span class="badge badge-success">
+                    <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                    ${c.estatus}
+                </span>
+            </td>
+            <td style="text-align: center;">
+                <button class="btn btn-secondary" onclick="resendEmail('${c.destinatario}', '${c.folio}')" style="padding: 5px 10px; font-size: 0.72rem;">Reenviar</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderClientesTable() {
+    const tbody = document.getElementById('tbody-clientes');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    
+    // Group unique clients from dossiers and stamped list
+    const clients = [
+        { rfc: 'EEM010101XXX', razon: 'Empresa Ejemplo, S.A. de C.V.', regimen: '601 - General de Ley Personas Morales', cp: '80000', email: 'facturacion@empresaejemplo.com' },
+        { rfc: 'SPS090909AAA', razon: 'Sistemas Sinaloa, S.A. de C.V.', regimen: '601 - General de Ley Personas Morales', cp: '81000', email: 'proveedor@sistemasinaloa.mx' },
+        { rfc: 'GSI121212BBB', razon: 'Gas Sinaloa, S.A.', regimen: '601 - General de Ley Personas Morales', cp: '80100', email: 'contacto@gassinaloa.com' }
+    ];
+
+    clients.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-family: monospace; font-weight: 600;">${c.rfc}</td>
+            <td class="col-cliente">${c.razon}</td>
+            <td>${c.regimen}</td>
+            <td>${c.cp}</td>
+            <td>${c.email}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderBitacoraTable() {
+    const tbody = document.getElementById('tbody-bitacora');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    state.bitacoraSeguridad.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="color: #6c757d;">${log.fecha}</td>
+            <td style="font-weight: 600;">${log.usuario}</td>
+            <td><span class="badge badge-pending">${log.accion || log.action}</span></td>
+            <td style="color: #495057;">${log.detalles}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderReportTable() {
+    const tbody = document.getElementById('tbody-report-invoices');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    state.facturas.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="col-folio">${f.folioInterno}</td>
+            <td>${f.folioRecibo}</td>
+            <td class="col-cliente">${f.cliente}</td>
+            <td style="color: #6c757d;">${f.fecha}</td>
+            <td style="text-align: right; font-weight: 700; color: #212529;">$${f.importe.toFixed(2)}</td>
+            <td style="text-align: center;">
+                <span class="badge badge-success">
+                    <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                    ${f.estatus}
+                </span>
+            </td>
+            <td style="text-align: center;">
+                <div class="action-icon-group">
+                    <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal('${f.folioInterno}', '${f.cliente}', '$${f.importe.toFixed(2)}')" title="Ver factura"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                    <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_${f.folioRecibo.replace('-', '')}.pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                    <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_${f.folioRecibo.replace('-', '')}.xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                    <button class="action-icon-btn btn-email" onclick="resendEmail('${state.activeExpediente ? state.activeExpediente.correo : 'facturacion@empresaejemplo.com'}', '${f.folioInterno}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    const showingText = document.getElementById('showing-results-text');
+    if (showingText) {
+        showingText.textContent = `Mostrando ${state.facturas.length} de ${state.facturas.length} resultados`;
+    }
+}
+
+function updateDashboardCounts() {
+    const timbradasEl = document.getElementById('dash-timbradas-count');
+    const procEl = document.getElementById('dash-proc-count');
+    const correosEl = document.getElementById('dash-correos-count');
+
+    if (timbradasEl) timbradasEl.textContent = state.facturas.length;
+    if (procEl) {
+        // Dossiers in process are those not Timbrado or Entregado
+        const procCount = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado').length;
+        procEl.textContent = procCount;
+    }
+    if (correosEl) correosEl.textContent = state.historialCorreos.length;
+}
+
+// 10. Audit logs and security helper functions
+function addSecurityLog(action, details) {
+    state.bitacoraSeguridad.unshift({
+        fecha: getCurrentDateTimeString(),
+        usuario: state.currentUser.name,
+        action: action,
+        detalles: details
+    });
+}
+
+function generateMockUUID() {
+    const chars = '0123456789ABCDEF';
+    let uuid = '';
+    for (let i = 0; i < 36; i++) {
+        if (i === 8 || i === 13 || i === 18 || i === 23) {
+            uuid += '-';
+        } else {
+            uuid += chars[Math.floor(Math.random() * 16)];
+        }
+    }
+    return uuid;
+}
+
+function getCurrentDateTimeString() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // hour '0' should be '12'
+    
+    return `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+}
+
+// 11. Modal fiscal details update manual edits (Step 2 fallback)
+function openEditModal() {
+    if (!state.activeExpediente) return;
+    document.getElementById('edit-rfc').value = state.activeExpediente.rfc;
+    document.getElementById('edit-razon').value = state.activeExpediente.cliente;
+    document.getElementById('edit-regimen').value = state.activeExpediente.regimenFiscal;
+    document.getElementById('edit-cp').value = state.activeExpediente.codigoPostal;
+    document.getElementById('edit-cfdi').value = state.activeExpediente.usoCfdi;
+    document.getElementById('edit-correo').value = state.activeExpediente.correo;
+
+    document.getElementById('modal-edit-fiscal').classList.add('open');
+}
+
+function saveFiscalData(event) {
+    event.preventDefault();
+    if (!state.activeExpediente) return;
+    
+    state.activeExpediente.rfc = document.getElementById('edit-rfc').value.trim().toUpperCase();
+    state.activeExpediente.cliente = document.getElementById('edit-razon').value.trim();
+    state.activeExpediente.regimenFiscal = document.getElementById('edit-regimen').value.trim();
+    state.activeExpediente.codigoPostal = document.getElementById('edit-cp').value.trim();
+    state.activeExpediente.usoCfdi = document.getElementById('edit-cfdi').value.trim();
+    state.activeExpediente.correo = document.getElementById('edit-correo').value.trim();
+
+    addAuditLogToActive('Datos fiscales modificados manualmente por el usuario.');
+    addSecurityLog('Modificación Datos Fiscales', `Datos fiscales del expediente ${state.activeExpediente.folio} modificados.`);
+
+    // Re-render
+    updateStep2Fields();
+    updatePreviewFields();
+    renderTimeline();
+
+    closeModal('modal-edit-fiscal');
+    showToast('Datos fiscales actualizados correctamente.', 'success');
+}
+
+// Document Preview window
 function previewDocument(docName, type) {
     showToast(`Abriendo visor de documentos para ${docName}...`, 'info');
     
     document.getElementById('pdf-folio').textContent = 'RECIBO-CIS-MOCK';
     document.getElementById('pdf-receptor-name').textContent = docName;
-    document.getElementById('pdf-receptor-rfc').textContent = 'DETALLE DOCUMENTO';
-    document.getElementById('pdf-receptor-cfdi').textContent = `Tipo: ${type}`;
+    document.getElementById('pdf-receptor-rfc').textContent = 'VISOR INSTITUCIONAL';
+    document.getElementById('pdf-receptor-cfdi').textContent = `Tipo Archivo: ${type}`;
+    
+    const uuidBox = document.getElementById('pdf-uuid-val');
+    if (uuidBox) {
+        uuidBox.textContent = 'MOCK-DOCUMENT-PREVIEW-NOT-STAMPED';
+    }
+
     document.getElementById('pdf-unit-price').textContent = '-';
     document.getElementById('pdf-subtotal').textContent = '-';
     document.getElementById('pdf-iva').textContent = '-';
@@ -471,7 +1340,7 @@ function previewDocument(docName, type) {
     }, 400);
 }
 
-// Toast Notification System
+// Toast Notifications Helper
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
