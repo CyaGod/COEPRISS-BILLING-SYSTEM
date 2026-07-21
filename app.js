@@ -629,6 +629,7 @@ function createActiveExpedienteFromUploads() {
         importe: 0,
         fechaRecibo: getCurrentDateTimeString(),
         concepto: '',
+        folioRecibo: '',
         banco: '',
         fechaPago: '',
         referencia: '',
@@ -808,7 +809,8 @@ function parseExtractedFields(text) {
     const upper = normalized.toUpperCase();
     const rfcMatch = upper.match(/\b[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}\b/);
     const amountMatch = normalized.match(/(?:IMPORTE|TOTAL(?: A PAGAR)?|MONTO|DEPOSITO|PAGO)[^\d$]{0,40}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
-    const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION|FOLIO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
+    const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DEL?\s+)?RECIBO|NO\.?\s+DE?\s+RECIBO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
+    const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const reasonMatch = normalized.match(/(?:RAZON SOCIAL|RAZON|NOMBRE|CONTRIBUYENTE)[\s:#-]*([^\n]{4,100})/i);
     const conceptMatch = normalized.match(/(?:CONCEPTO|DESCRIPCION)[\s:#-]*([^\n]{4,120})/i);
     const dateMatch = normalized.match(/(?:FECHA(?:\s+PAGO)?|FECHA DE PAGO)[\s:#-]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}(?:\s+\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?)?)/i);
@@ -819,6 +821,7 @@ function parseExtractedFields(text) {
     const referencia = referenceMatch ? cleanOcrValue(referenceMatch[1]) : '';
     const concepto = conceptMatch ? cleanOcrValue(conceptMatch[1]) : '';
     const fechaPago = dateMatch ? cleanOcrValue(dateMatch[1]) : '';
+    const folioRecibo = folioReciboMatch ? cleanOcrValue(folioReciboMatch[1]) : '';
     return {
         rfc: rfcMatch ? rfcMatch[0].toUpperCase() : '',
         razonSocial,
@@ -827,6 +830,7 @@ function parseExtractedFields(text) {
         referencia,
         concepto,
         fechaPago,
+        folioRecibo,
         confidence: {
             rfc: rfcMatch ? 0.95 : 0,
             razonSocial: razonSocial ? 0.65 : 0,
@@ -834,7 +838,8 @@ function parseExtractedFields(text) {
             importe: Number.isFinite(amount) ? 0.8 : 0,
             referencia: referencia ? 0.7 : 0,
             concepto: concepto ? 0.8 : 0,
-            fechaPago: fechaPago ? 0.75 : 0
+            fechaPago: fechaPago ? 0.75 : 0,
+            folioRecibo: folioRecibo ? 0.8 : 0
         }
     };
 }
@@ -854,6 +859,7 @@ function applyExtractedFields(fields) {
     if (fields.referencia) dossier.referencia = fields.referencia;
     if (fields.concepto) dossier.concepto = fields.concepto;
     if (fields.fechaPago) dossier.fechaPago = fields.fechaPago;
+    if (fields.folioRecibo) dossier.folioRecibo = fields.folioRecibo;
 }
 
 // Load presets of test invoices
@@ -935,7 +941,7 @@ function updateStep2Fields() {
 
     // These values come from OCR only. The word "PAGADO" in a document is
     // not bank confirmation, so the validation status remains pending.
-    document.getElementById('val-cis-folio').textContent = state.activeExpediente.folio || pending;
+    document.getElementById('val-cis-folio').textContent = state.activeExpediente.folioRecibo || pending;
     document.getElementById('val-cis-fecha').textContent = state.activeExpediente.fechaPago || pending;
     document.getElementById('val-cis-concepto').textContent = state.activeExpediente.concepto || pending;
     document.getElementById('val-cis-importe').textContent = Number.isFinite(amount) && amount > 0
