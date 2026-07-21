@@ -627,7 +627,9 @@ async function extractUploadedDocuments() {
                 allText += `\n${pageText}`;
             } else {
                 const canvas = await renderPdfPageForOcr(page);
-                allText += `\n${await recognizeCanvasWithFallback(canvas)}`;
+                // PSM 4 works better for scanned PDF pages with a full-page
+                // document layout; image receipts keep the banded PSM 6 path.
+                allText += `\n${await recognizeCanvasWithFallback(canvas, '4')}`;
                 canvas.width = 1;
                 canvas.height = 1;
             }
@@ -654,13 +656,14 @@ async function recognizeImageWithFallback(file) {
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     if (typeof bitmap.close === 'function') bitmap.close();
 
-    const text = await recognizeCanvasWithFallback(canvas);
+    const text = await recognizeCanvasWithFallback(canvas, '6');
     canvas.width = 1;
     canvas.height = 1;
     return text;
 }
 
-async function recognizeCanvasWithFallback(canvas) {
+async function recognizeCanvasWithFallback(canvas, pageSegMode = '6') {
+    await state.ocrWorker.setParameters({ tessedit_pageseg_mode: pageSegMode });
     const firstPass = await state.ocrWorker.recognize(canvas);
     const firstText = firstPass.data.text || '';
     const firstFields = parseExtractedFields(firstText);
@@ -689,7 +692,9 @@ async function recognizeCanvasWithFallback(canvas) {
 
 async function renderPdfPageForOcr(page) {
     const baseViewport = page.getViewport({ scale: 1 });
-    const scale = Math.max(1.2, Math.min(1.6, 1800 / Math.max(baseViewport.width, baseViewport.height)));
+    // Render scanned PDFs at a higher resolution so small RFCs and references
+    // do not disappear before Tesseract receives the page canvas.
+    const scale = Math.max(1.6, Math.min(2.2, 1800 / Math.max(baseViewport.width, baseViewport.height)));
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(viewport.width);
