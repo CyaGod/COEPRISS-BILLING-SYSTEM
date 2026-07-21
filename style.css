@@ -1,15 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 
 :root {
-    /* Color Palette matching screenshot */
-    --primary-color: #560724;       /* COEPRISS Burgundy */
-    --primary-dark: #3d0519;        /* Darker sidebar burgundy */
-    --primary-light: #fbeff3;       /* Warm warm pink/off-white */
-    --primary-hover: #720a30;
-    --secondary-color: #B38E5D;     /* Government Gold */
-    --secondary-light: #ebdcb9;
-    --sidebar-active-bg: #851c42;   /* Active sidebar item color from screenshot */
-    --light-neutral: #f9f6f7;       /* App workspace background matching image */
+    /* Color Palette - Navy Blue and Gold/Beige Theme */
+    --primary-color: #0A2240;       /* Navy Blue Principal */
+    --primary-dark: #061628;        /* Dark Navy Blue (Fondo Sidebar) */
+    --primary-light: #e6edf4;       /* Soft light blue-gray */
+    --primary-hover: #1a3a60;       /* Navy Blue Hover */
+    --secondary-color: #C8A84B;     /* Gold Principal */
+    --secondary-light: #f0e0a8;     /* Cream/Light Gold */
+    --secondary-dark: #a07830;      /* Dark Gold */
+    --sidebar-active-bg: #1a3a60;   /* Active sidebar item color (hover navy) */
+    --light-neutral: #f0f4f8;       /* General workspace background (gris azulado claro) */
     --card-bg: #ffffff;
     
     /* Semantic Colors from screenshot */
