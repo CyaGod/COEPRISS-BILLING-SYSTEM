@@ -1177,6 +1177,7 @@ function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = 
     document.getElementById('pdf-folio').textContent = folio;
     document.getElementById('pdf-receptor-name').textContent = clientName;
     document.getElementById('pdf-receptor-rfc').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? state.activeExpediente.rfc : 'XAXX010101000';
+    document.getElementById('pdf-receptor-regimen').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? (state.activeExpediente.regimenFiscal || 'Pendiente de confirmación') : '601';
     document.getElementById('pdf-receptor-cfdi').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? state.activeExpediente.usoCfdi : 'G03 - Gastos en general';
     
     // Set UUID in box
@@ -1193,6 +1194,8 @@ function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = 
     document.getElementById('pdf-subtotal').textContent = `$${numericSubtotal.toFixed(2)}`;
     document.getElementById('pdf-iva').textContent = `$${numericIva.toFixed(2)}`;
     document.getElementById('pdf-total').textContent = totalVal;
+    const conceptoPreview = document.getElementById('pdf-concepto');
+    if (conceptoPreview) conceptoPreview.textContent = state.activeExpediente?.concepto || 'Servicio de trámite de COEPRISS Sinaloa';
 
     document.getElementById('modal-invoice-preview').classList.add('open');
 }
@@ -1676,21 +1679,41 @@ function saveFiscalData(event) {
 // Document Preview window
 function previewDocument(docName, type) {
     showToast(`Abriendo visor de documentos para ${docName}...`, 'info');
-    
-    document.getElementById('pdf-folio').textContent = 'RECIBO-CIS-MOCK';
-    document.getElementById('pdf-receptor-name').textContent = docName;
-    document.getElementById('pdf-receptor-rfc').textContent = 'VISOR INSTITUCIONAL';
-    document.getElementById('pdf-receptor-cfdi').textContent = `Tipo Archivo: ${type}`;
-    
+
+    const dossier = state.activeExpediente;
+    const hasExtractedData = dossier && (dossier.rfc || dossier.cliente || Number.isFinite(Number(dossier.importe)) && dossier.importe > 0);
+    const previewName = hasExtractedData && dossier.cliente !== 'Pendiente de lectura' ? dossier.cliente : docName;
+    const previewRfc = hasExtractedData && dossier.rfc ? dossier.rfc : 'OCR pendiente';
+    const previewRegimen = hasExtractedData && dossier.regimenFiscal ? dossier.regimenFiscal : 'Pendiente de confirmación';
+    const previewCfdi = hasExtractedData && dossier.usoCfdi ? dossier.usoCfdi : `Tipo de archivo: ${type}`;
+    const numericTotal = hasExtractedData ? Number(dossier.importe) : NaN;
+
+    document.getElementById('pdf-folio').textContent = hasExtractedData ? dossier.folio : 'RECIBO-CIS-MOCK';
+    document.getElementById('pdf-receptor-name').textContent = previewName;
+    document.getElementById('pdf-receptor-rfc').textContent = previewRfc;
+    document.getElementById('pdf-receptor-regimen').textContent = previewRegimen;
+    document.getElementById('pdf-receptor-cfdi').textContent = previewCfdi;
+    const conceptoPreview = document.getElementById('pdf-concepto');
+    if (conceptoPreview) conceptoPreview.textContent = hasExtractedData && dossier.concepto ? dossier.concepto : 'Información extraída del documento';
+
     const uuidBox = document.getElementById('pdf-uuid-val');
     if (uuidBox) {
-        uuidBox.textContent = 'MOCK-DOCUMENT-PREVIEW-NOT-STAMPED';
+        uuidBox.textContent = dossier?.uuid || 'PREVISUALIZACION-OCR-SIN-TIMBRAR';
     }
 
-    document.getElementById('pdf-unit-price').textContent = '-';
-    document.getElementById('pdf-subtotal').textContent = '-';
-    document.getElementById('pdf-iva').textContent = '-';
-    document.getElementById('pdf-total').textContent = '-';
+    if (Number.isFinite(numericTotal) && numericTotal > 0) {
+        const subtotal = numericTotal / 1.16;
+        const iva = numericTotal - subtotal;
+        document.getElementById('pdf-unit-price').textContent = `$${subtotal.toFixed(2)}`;
+        document.getElementById('pdf-subtotal').textContent = `$${subtotal.toFixed(2)}`;
+        document.getElementById('pdf-iva').textContent = `$${iva.toFixed(2)}`;
+        document.getElementById('pdf-total').textContent = `$${numericTotal.toFixed(2)}`;
+    } else {
+        document.getElementById('pdf-unit-price').textContent = '-';
+        document.getElementById('pdf-subtotal').textContent = '-';
+        document.getElementById('pdf-iva').textContent = '-';
+        document.getElementById('pdf-total').textContent = '-';
+    }
 
     setTimeout(() => {
         document.getElementById('modal-invoice-preview').classList.add('open');
