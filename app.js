@@ -755,16 +755,51 @@ async function extractUploadedDocuments() {
 async function recognizeImageWithFallback(file) {
     const bitmap = await createImageBitmap(file);
     const canvas = document.createElement('canvas');
-    const scale = Math.min(1.5, 1600 / bitmap.width, 1800 / bitmap.height);
+    // Do not shrink a phone photograph before OCR. Small RFCs, UUIDs and
+    // amounts lose too much detail when the image is reduced to 1600 px.
+    const scale = Math.min(1.85, 2400 / bitmap.width, 2800 / bitmap.height);
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     if (typeof bitmap.close === 'function') bitmap.close();
 
-    const text = await recognizeCanvasWithFallback(canvas, '6');
+    let text = await recognizeCanvasWithFallback(canvas, '6');
+    const firstFields = parseExtractedFields(text);
+
+    // A second, high-contrast sparse-text pass helps photographs of CFDIs:
+    // the first pass is better for tables, while PSM 11 is better for the
+    // two-column header and the small fiscal metadata on the right.
+    const hasFiscalCore = Boolean(firstFields.rfc && firstFields.razonSocial && firstFields.importe && firstFields.uuid);
+    if (!hasFiscalCore) {
+        const enhancedCanvas = createEnhancedOcrCanvas(canvas);
+        text += `\n${await recognizeCanvasWithFallback(enhancedCanvas, '11')}`;
+        enhancedCanvas.width = 1;
+        enhancedCanvas.height = 1;
+    }
     canvas.width = 1;
     canvas.height = 1;
     return text;
+}
+
+function createEnhancedOcrCanvas(sourceCanvas) {
+    const canvas = document.createElement('canvas');
+    canvas.width = sourceCanvas.width;
+    canvas.height = sourceCanvas.height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(sourceCanvas, 0, 0);
+
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = image.data;
+    const contrast = 1.32;
+    for (let index = 0; index < data.length; index += 4) {
+        const gray = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114);
+        const adjusted = Math.max(0, Math.min(255, ((gray - 128) * contrast) + 128));
+        data[index] = adjusted;
+        data[index + 1] = adjusted;
+        data[index + 2] = adjusted;
+    }
+    context.putImageData(image, 0, 0);
+    return canvas;
 }
 
 async function recognizeCanvasWithFallback(canvas, pageSegMode = '6') {
@@ -808,47 +843,90 @@ async function renderPdfPageForOcr(page) {
     return canvas;
 }
 
+function stripOcrAccents(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function extractOcrLabelValue(source, labelPattern, stopPattern, maxLength = 180) {
+    const expression = new RegExp(`(?:${labelPattern})\\s*[:\\-]?\\s*([\\s\\S]{1,${maxLength}}?)(?=\\s*(?:${stopPattern})\\s*[:\\-]?|$)`, 'i');
+    const match = source.match(expression);
+    return match ? cleanOcrValue(match[1] || '') : '';
+}
+
+function normalizeOcrDate(value) {
+    const cleanValue = cleanOcrValue(value);
+    const isoMatch = cleanValue.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(.*)$/);
+    if (isoMatch) {
+        return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}${isoMatch[4]}`.trim();
+    }
+    return cleanValue;
+}
+
 function parseExtractedFields(text) {
-    const normalized = text.replace(/\r/g, '').replace(/[ \t]+/g, ' ');
-    const upper = normalized.toUpperCase();
-    const rfcMatch = upper.match(/\b[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}\b/);
-    const amountMatch = normalized.match(/(?:IMPORTE|TOTAL(?: A PAGAR)?|MONTO|DEPOSITO|PAGO)[^\d$]{0,40}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
+    const normalized = String(text || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ');
+    const plain = stripOcrAccents(normalized).toUpperCase();
+    const rfcPattern = '[A-Z&Ñ]{3,4}\\d{6}[A-Z0-9]{2,3}';
+    const rfcEmisorMatch = plain.match(new RegExp(`RFC\\s+EMISOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
+    const rfcReceptorMatch = plain.match(new RegExp(`RFC\\s+RECEPTOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
+    const genericRfcMatch = plain.match(new RegExp(`\\b${rfcPattern}\\b`, 'i'));
+
+    const stopLabels = 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|CODIGO\\s+POSTAL|REGIMEN\\s+FISCAL|USO\\s+CFDI|FOLIO\\s+FISCAL|EFECTO\\s+DE\\s+COMPROBANTE|CONCEPTOS|DESCRIPCION|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL';
+    const receiverName = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?RECEPTOR', stopLabels, 120);
+    const legalName = extractOcrLabelValue(plain, 'RAZON\\s+SOCIAL', stopLabels, 120);
+    const razonSocial = receiverName || legalName;
+    const codigoPostal = (plain.match(/CODIGO\s+POSTAL(?:\s+DEL)?(?:\s+RECEPTOR)?\s*[:\-]?\s*(\d{5})/i) || [])[1] || '';
+    const regimenFiscal = extractOcrLabelValue(plain, 'REGIMEN\\s+FISCAL(?:\\s+RECEPTOR)?', 'USO\\s+CFDI|EXPORTACION|FOLIO\\s+FISCAL|RFC|CONCEPTOS', 100);
+    const usoCfdi = extractOcrLabelValue(plain, 'USO\\s+CFDI', 'CONCEPTOS|FOLIO\\s+FISCAL|REGIMEN\\s+FISCAL|MONEDA|FORMA\\s+DE\\s+PAGO', 80);
+    const tipoCfdi = extractOcrLabelValue(plain, 'EFECTO\\s+DE\\s+COMPROBANTE', 'REGIMEN\\s+FISCAL|EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|DESCRIPCION', 40);
+    const uuidMatch = plain.match(/FOLIO\s+FISCAL\s*[:\-]?\s*([0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12})/i);
+
+    const totalMatch = plain.match(/(?:^|\n)\s*TOTAL\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/im);
+    const amountMatch = totalMatch || normalized.match(/(?:IMPORTE|TOTAL(?: A PAGAR)?|MONTO|DEPOSITO|PAGO)[^\d$]{0,40}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
     const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DEL?\s+)?RECIBO|NO\.?\s+DE?\s+RECIBO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
-    const reasonMatch = normalized.match(/(?:RAZON SOCIAL|RAZON|NOMBRE|CONTRIBUYENTE)[\s:#-]*([^\n]{4,100})/i);
     const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|CLAVE\s+RASTREO|RASTREO)[\s:#-]*([A-Z0-9]{6,30})/i);
     const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,20})/i);
-    const conceptMatch = normalized.match(/(?:CONCEPTO|DESCRIPCION)[\s:#-]*([^\n]{4,120})/i);
-    const dateMatch = normalized.match(/(?:FECHA(?:\s+PAGO)?|FECHA DE PAGO)[\s:#-]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}(?:\s+\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?)?)/i);
+    const concept = extractOcrLabelValue(plain, 'DESCRIPCION|CONCEPTO', 'NUMERO\\s+DE\\s+PEDIMENTO|NUMERO\\s+DE\\s+CUENTA|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL', 180);
+    const dateMatch = plain.match(/(?:FECHA(?:\s+Y\s+HORA)?(?:\s+DE)?\s+EMISION|FECHA(?:\s+PAGO)?|FECHA\s+DE\s+PAGO)[^0-9]{0,40}(?:\d{5}\s+)?((?:\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)/i);
     const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'NU'];
-    const bank = bankNames.find(name => upper.includes(name)) || '';
+    const bank = bankNames.find(name => plain.includes(name)) || '';
     const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
-    const razonSocial = reasonMatch ? cleanOcrValue(reasonMatch[1]) : '';
     const referencia = referenceMatch ? cleanOcrValue(referenceMatch[1]) : '';
-    const concepto = conceptMatch ? cleanOcrValue(conceptMatch[1]) : '';
-    const fechaPago = dateMatch ? cleanOcrValue(dateMatch[1]) : '';
+    const fechaPago = dateMatch ? normalizeOcrDate(dateMatch[1]) : '';
     const folioRecibo = folioReciboMatch ? cleanOcrValue(folioReciboMatch[1]) : '';
     const claveRastreo = trackingMatch ? cleanOcrValue(trackingMatch[1]).replace(/[^A-Z0-9]/gi, '') : '';
     const cuentaBeneficiaria = accountMatch ? accountMatch[1].replace(/\D/g, '') : '';
+    const rfc = (rfcReceptorMatch || rfcEmisorMatch || genericRfcMatch)?.[1]?.toUpperCase() || (genericRfcMatch?.[0] || '').toUpperCase();
+
     return {
-        rfc: rfcMatch ? rfcMatch[0].toUpperCase() : '',
+        rfc,
         razonSocial,
+        regimenFiscal,
+        codigoPostal,
+        usoCfdi,
+        tipoCfdi,
+        uuid: uuidMatch ? uuidMatch[1].toUpperCase() : '',
         banco: bank,
         importe: Number.isFinite(amount) ? amount : null,
         referencia,
-        concepto,
+        concepto: concept,
         fechaPago,
         folioRecibo,
         claveRastreo,
         cuentaBeneficiaria,
         confidence: {
-            rfc: rfcMatch ? 0.95 : 0,
-            razonSocial: razonSocial ? 0.65 : 0,
+            rfc: rfc ? 0.95 : 0,
+            razonSocial: razonSocial ? 0.9 : 0,
+            regimenFiscal: regimenFiscal ? 0.8 : 0,
+            codigoPostal: codigoPostal ? 0.95 : 0,
+            usoCfdi: usoCfdi ? 0.85 : 0,
+            tipoCfdi: tipoCfdi ? 0.8 : 0,
+            uuid: uuidMatch ? 0.95 : 0,
             banco: bank ? 0.85 : 0,
-            importe: Number.isFinite(amount) ? 0.8 : 0,
+            importe: Number.isFinite(amount) ? 0.95 : 0,
             referencia: referencia ? 0.7 : 0,
-            concepto: concepto ? 0.8 : 0,
-            fechaPago: fechaPago ? 0.75 : 0,
+            concepto: concept ? 0.85 : 0,
+            fechaPago: fechaPago ? 0.9 : 0,
             folioRecibo: folioRecibo ? 0.8 : 0,
             claveRastreo: claveRastreo ? 0.85 : 0,
             cuentaBeneficiaria: cuentaBeneficiaria ? 0.85 : 0
@@ -857,7 +935,7 @@ function parseExtractedFields(text) {
 }
 
 function cleanOcrValue(value) {
-    return value.replace(/\s+/g, ' ').replace(/[|]+/g, '').trim().replace(/[.,;:]$/, '');
+    return String(value || '').replace(/\s+/g, ' ').replace(/[|]+/g, '').trim().replace(/[.,;:]$/, '');
 }
 
 function applyExtractedFields(fields) {
@@ -872,6 +950,11 @@ function applyExtractedFields(fields) {
     if (fields.concepto) dossier.concepto = fields.concepto;
     if (fields.fechaPago) dossier.fechaPago = fields.fechaPago;
     if (fields.folioRecibo) dossier.folioRecibo = fields.folioRecibo;
+    if (fields.regimenFiscal) dossier.regimenFiscal = fields.regimenFiscal;
+    if (fields.codigoPostal) dossier.codigoPostal = fields.codigoPostal;
+    if (fields.usoCfdi) dossier.usoCfdi = fields.usoCfdi;
+    if (fields.tipoCfdi) dossier.tipoCfdi = fields.tipoCfdi.toLowerCase().includes('egreso') ? 'egreso' : 'ingreso';
+    if (fields.uuid) dossier.uuid = fields.uuid;
     if (fields.claveRastreo) dossier.claveRastreo = fields.claveRastreo;
     if (fields.cuentaBeneficiaria) dossier.cuentaBeneficiaria = fields.cuentaBeneficiaria;
 }
