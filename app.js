@@ -632,10 +632,16 @@ function createActiveExpedienteFromUploads() {
         concepto: '',
         folioRecibo: '',
         banco: '',
+        bancoEmisor: '',
+        bancoReceptor: '',
+        bancoEmisorCodigo: '',
+        bancoReceptorCodigo: '',
         fechaPago: '',
         referencia: '',
         claveRastreo: '',
         cuentaBeneficiaria: '',
+        formaPago: '',
+        moneda: '',
         estatus: 'Recibido',
         tipoCfdi: 'ingreso',
         uuid: '',
@@ -868,9 +874,12 @@ function parseExtractedFields(text) {
     const rfcPattern = '[A-Z&Ñ]{3,4}\\d{6}[A-Z0-9]{2,3}';
     const rfcEmisorMatch = plain.match(new RegExp(`RFC\\s+EMISOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
     const rfcReceptorMatch = plain.match(new RegExp(`RFC\\s+RECEPTOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
-    const genericRfcMatch = plain.match(new RegExp(`\\b${rfcPattern}\\b`, 'i'));
+    // Only accept an unlabeled RFC when it appears after an RFC label. A
+    // random tracking key can have the same letter/number shape as an RFC.
+    const genericRfcMatch = plain.match(new RegExp(`(?:^|\\n)\\s*RFC(?:\\s+(?:DEL|DE)?\\s*[A-Z ]+?)?\\s*[:\\-]?\\s*(\\b${rfcPattern}\\b)`, 'im'));
 
     const stopLabels = 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|CODIGO\\s+POSTAL|REGIMEN\\s+FISCAL|USO\\s+CFDI|FOLIO\\s+FISCAL|EFECTO\\s+DE\\s+COMPROBANTE|CONCEPTOS|DESCRIPCION|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL';
+    const bankStopLabels = 'INSTITUCION\\s+(?:EMISORA?|RECEPTORA?)|BANCO\\s+(?:EMISOR|RECEPTOR|ORIGEN|DESTINO)|CODIGO|CLAVE|CUENTA|CLABE|MONTO|IMPORTE|REFERENCIA|FECHA|TOTAL|FOLIO';
     const receiverName = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?RECEPTOR', stopLabels, 120);
     const legalName = extractOcrLabelValue(plain, 'RAZON\\s+SOCIAL', stopLabels, 120);
     const razonSocial = receiverName || legalName;
@@ -879,23 +888,34 @@ function parseExtractedFields(text) {
     const usoCfdi = extractOcrLabelValue(plain, 'USO\\s+CFDI', 'CONCEPTOS|FOLIO\\s+FISCAL|REGIMEN\\s+FISCAL|MONEDA|FORMA\\s+DE\\s+PAGO', 80);
     const tipoCfdi = extractOcrLabelValue(plain, 'EFECTO\\s+DE\\s+COMPROBANTE', 'REGIMEN\\s+FISCAL|EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|DESCRIPCION', 40);
     const uuidMatch = plain.match(/FOLIO\s+FISCAL\s*[:\-]?\s*([0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12})/i);
+    const bancoEmisor = extractOcrLabelValue(plain, '(?:INSTITUCION|BANCO)\\s+(?:EMISORA?|ORIGEN)(?:\\s+DEL\\s+PAGO)?', bankStopLabels, 80);
+    const bancoReceptor = extractOcrLabelValue(plain, '(?:INSTITUCION|BANCO)\\s+(?:RECEPTORA?|DESTINO)(?:\\s+DEL\\s+PAGO)?', bankStopLabels, 80);
+    const bancoEmisorCodigoMatch = plain.match(/(?:CODIGO|CLAVE)\s+(?:DE\s+)?(?:BANCO|INSTITUCION)\s+(?:EMISOR|EMISORA|ORIGEN)[^0-9]{0,30}(\d{3,6})/i);
+    const bancoReceptorCodigoMatch = plain.match(/(?:CODIGO|CLAVE)\s+(?:DE\s+)?(?:BANCO|INSTITUCION)\s+(?:RECEPTOR|RECEPTORA|DESTINO)[^0-9]{0,30}(\d{3,6})/i);
 
     const totalMatch = plain.match(/(?:^|\n)\s*TOTAL\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/im);
-    const amountMatch = totalMatch || normalized.match(/(?:IMPORTE|TOTAL(?: A PAGAR)?|MONTO|DEPOSITO|PAGO)[^\d$]{0,40}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
+    // Do not use the bare word "PAGO": it can be followed by an account
+    // number or date and would produce a false, very large amount.
+    const explicitPaymentAmountMatch = normalized.match(/(?:MONTO\s+(?:DEL|DE)?\s*PAGO|IMPORTE\s+(?:PAGADO|DEL\s+PAGO)?|DEPOSITO|TOTAL(?:\s+A\s+PAGAR)?)[^\d$]{0,60}\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
+    const amountMatch = totalMatch || explicitPaymentAmountMatch || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
     const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DEL?\s+)?RECIBO|NO\.?\s+DE?\s+RECIBO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
+    const numericReferenceMatch = normalized.match(/(?:NUMERO\s+DE\s+REFERENCIA|REFERENCIA|REF\.?)[\s:#-]*(\d{1,7})(?!\d)/i);
     const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|CLAVE\s+RASTREO|RASTREO)[\s:#-]*([A-Z0-9]{6,30})/i);
-    const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,20})/i);
+    const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,18})/i);
     const concept = extractOcrLabelValue(plain, 'DESCRIPCION|CONCEPTO', 'NUMERO\\s+DE\\s+PEDIMENTO|NUMERO\\s+DE\\s+CUENTA|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL', 180);
+    const formaPago = extractOcrLabelValue(plain, 'FORMA\\s+DE\\s+PAGO', 'METODO\\s+DE\\s+PAGO|MONEDA|SUBTOTAL|TOTAL|CONCEPTOS', 100);
+    const moneda = extractOcrLabelValue(plain, 'MONEDA', 'FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|CONCEPTOS', 40);
     const dateMatch = plain.match(/(?:FECHA(?:\s+Y\s+HORA)?(?:\s+DE)?\s+EMISION|FECHA(?:\s+PAGO)?|FECHA\s+DE\s+PAGO)[^0-9]{0,40}(?:\d{5}\s+)?((?:\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)/i);
     const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'NU'];
     const bank = bankNames.find(name => plain.includes(name)) || '';
     const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
-    const referencia = referenceMatch ? cleanOcrValue(referenceMatch[1]) : '';
+    const referencia = numericReferenceMatch ? cleanOcrValue(numericReferenceMatch[1]) : (referenceMatch ? cleanOcrValue(referenceMatch[1]) : '');
     const fechaPago = dateMatch ? normalizeOcrDate(dateMatch[1]) : '';
     const folioRecibo = folioReciboMatch ? cleanOcrValue(folioReciboMatch[1]) : '';
     const claveRastreo = trackingMatch ? cleanOcrValue(trackingMatch[1]).replace(/[^A-Z0-9]/gi, '') : '';
     const cuentaBeneficiaria = accountMatch ? accountMatch[1].replace(/\D/g, '') : '';
+    const bancoDetectado = bank || bancoEmisor || bancoReceptor;
     const rfc = (rfcReceptorMatch || rfcEmisorMatch || genericRfcMatch)?.[1]?.toUpperCase() || (genericRfcMatch?.[0] || '').toUpperCase();
 
     return {
@@ -906,7 +926,11 @@ function parseExtractedFields(text) {
         usoCfdi,
         tipoCfdi,
         uuid: uuidMatch ? uuidMatch[1].toUpperCase() : '',
-        banco: bank,
+        banco: bancoDetectado,
+        bancoEmisor,
+        bancoReceptor,
+        bancoEmisorCodigo: bancoEmisorCodigoMatch ? bancoEmisorCodigoMatch[1] : '',
+        bancoReceptorCodigo: bancoReceptorCodigoMatch ? bancoReceptorCodigoMatch[1] : '',
         importe: Number.isFinite(amount) ? amount : null,
         referencia,
         concepto: concept,
@@ -914,6 +938,8 @@ function parseExtractedFields(text) {
         folioRecibo,
         claveRastreo,
         cuentaBeneficiaria,
+        formaPago,
+        moneda,
         confidence: {
             rfc: rfc ? 0.95 : 0,
             razonSocial: razonSocial ? 0.9 : 0,
@@ -922,14 +948,20 @@ function parseExtractedFields(text) {
             usoCfdi: usoCfdi ? 0.85 : 0,
             tipoCfdi: tipoCfdi ? 0.8 : 0,
             uuid: uuidMatch ? 0.95 : 0,
-            banco: bank ? 0.85 : 0,
+            banco: bancoDetectado ? 0.85 : 0,
+            bancoEmisor: bancoEmisor ? 0.85 : 0,
+            bancoReceptor: bancoReceptor ? 0.85 : 0,
+            bancoEmisorCodigo: bancoEmisorCodigoMatch ? 0.95 : 0,
+            bancoReceptorCodigo: bancoReceptorCodigoMatch ? 0.95 : 0,
             importe: Number.isFinite(amount) ? 0.95 : 0,
             referencia: referencia ? 0.7 : 0,
             concepto: concept ? 0.85 : 0,
             fechaPago: fechaPago ? 0.9 : 0,
             folioRecibo: folioRecibo ? 0.8 : 0,
             claveRastreo: claveRastreo ? 0.85 : 0,
-            cuentaBeneficiaria: cuentaBeneficiaria ? 0.85 : 0
+            cuentaBeneficiaria: cuentaBeneficiaria ? 0.85 : 0,
+            formaPago: formaPago ? 0.85 : 0,
+            moneda: moneda ? 0.85 : 0
         }
     };
 }
@@ -955,8 +987,14 @@ function applyExtractedFields(fields) {
     if (fields.usoCfdi) dossier.usoCfdi = fields.usoCfdi;
     if (fields.tipoCfdi) dossier.tipoCfdi = fields.tipoCfdi.toLowerCase().includes('egreso') ? 'egreso' : 'ingreso';
     if (fields.uuid) dossier.uuid = fields.uuid;
+    if (fields.bancoEmisor) dossier.bancoEmisor = fields.bancoEmisor;
+    if (fields.bancoReceptor) dossier.bancoReceptor = fields.bancoReceptor;
+    if (fields.bancoEmisorCodigo) dossier.bancoEmisorCodigo = fields.bancoEmisorCodigo;
+    if (fields.bancoReceptorCodigo) dossier.bancoReceptorCodigo = fields.bancoReceptorCodigo;
     if (fields.claveRastreo) dossier.claveRastreo = fields.claveRastreo;
     if (fields.cuentaBeneficiaria) dossier.cuentaBeneficiaria = fields.cuentaBeneficiaria;
+    if (fields.formaPago) dossier.formaPago = fields.formaPago;
+    if (fields.moneda) dossier.moneda = fields.moneda;
 }
 
 // Load presets of test invoices
@@ -1051,6 +1089,9 @@ function updateStep2Fields() {
         ? `$${amount.toFixed(2)} MXN`
         : pending;
     document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia || pending;
+    document.getElementById('val-banco-clave').textContent = state.activeExpediente.claveRastreo || pending;
+    document.getElementById('val-banco-cuenta').textContent = state.activeExpediente.cuentaBeneficiaria || pending;
+    document.getElementById('val-banco-forma').textContent = state.activeExpediente.formaPago || pending;
 }
 
 function formatBanxicoDate(value) {
@@ -1089,10 +1130,10 @@ function openBanxicoCepModal() {
                 <form id="banxico-cep-form" class="cep-modal-form">
                     <div class="cep-form-grid">
                         <label>Fecha de operación
-                            <input id="cep-fecha" type="text" readonly>
+                            <input id="cep-fecha" type="text" maxlength="10" placeholder="DD-MM-AAAA" autocomplete="off">
                         </label>
                         <label>Monto detectado
-                            <input id="cep-monto" type="text" readonly>
+                            <input id="cep-monto" type="text" inputmode="decimal" maxlength="18" placeholder="Ej. 704.00" autocomplete="off">
                         </label>
                         <label>Criterio de búsqueda
                             <select id="cep-tipo-criterio">
@@ -1112,17 +1153,31 @@ function openBanxicoCepModal() {
                             <input id="cep-receptor" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 40012">
                         </label>
                         <label>Cuenta beneficiaria (CLABE/tarjeta/celular)
-                            <input id="cep-cuenta" type="text" inputmode="numeric" maxlength="20" placeholder="Opcional para consultar estado">
-                        </label>
-                        <label>Código de seguridad CAPTCHA
-                            <input id="cep-captcha" type="text" maxlength="5" autocomplete="off" placeholder="Lo solicita Banxico">
+                            <input id="cep-cuenta" type="text" inputmode="numeric" maxlength="18" placeholder="Opcional para consultar estado">
                         </label>
                     </div>
                     <label class="cep-checkbox-row">
-                        <input id="cep-receptor-participante" type="checkbox" value="1">
+                        <input id="cep-receptor-participante" type="checkbox" value="0">
                         El beneficiario es directamente el banco receptor
                     </label>
-                    <p class="cep-modal-help">Banco detectado por OCR: <strong id="cep-banco-detectado">No detectado</strong>. La consulta oficial puede solicitar CAPTCHA.</p>
+                    <div class="cep-captcha-card">
+                        <div class="cep-captcha-heading">
+                            <div>
+                                <strong>Imagen de seguridad oficial de Banxico</strong>
+                                <span>Escribe exactamente el código que aparece en la imagen.</span>
+                            </div>
+                            <button type="button" class="btn btn-secondary cep-captcha-reload" id="cep-captcha-reload">Intentar otra imagen</button>
+                        </div>
+                        <div class="cep-captcha-content">
+                            <img id="cep-captcha-image" alt="CAPTCHA oficial de Banxico">
+                            <label>Código de seguridad *
+                                <input id="cep-captcha" type="text" maxlength="5" autocomplete="off" placeholder="Código de la imagen" required>
+                            </label>
+                        </div>
+                        <p class="cep-modal-help">Por seguridad, este CAPTCHA no se omite ni se resuelve automáticamente. Si necesitas cambiarlo, usa “Intentar otra imagen”.</p>
+                    </div>
+                    <p class="cep-modal-help">Datos detectados por OCR: banco emisor <strong id="cep-banco-emisor-detectado">No detectado</strong>, banco receptor <strong id="cep-banco-receptor-detectado">No detectado</strong>, forma de pago <strong id="cep-forma-pago-detectada">No detectada</strong>.</p>
+                    <p class="cep-modal-help">El OCR no puede inventar los códigos Banxico: confirma emisor, receptor, fecha, referencia/clave y CLABE con el comprobante bancario.</p>
                     <div class="cep-modal-actions">
                         <button type="button" class="btn btn-secondary" id="cep-modal-cancel">Cancelar</button>
                         <a class="btn btn-secondary" href="https://www.banxico.org.mx/cep/" target="_blank" rel="noopener">Abrir formulario oficial</a>
@@ -1140,7 +1195,16 @@ function openBanxicoCepModal() {
     document.getElementById('cep-tipo-criterio').value = criterionType;
     document.getElementById('cep-criterio').value = criterionValue;
     document.getElementById('cep-cuenta').value = dossier.cuentaBeneficiaria || '';
-    document.getElementById('cep-banco-detectado').textContent = dossier.banco || 'No detectado';
+    document.getElementById('cep-emisor').value = dossier.bancoEmisorCodigo || '';
+    document.getElementById('cep-receptor').value = dossier.bancoReceptorCodigo || '';
+    document.getElementById('cep-banco-emisor-detectado').textContent = dossier.bancoEmisor || dossier.banco || 'No detectado';
+    document.getElementById('cep-banco-receptor-detectado').textContent = dossier.bancoReceptor || 'No detectado';
+    document.getElementById('cep-forma-pago-detectada').textContent = dossier.formaPago || 'No detectada';
+
+    const refreshBanxicoCaptcha = () => {
+        const image = document.getElementById('cep-captcha-image');
+        if (image) image.src = `https://www.banxico.org.mx/cep/stickyImg?b_capt=${Date.now()}`;
+    };
 
     const updateCriterionLabel = () => {
         const isReference = document.getElementById('cep-tipo-criterio').value === 'R';
@@ -1152,11 +1216,16 @@ function openBanxicoCepModal() {
     document.getElementById('cep-tipo-criterio').addEventListener('change', updateCriterionLabel);
     document.getElementById('cep-modal-close').addEventListener('click', closeBanxicoCepModal);
     document.getElementById('cep-modal-cancel').addEventListener('click', closeBanxicoCepModal);
+    document.getElementById('cep-captcha-reload').addEventListener('click', () => {
+        document.getElementById('cep-captcha').value = '';
+        refreshBanxicoCaptcha();
+    });
     document.getElementById('banxico-cep-modal').addEventListener('click', event => {
         if (event.target.id === 'banxico-cep-modal') closeBanxicoCepModal();
     });
     document.getElementById('banxico-cep-form').addEventListener('submit', submitBanxicoCepForm);
     updateCriterionLabel();
+    refreshBanxicoCaptcha();
     document.getElementById('cep-criterio').focus();
 }
 
@@ -1172,7 +1241,7 @@ function submitBanxicoCepForm(event) {
     const monto = get('cep-monto');
     const captcha = get('cep-captcha');
 
-    if (!fecha) {
+    if (!/^\d{2}-\d{2}-\d{4}$/.test(fecha)) {
         showToast('No se detectó la fecha de operación. Confírmala en el comprobante o en el estado de cuenta.', 'error');
         return;
     }
@@ -1185,12 +1254,16 @@ function submitBanxicoCepForm(event) {
         showToast('Captura códigos Banxico válidos y diferentes para banco emisor y receptor.', 'error');
         return;
     }
-    if (cuenta && !/^\d{10,20}$/.test(cuenta)) {
-        showToast('La cuenta beneficiaria debe contener de 10 a 20 dígitos.', 'error');
+    if (cuenta && !/^\d{10,18}$/.test(cuenta)) {
+        showToast('La cuenta beneficiaria debe contener de 10 a 18 dígitos.', 'error');
         return;
     }
     if (cuenta && (!monto || !/^\d+(\.\d{1,2})?$/.test(monto))) {
         showToast('Captura un monto válido cuando uses cuenta beneficiaria.', 'error');
+        return;
+    }
+    if (!captcha || !/^[A-Za-z0-9]{1,5}$/.test(captcha)) {
+        showToast('Escribe el código de la imagen oficial de seguridad de Banxico.', 'error');
         return;
     }
 
@@ -1208,7 +1281,7 @@ function submitBanxicoCepForm(event) {
         emisor,
         receptor,
         cuenta,
-        receptorParticipante: document.getElementById('cep-receptor-participante').checked ? '1' : '0',
+        receptorParticipante: document.getElementById('cep-receptor-participante').checked ? '0' : '',
         monto,
         captcha,
         tipoConsulta: cuenta && monto ? '1' : '0'

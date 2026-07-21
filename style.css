@@ -1882,6 +1882,62 @@ body {
     font-size: 0.74rem;
 }
 
+.cep-captcha-card {
+    margin: 16px 0 12px;
+    padding: 14px;
+    border: 1px solid #c8d6e5;
+    border-radius: 7px;
+    background: #f8fbff;
+}
+
+.cep-captcha-heading,
+.cep-captcha-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.cep-captcha-heading {
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.cep-captcha-heading strong,
+.cep-captcha-heading span {
+    display: block;
+}
+
+.cep-captcha-heading strong {
+    color: #193b5c;
+    font-size: 0.8rem;
+}
+
+.cep-captcha-heading span {
+    margin-top: 3px;
+    color: #6c757d;
+    font-size: 0.72rem;
+}
+
+.cep-captcha-content img {
+    display: block;
+    width: 180px;
+    min-height: 62px;
+    object-fit: contain;
+    border: 1px solid #adb5bd;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.cep-captcha-content label {
+    flex: 1;
+}
+
+.cep-captcha-reload {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    font-size: 0.72rem;
+}
+
 .cep-modal-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1901,6 +1957,17 @@ body {
 
     .cep-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .cep-captcha-heading,
+    .cep-captcha-content {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .cep-captcha-content img {
+        width: 100%;
+        max-width: 280px;
     }
 
     .cep-modal-actions {
