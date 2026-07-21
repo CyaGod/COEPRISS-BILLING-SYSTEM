@@ -462,7 +462,7 @@
 
                         <!-- Dropzone Area -->
                         <div class="upload-dropzone" id="dropzone-step1">
-                            <input id="document-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple hidden>
+                            <input id="document-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" capture="environment" multiple hidden>
                             <div class="scan-overlay" id="laser-scanner">
                                 <div class="scan-laser"></div>
                             </div>
@@ -532,6 +532,25 @@
                                 <div style="color: #6c757d; font-weight: 500;">Correo:</div>
                                 <div id="val-correo" style="font-weight: 600; color: #212529; text-decoration: underline;">facturacion@empresaejemplo.com</div>
                             </div>
+                            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #f0f0f0;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: #6c757d; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 9px;">Detalles CFDI detectados</div>
+                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.82rem;">
+                                    <div style="color: #6c757d;">RFC emisor:</div><div id="val-rfc-emisor" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Nombre emisor:</div><div id="val-nombre-emisor" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Régimen emisor:</div><div id="val-regimen-emisor" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Efecto:</div><div id="val-tipo-cfdi" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Fecha de emisión:</div><div id="val-fecha-emision" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Folio fiscal (UUID):</div><div id="val-uuid" style="font-weight: 600; word-break: break-all;">No detectado</div>
+                                    <div style="color: #6c757d;">Método de pago:</div><div id="val-metodo-pago" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Moneda:</div><div id="val-moneda" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Subtotal:</div><div id="val-subtotal" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Clave producto/servicio:</div><div id="val-clave-prodserv" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Cantidad / unidad:</div><div id="val-cantidad-unidad" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Valor unitario / importe:</div><div id="val-valores-linea" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">Objeto de impuesto:</div><div id="val-objeto-impuesto" style="font-weight: 600;">No detectado</div>
+                                    <div style="color: #6c757d;">CSD / PAC:</div><div id="val-certificados" style="font-weight: 600; word-break: break-all;">No detectado</div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- CIS Receipt Section -->
@@ -578,7 +597,7 @@
                                 <div style="color: #6c757d; font-weight: 500;">Cuenta beneficiaria:</div>
                                 <div id="val-banco-cuenta" style="font-weight: 600; color: #212529; word-break: break-all;">Pendiente de lectura</div>
 
-                                <div style="color: #6c757d; font-weight: 500;">Forma de pago:</div>
+                                <div style="color: #6c757d; font-weight: 500;">Forma de pago declarada:</div>
                                 <div id="val-banco-forma" style="font-weight: 600; color: #212529;">Pendiente de lectura</div>
                             </div>
                         </div>

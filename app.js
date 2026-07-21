@@ -625,9 +625,10 @@ function createActiveExpedienteFromUploads() {
         rfc: '',
         regimenFiscal: '',
         codigoPostal: '',
-        usoCfdi: 'G03 - Gastos en general',
+        usoCfdi: '',
         correo: '',
         importe: 0,
+        importePago: null,
         fechaRecibo: getCurrentDateTimeString(),
         concepto: '',
         folioRecibo: '',
@@ -642,8 +643,25 @@ function createActiveExpedienteFromUploads() {
         cuentaBeneficiaria: '',
         formaPago: '',
         moneda: '',
+        rfcEmisor: '',
+        nombreEmisor: '',
+        regimenFiscalEmisor: '',
+        fechaEmision: '',
+        fechaCertificacion: '',
+        claveProdServ: '',
+        cantidad: '',
+        claveUnidad: '',
+        unidad: '',
+        valorUnitario: null,
+        importeLinea: null,
+        objetoImpuesto: '',
+        metodoPago: '',
+        subtotal: null,
+        noSerieCsd: '',
+        rfcProveedorCertificacion: '',
+        noSerieCertificadoSat: '',
         estatus: 'Recibido',
-        tipoCfdi: 'ingreso',
+        tipoCfdi: '',
         uuid: '',
         archivos: [],
         auditoria: [`[${getCurrentDateTimeString()}] Tramite recibido mediante carga de documentos.`]
@@ -769,7 +787,43 @@ async function recognizeImageWithFallback(file) {
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     if (typeof bitmap.close === 'function') bitmap.close();
 
-    let text = await recognizeCanvasWithFallback(canvas, '6');
+    // First normalize the photograph like a document-scanner app: remove the
+    // desk/hand margins and enlarge the sheet before Tesseract sees it.
+    const scanCanvas = createDocumentScanCanvas(canvas);
+    // Put the focused passes first. Tesseract can misread a small label in a
+    // full-page photograph; parseExtractedFields keeps the first matching
+    // value, so the cleaner regional reads must have priority.
+    let text = '';
+
+    // One full-page pass is not enough for two-column CFDIs. These focused
+    // passes spend a little more local CPU, but prevent small labels and the
+    // concepts/payment blocks from being lost in the page layout.
+    const regions = [
+        { name: 'encabezado', top: 0.02, bottom: 0.36, psm: '6' },
+        { name: 'conceptos', top: 0.27, bottom: 0.57, psm: '11' },
+        { name: 'pago', top: 0.51, bottom: 0.73, psm: '6' }
+    ];
+    for (const region of regions) {
+        const regionCanvas = createOcrRegionCanvas(scanCanvas, region.top, region.bottom);
+        const button = document.getElementById('btn-scan');
+        if (button) button.textContent = `Leyendo zona ${region.name}...`;
+        text += `\n${await recognizeCanvasOnce(regionCanvas, region.psm)}`;
+        regionCanvas.width = 1;
+        regionCanvas.height = 1;
+    }
+
+    // Keep one full-page pass as a safety net for labels that fall between
+    // regions (for example footer metadata and long CFDI descriptions).
+    const button = document.getElementById('btn-scan');
+    if (button) button.textContent = 'Leyendo pagina completa...';
+    text += `\n${await recognizeCanvasWithFallback(scanCanvas, '6')}`;
+
+    // Mexican CFDI photographs normally include the SAT QR. When the
+    // browser supports BarcodeDetector, it supplies an exact UUID/RFC/total
+    // even when a character is visually ambiguous to OCR.
+    const qrText = await detectQrText(scanCanvas);
+    if (qrText) text += `\n${qrText}`;
+
     const firstFields = parseExtractedFields(text);
 
     // A second, high-contrast sparse-text pass helps photographs of CFDIs:
@@ -777,14 +831,200 @@ async function recognizeImageWithFallback(file) {
     // two-column header and the small fiscal metadata on the right.
     const hasFiscalCore = Boolean(firstFields.rfc && firstFields.razonSocial && firstFields.importe && firstFields.uuid);
     if (!hasFiscalCore) {
-        const enhancedCanvas = createEnhancedOcrCanvas(canvas);
+        const enhancedCanvas = createEnhancedOcrCanvas(scanCanvas);
         text += `\n${await recognizeCanvasWithFallback(enhancedCanvas, '11')}`;
         enhancedCanvas.width = 1;
         enhancedCanvas.height = 1;
     }
     canvas.width = 1;
     canvas.height = 1;
+    if (scanCanvas !== canvas) {
+        scanCanvas.width = 1;
+        scanCanvas.height = 1;
+    }
     return text;
+}
+
+function createDocumentScanCanvas(sourceCanvas) {
+    const bounds = estimateBrightDocumentBounds(sourceCanvas);
+    if (!bounds) return sourceCanvas;
+
+    const width = bounds.right - bounds.left;
+    const height = bounds.bottom - bounds.top;
+    if (width < sourceCanvas.width * 0.55 || height < sourceCanvas.height * 0.55) return sourceCanvas;
+
+    const canvas = document.createElement('canvas');
+    const outputWidth = Math.min(2600, Math.max(1200, Math.round(width)));
+    const outputHeight = Math.min(3200, Math.max(1600, Math.round(height * (outputWidth / width))));
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const context = canvas.getContext('2d');
+    if (Number.isFinite(bounds.topSlope)) {
+        // A vertical shear deskews the photographed sheet without requiring a
+        // heavy computer-vision library. It is enough for the mild camera
+        // perspective common in phone captures and keeps memory predictable.
+        const sourceScale = outputWidth / width;
+        const margin = Math.max(8, Math.round(sourceCanvas.width * 0.008));
+        context.setTransform(
+            sourceScale,
+            -bounds.topSlope * sourceScale,
+            0,
+            sourceScale,
+            (-bounds.left + margin) * sourceScale,
+            (bounds.topSlope * bounds.left - bounds.topAtLeft + margin) * sourceScale
+        );
+        context.drawImage(sourceCanvas, 0, 0);
+    } else {
+        context.drawImage(sourceCanvas, bounds.left, bounds.top, width, height, 0, 0, outputWidth, outputHeight);
+    }
+    return canvas;
+}
+
+function estimateBrightDocumentBounds(sourceCanvas) {
+    const analysisScale = Math.min(1, 900 / Math.max(sourceCanvas.width, sourceCanvas.height));
+    const width = Math.max(1, Math.round(sourceCanvas.width * analysisScale));
+    const height = Math.max(1, Math.round(sourceCanvas.height * analysisScale));
+    const analysis = document.createElement('canvas');
+    analysis.width = width;
+    analysis.height = height;
+    const context = analysis.getContext('2d', { willReadFrequently: true });
+    context.drawImage(sourceCanvas, 0, 0, width, height);
+    const data = context.getImageData(0, 0, width, height).data;
+    const gray = new Uint8Array(width * height);
+    const samples = [];
+    for (let index = 0, pixel = 0; index < data.length; index += 4, pixel += 1) {
+        const value = Math.round((data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114));
+        gray[pixel] = value;
+        if ((pixel % 17) === 0) samples.push(value);
+    }
+    samples.sort((a, b) => a - b);
+    const median = samples[Math.floor(samples.length / 2)] || 220;
+    const threshold = Math.max(185, Math.min(225, median - 10));
+    const rowStart = Math.floor(width * 0.08);
+    const rowEnd = Math.ceil(width * 0.92);
+    const colStart = Math.floor(height * 0.12);
+    const colEnd = Math.ceil(height * 0.92);
+    const rowScores = new Float32Array(height);
+    const colScores = new Float32Array(width);
+
+    for (let y = 0; y < height; y += 1) {
+        let bright = 0;
+        for (let x = rowStart; x < rowEnd; x += 1) bright += gray[(y * width) + x] >= threshold ? 1 : 0;
+        rowScores[y] = bright / Math.max(1, rowEnd - rowStart);
+    }
+    for (let x = 0; x < width; x += 1) {
+        let bright = 0;
+        for (let y = colStart; y < colEnd; y += 1) bright += gray[(y * width) + x] >= threshold ? 1 : 0;
+        colScores[x] = bright / Math.max(1, colEnd - colStart);
+    }
+
+    const firstRun = (scores, start, end, minimum) => {
+        for (let index = start; index < end; index += 1) {
+            let total = 0;
+            for (let offset = 0; offset < 7 && index + offset < scores.length; offset += 1) total += scores[index + offset];
+            if (total / 7 >= minimum) return index;
+        }
+        return -1;
+    };
+    const lastRun = (scores, start, end, minimum) => {
+        for (let index = end; index >= start; index -= 1) {
+            let total = 0;
+            for (let offset = 0; offset < 7 && index - offset >= 0; offset += 1) total += scores[index - offset];
+            if (total / 7 >= minimum) return index;
+        }
+        return -1;
+    };
+
+    const top = firstRun(rowScores, Math.floor(height * 0.04), Math.floor(height * 0.55), 0.58);
+    const bottom = lastRun(rowScores, Math.floor(height * 0.45), height - 1, 0.52);
+    const left = firstRun(colScores, Math.floor(width * 0.01), Math.floor(width * 0.45), 0.42);
+    const right = lastRun(colScores, Math.floor(width * 0.55), width - 1, 0.42);
+    analysis.width = 1;
+    analysis.height = 1;
+    if ([left, top, right, bottom].some(value => value < 0)) return null;
+
+    const topLine = estimateDocumentTopLine(gray, width, height, top, left, right);
+
+    const marginX = Math.max(4, Math.round(width * 0.018));
+    const marginY = Math.max(4, Math.round(height * 0.012));
+    return {
+        left: Math.max(0, Math.round((left - marginX) / analysisScale)),
+        top: Math.max(0, Math.round((top - marginY) / analysisScale)),
+        right: Math.min(sourceCanvas.width, Math.round((right + marginX) / analysisScale)),
+        bottom: Math.min(sourceCanvas.height, Math.round((bottom + marginY) / analysisScale)),
+        topSlope: topLine ? topLine.slope : NaN,
+        topAtLeft: topLine ? topLine.atLeft / analysisScale : NaN
+    };
+}
+
+function estimateDocumentTopLine(gray, width, height, top, left, right) {
+    const sampleMean = (yStart, yEnd, xStart, xEnd) => {
+        const y1 = Math.max(0, Math.floor(yStart));
+        const y2 = Math.min(height, Math.ceil(yEnd));
+        const x1 = Math.max(0, Math.floor(xStart));
+        const x2 = Math.min(width, Math.ceil(xEnd));
+        let sum = 0;
+        let count = 0;
+        for (let y = y1; y < y2; y += 1) {
+            for (let x = x1; x < x2; x += 1) {
+                sum += gray[(y * width) + x];
+                count += 1;
+            }
+        }
+        return count ? sum / count : 0;
+    };
+
+    let best = null;
+    for (let slope = -0.06; slope <= 0.0601; slope += 0.01) {
+        for (let atLeft = top - 25; atLeft <= top + 25; atLeft += 2) {
+            const atRight = atLeft + (slope * (right - left));
+            if (atRight < top - 35 || atRight > top + 35) continue;
+            let score = 0;
+            const sampleCount = 64;
+            for (let index = 0; index < sampleCount; index += 1) {
+                const x = left + 12 + ((right - left - 24) * index / (sampleCount - 1));
+                const y = atLeft + (slope * (x - left));
+                const above = sampleMean(y - 14, y - 4, x - 3, x + 4);
+                const below = sampleMean(y + 4, y + 14, x - 3, x + 4);
+                score += below - above;
+            }
+            if (!best || score > best.score) best = { score, slope, atLeft };
+        }
+    }
+    return best && best.score > 250 ? best : null;
+}
+
+function createOcrRegionCanvas(sourceCanvas, topRatio, bottomRatio) {
+    const top = Math.max(0, Math.floor(sourceCanvas.height * topRatio));
+    const bottom = Math.min(sourceCanvas.height, Math.ceil(sourceCanvas.height * bottomRatio));
+    const padding = Math.max(8, Math.round(sourceCanvas.height * 0.008));
+    const canvas = document.createElement('canvas');
+    canvas.width = sourceCanvas.width;
+    canvas.height = Math.max(1, bottom - top + (padding * 2));
+    canvas.getContext('2d').drawImage(sourceCanvas, 0, Math.max(0, top - padding), sourceCanvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+    return canvas;
+}
+
+async function recognizeCanvasOnce(canvas, pageSegMode = '6') {
+    await state.ocrWorker.setParameters({ tessedit_pageseg_mode: pageSegMode, preserve_interword_spaces: '1' });
+    const result = await state.ocrWorker.recognize(canvas);
+    return result.data.text || '';
+}
+
+async function detectQrText(canvas) {
+    if (!window.BarcodeDetector) return '';
+    try {
+        const formats = typeof window.BarcodeDetector.getSupportedFormats === 'function'
+            ? await window.BarcodeDetector.getSupportedFormats()
+            : ['qr_code'];
+        if (!formats.includes('qr_code')) return '';
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const codes = await detector.detect(canvas);
+        return codes.map(code => code.rawValue || '').filter(Boolean).join('\n');
+    } catch (error) {
+        console.info('QR fiscal no disponible en este navegador:', error);
+        return '';
+    }
 }
 
 function createEnhancedOcrCanvas(sourceCanvas) {
@@ -871,7 +1111,9 @@ function normalizeOcrDate(value) {
 function parseExtractedFields(text) {
     const normalized = String(text || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ');
     const plain = stripOcrAccents(normalized).toUpperCase();
-    const rfcPattern = '[A-Z&Ñ]{3,4}\\d{6}[A-Z0-9]{2,3}';
+    // Phone photos often insert a dot or space in an RFC (for example
+    // CEP130206L.C4). Normalize that OCR artifact after matching it.
+    const rfcPattern = '[A-Z&N]{3,4}\\s*\\d{6}[A-Z0-9](?:\\s*\\.\\s*)?[A-Z0-9]{1,2}';
     const rfcEmisorMatch = plain.match(new RegExp(`RFC\\s+EMISOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
     const rfcReceptorMatch = plain.match(new RegExp(`RFC\\s+RECEPTOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
     // Only accept an unlabeled RFC when it appears after an RFC label. A
@@ -881,93 +1123,194 @@ function parseExtractedFields(text) {
     const stopLabels = 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|CODIGO\\s+POSTAL|REGIMEN\\s+FISCAL|USO\\s+CFDI|FOLIO\\s+FISCAL|EFECTO\\s+DE\\s+COMPROBANTE|CONCEPTOS|DESCRIPCION|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL';
     const bankStopLabels = 'INSTITUCION\\s+(?:EMISORA?|RECEPTORA?)|BANCO\\s+(?:EMISOR|RECEPTOR|ORIGEN|DESTINO)|CODIGO|CLAVE|CUENTA|CLABE|MONTO|IMPORTE|REFERENCIA|FECHA|TOTAL|FOLIO';
     const receiverName = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?RECEPTOR', stopLabels, 120);
+    const nombreEmisor = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?EMISOR', 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|FOLIO\\s+FISCAL|NO\\.?\\s+DE\\s+SERIE|CODIGO\\s+POSTAL|EFECTO\\s+DE\\s+COMPROBANTE', 160);
     const legalName = extractOcrLabelValue(plain, 'RAZON\\s+SOCIAL', stopLabels, 120);
     const razonSocial = receiverName || legalName;
     const codigoPostal = (plain.match(/CODIGO\s+POSTAL(?:\s+DEL)?(?:\s+RECEPTOR)?\s*[:\-]?\s*(\d{5})/i) || [])[1] || '';
-    const regimenFiscal = extractOcrLabelValue(plain, 'REGIMEN\\s+FISCAL(?:\\s+RECEPTOR)?', 'USO\\s+CFDI|EXPORTACION|FOLIO\\s+FISCAL|RFC|CONCEPTOS', 100);
+    const receiverRegimenFiscal = extractOcrLabelValue(plain, '(?:REGIMEN\\s+FISCAL\\s+RECEPTOR|RECEPTOR\\s*[:\\-]?\\s*REGIMEN\\s+FISCAL)', 'RECEPTOR|USO\\s+CFDI|CODIGO\\s+POSTAL|RFC|NOMBRE|CONCEPTOS', 100);
+    const regimenFiscal = receiverRegimenFiscal || extractOcrLabelValue(plain, 'REGIMEN\\s+FISCAL', 'USO\\s+CFDI|CODIGO\\s+POSTAL|EXPORTACION|FOLIO\\s+FISCAL|RFC|NOMBRE|CONCEPTOS', 100);
+    const regimenFiscalEmisor = extractOcrLabelValue(plain, 'REGIMEN\\s+FISCAL(?!\\s+RECEPTOR)', 'EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|USO\\s+CFDI|CODIGO\\s+POSTAL|RFC|NOMBRE', 100);
     const usoCfdi = extractOcrLabelValue(plain, 'USO\\s+CFDI', 'CONCEPTOS|FOLIO\\s+FISCAL|REGIMEN\\s+FISCAL|MONEDA|FORMA\\s+DE\\s+PAGO', 80);
-    const tipoCfdi = extractOcrLabelValue(plain, 'EFECTO\\s+DE\\s+COMPROBANTE', 'REGIMEN\\s+FISCAL|EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|DESCRIPCION', 40);
-    const uuidMatch = plain.match(/FOLIO\s+FISCAL\s*[:\-]?\s*([0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12})/i);
+    const tipoCfdi = extractOcrLabelValue(plain, 'EFECTO\\s+DE\\s+COMPROBANTE', 'REGIMEN\\s+FISCAL|EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|DESCRIPCION|NOMBRE|RFC|CODIGO\\s+POSTAL', 40);
+    const uuidMatch = plain.match(/FOLIO\s+FISCAL\s*[:\-]?\s*([0-9A-Z]{8}(?:-[0-9A-Z]{4}){3}-[0-9A-Z]{12})/i);
+    const qrUuidMatch = plain.match(/(?:[?&]ID=|UUID\s*[:=])([0-9A-Z]{8}(?:-[0-9A-Z]{4}){3}-[0-9A-Z]{12})/i);
+    const qrRfcEmisorMatch = plain.match(/[?&]RE=([A-Z&N]{3,4}\d{6}[A-Z0-9]{2,3})/i);
+    const qrRfcReceptorMatch = plain.match(/[?&]RR=([A-Z&N]{3,4}\d{6}[A-Z0-9]{2,3})/i);
     const bancoEmisor = extractOcrLabelValue(plain, '(?:INSTITUCION|BANCO)\\s+(?:EMISORA?|ORIGEN)(?:\\s+DEL\\s+PAGO)?', bankStopLabels, 80);
     const bancoReceptor = extractOcrLabelValue(plain, '(?:INSTITUCION|BANCO)\\s+(?:RECEPTORA?|DESTINO)(?:\\s+DEL\\s+PAGO)?', bankStopLabels, 80);
     const bancoEmisorCodigoMatch = plain.match(/(?:CODIGO|CLAVE)\s+(?:DE\s+)?(?:BANCO|INSTITUCION)\s+(?:EMISOR|EMISORA|ORIGEN)[^0-9]{0,30}(\d{3,6})/i);
     const bancoReceptorCodigoMatch = plain.match(/(?:CODIGO|CLAVE)\s+(?:DE\s+)?(?:BANCO|INSTITUCION)\s+(?:RECEPTOR|RECEPTORA|DESTINO)[^0-9]{0,30}(\d{3,6})/i);
+    const bankDocumentContext = /INSTITUCION\s+(?:EMISORA?|RECEPTORA?)|CLAVE\s+DE\s+RASTREO|CUENTA\s+BENEFICIARIA/i.test(plain);
 
-    const totalMatch = plain.match(/(?:^|\n)\s*TOTAL\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/im);
+    const totalMatch = plain.match(/\bTOTAL(?:\s+A\s+PAGAR)?\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
     // Do not use the bare word "PAGO": it can be followed by an account
     // number or date and would produce a false, very large amount.
-    const explicitPaymentAmountMatch = normalized.match(/(?:MONTO\s+(?:DEL|DE)?\s*PAGO|IMPORTE\s+(?:PAGADO|DEL\s+PAGO)?|DEPOSITO|TOTAL(?:\s+A\s+PAGAR)?)[^\d$]{0,60}\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
-    const amountMatch = totalMatch || explicitPaymentAmountMatch || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
+    const explicitPaymentAmountMatch = normalized.match(/(?:MONTO(?:\s+(?:DEL|DE)?\s*PAGO)?|IMPORTE\s+(?:PAGADO|DEL\s+PAGO)|DEPOSITO)[^\d$\n]{0,60}\$?\s*([\d,]+(?:\.\d{1,2})?)/i)
+        || (bankDocumentContext ? normalized.match(/IMPORTE\s*[:\-]?[^\d$\n]{0,20}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) : null);
+    const currencyMatches = [...normalized.matchAll(/\$\s*([\d,]+\.\d{1,2})/g)];
+    const currencyMatch = currencyMatches.length ? currencyMatches[currencyMatches.length - 1] : null;
+    const qrAmountMatch = plain.match(/[?&]TT=([\d,]+(?:\.\d+)?)/i);
+    const amountMatch = qrAmountMatch || totalMatch || explicitPaymentAmountMatch || currencyMatch;
+    const paymentAmount = explicitPaymentAmountMatch ? Number(explicitPaymentAmountMatch[1].replace(/,/g, '')) : null;
+    const subtotalMatch = plain.match(/\bSUBTOTAL\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
     const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DEL?\s+)?RECIBO|NO\.?\s+DE?\s+RECIBO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const numericReferenceMatch = normalized.match(/(?:NUMERO\s+DE\s+REFERENCIA|REFERENCIA|REF\.?)[\s:#-]*(\d{1,7})(?!\d)/i);
     const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|CLAVE\s+RASTREO|RASTREO)[\s:#-]*([A-Z0-9]{6,30})/i);
     const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,18})/i);
-    const concept = extractOcrLabelValue(plain, 'DESCRIPCION|CONCEPTO', 'NUMERO\\s+DE\\s+PEDIMENTO|NUMERO\\s+DE\\s+CUENTA|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL', 180);
+    const productCodeMatch = plain.match(/(?:CONCEPTOS|CLAVE\s+DEL\s+PRODUCTO)[\s\S]{0,1400}?\b(\d{8})\b/i);
+    const quantityMatch = plain.match(/CONCEPTOS[\s\S]{0,1400}?\b(1(?:\.0+)?)\b[\s\S]{0,500}?\bE(?:48|51|A)\b/i)
+        || plain.match(/CONCEPTOS[\s\S]{0,350}?\b(1(?:\.0+)?)\b/i);
+    const unitCodeMatch = plain.match(/\b(E48|E51|H87|ACT|KGM|LTR|XUN)\b/i);
+    const unitMatch = plain.match(/\b(?:E48|E51|H87|ACT|KGM|LTR|XUN)\b\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,45}?)(?=\s+(?:\$?\d|NO\s+OBJETO|DESCRIPCION|MONEDA|SUBTOTAL|TOTAL))/i);
+    const lineImportMatch = plain.match(/\b([\d,]+\.\d{4,})\b/);
+    const objectTaxMatch = plain.match(/\b(NO\s+OBJETO\s+DE\s+IMPUESTO|OBJETO\s+DE\s+IMPUESTO)\b/i);
+    const conceptLabel = extractOcrLabelValue(plain, 'DESCRIPCION|CONCEPTO|DESCRIP(?:CION|EIGN|PEIGN|PIGN|PCION)', 'N(?:U|A|I)MERO\\s+DE\\s+PEDIMENTO|N(?:U|A|I)MERO\\s+DE\\s+CUENTA|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL', 220);
+    const conceptFallbackMatch = normalized.match(/((?:SOLICITUD|PAGO|TRAMITE|DERECHOS)[\s\S]{12,220}?)(?=\s*(?:N(?:U|A|I)MERO\s+DE\s+PEDIMENTO|N(?:U|A|I)MERO\s+DE\s+CUENTA|MONEDA|SUBTOTAL|TOTAL|SELLO\s+DIGITAL)|$)/i) || normalized.match(/(SERVICIO\s+DE[\s\S]{12,220}?)(?=\s*(?:N(?:U|A|I)MERO\s+DE\s+PEDIMENTO|N(?:U|A|I)MERO\s+DE\s+CUENTA|MONEDA|SUBTOTAL|TOTAL|SELLO\s+DIGITAL)|$)/i);
+    const conceptBase = normalizeOcrConcept(conceptLabel || (conceptFallbackMatch ? conceptFallbackMatch[1] : ''));
+    const conceptDateMatch = normalized.match(/(?:REALIZO|REALIZÓ)[\s\S]{0,40}?(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i);
+    const concept = conceptDateMatch && !conceptBase.includes(conceptDateMatch[1])
+        ? `${conceptBase} ${conceptDateMatch[1]}`.trim()
+        : conceptBase;
     const formaPago = extractOcrLabelValue(plain, 'FORMA\\s+DE\\s+PAGO', 'METODO\\s+DE\\s+PAGO|MONEDA|SUBTOTAL|TOTAL|CONCEPTOS', 100);
-    const moneda = extractOcrLabelValue(plain, 'MONEDA', 'FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|CONCEPTOS', 40);
-    const dateMatch = plain.match(/(?:FECHA(?:\s+Y\s+HORA)?(?:\s+DE)?\s+EMISION|FECHA(?:\s+PAGO)?|FECHA\s+DE\s+PAGO)[^0-9]{0,40}(?:\d{5}\s+)?((?:\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)/i);
-    const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'NU'];
+    const monedaDetectada = extractOcrLabelValue(plain, 'MONEDA', 'FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|CONCEPTOS', 40);
+    const moneda = /PESO\s+MEXICANO|P\s*EM(?:\s|$)/i.test(plain) ? 'PESO MEXICANO' : monedaDetectada;
+    const datePattern = '(?:\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}|\\d{1,2}[/-]\\d{1,2}[/-]\\d{4})(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?';
+    const emissionDateMatch = plain.match(new RegExp(`(?:FECHA\\s+Y\\s+HORA\\s+DE\\s+EMISION|FECHA\\s+DE\\s+EMISION|FECHA\\s+EMISION|FECHA\\s*Y\\s*HORA\\s*DE(?!\\s*CERTIFICACION))[^0-9]{0,60}(?:\\d{5}\\s+)?(${datePattern})`, 'i'));
+    const paymentDateMatch = plain.match(new RegExp(`(?:FECHA\\s+DE\\s+(?:OPERACION|PAGO)|FECHA\\s+PAGO)[^0-9]{0,40}(${datePattern})`, 'i'));
+    const fechaEmision = emissionDateMatch ? normalizeOcrDate(emissionDateMatch[1]) : '';
+    const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA'];
     const bank = bankNames.find(name => plain.includes(name)) || '';
     const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
     const referencia = numericReferenceMatch ? cleanOcrValue(numericReferenceMatch[1]) : (referenceMatch ? cleanOcrValue(referenceMatch[1]) : '');
-    const fechaPago = dateMatch ? normalizeOcrDate(dateMatch[1]) : '';
+    const fechaPago = paymentDateMatch ? normalizeOcrDate(paymentDateMatch[1]) : '';
     const folioRecibo = folioReciboMatch ? cleanOcrValue(folioReciboMatch[1]) : '';
     const claveRastreo = trackingMatch ? cleanOcrValue(trackingMatch[1]).replace(/[^A-Z0-9]/gi, '') : '';
     const cuentaBeneficiaria = accountMatch ? accountMatch[1].replace(/\D/g, '') : '';
     const bancoDetectado = bank || bancoEmisor || bancoReceptor;
-    const rfc = (rfcReceptorMatch || rfcEmisorMatch || genericRfcMatch)?.[1]?.toUpperCase() || (genericRfcMatch?.[0] || '').toUpperCase();
+    const rfcEmisor = normalizeOcrRfc((qrRfcEmisorMatch || rfcEmisorMatch)?.[1] || '');
+    const rfcReceptor = normalizeOcrRfc((qrRfcReceptorMatch || rfcReceptorMatch)?.[1] || '');
+    const genericRfc = normalizeOcrRfc(genericRfcMatch?.[1] || '');
+    const rfc = rfcReceptor || rfcEmisor || genericRfc;
+    const noSerieCsdMatch = plain.match(/NO\.?\s+DE\s+SERIE\s+DEL\s+CSD[^0-9]{0,30}(\d{10,20})/i);
+    const rfcProveedorMatch = plain.match(/RFC\s+DEL\s+PROVEEDOR\s+DE\s+CERTIFICACION[^A-Z0-9]{0,30}([A-Z&N]{3,4}\d{6}[A-Z0-9]{2,3})/i);
+    const noSerieSatMatch = plain.match(/NO\.?\s+DE\s+SERIE\s+DEL\s+CERTIFICADO\s+SAT[^0-9]{0,30}(\d{10,20})/i);
+    const certificationDateMatch = plain.match(new RegExp(`FECHA\\s+Y\\s+HORA\\s+DE\\s+CERTIFICACION[^0-9]{0,30}(${datePattern})`, 'i'));
+    const valorUnitarioMatch = plain.match(/(?:UNIDAD\s+DE\s+SERVICIO|E48|E51|H87|ACT|KGM|LTR|XUN)[\s\S]{0,80}?\b(\d{1,12}(?:\.\d{1,6})?)\b/i);
+    const valorUnitario = valorUnitarioMatch ? Number(valorUnitarioMatch[1].replace(/,/g, '')) : null;
+    const importeLinea = lineImportMatch ? Number(lineImportMatch[1].replace(/,/g, '')) : null;
+    const subtotal = subtotalMatch ? Number(subtotalMatch[1].replace(/,/g, '')) : null;
+    const metodoPagoRaw = extractOcrLabelValue(plain, 'METODO\\s+DE\\s+PAGO', 'SELLO\\s+DIGITAL|CONCEPTOS|MONEDA|FORMA\\s+DE\\s+PAGO|SUBTOTAL|TOTAL', 80);
+    const metodoPagoKnown = metodoPagoRaw.match(/PAGO\s+EN\s+(?:UNA\s+SOLA\s+EXHIBICION|PARCIALIDADES\s+O\s+DIFERIDO)/i);
+    const metodoPago = metodoPagoKnown ? cleanOcrValue(metodoPagoKnown[0]) : cleanOcrValue(metodoPagoRaw).slice(0, 80);
 
     return {
         rfc,
+        rfcEmisor,
+        rfcReceptor,
         razonSocial,
+        nombreEmisor,
         regimenFiscal,
+        regimenFiscalEmisor,
         codigoPostal,
         usoCfdi,
         tipoCfdi,
-        uuid: uuidMatch ? uuidMatch[1].toUpperCase() : '',
+        efectoComprobante: tipoCfdi,
+        uuid: (qrUuidMatch || uuidMatch) ? normalizeOcrUuid((qrUuidMatch || uuidMatch)[1]) : '',
         banco: bancoDetectado,
         bancoEmisor,
         bancoReceptor,
         bancoEmisorCodigo: bancoEmisorCodigoMatch ? bancoEmisorCodigoMatch[1] : '',
         bancoReceptorCodigo: bancoReceptorCodigoMatch ? bancoReceptorCodigoMatch[1] : '',
         importe: Number.isFinite(amount) ? amount : null,
+        importePago: Number.isFinite(paymentAmount) ? paymentAmount : null,
+        subtotal: Number.isFinite(subtotal) ? subtotal : null,
         referencia,
         concepto: concept,
+        fechaEmision,
         fechaPago,
+        fechaCertificacion: certificationDateMatch ? normalizeOcrDate(certificationDateMatch[1]) : '',
         folioRecibo,
         claveRastreo,
         cuentaBeneficiaria,
         formaPago,
         moneda,
+        claveProdServ: productCodeMatch ? productCodeMatch[1] : '',
+        cantidad: quantityMatch ? quantityMatch[1] : '',
+        claveUnidad: unitCodeMatch ? unitCodeMatch[1] : '',
+        unidad: unitMatch ? cleanOcrValue(unitMatch[1]) : '',
+        valorUnitario: Number.isFinite(valorUnitario) ? valorUnitario : null,
+        importeLinea: Number.isFinite(importeLinea) ? importeLinea : null,
+        objetoImpuesto: objectTaxMatch ? cleanOcrValue(objectTaxMatch[1]) : '',
+        metodoPago,
+        noSerieCsd: noSerieCsdMatch ? noSerieCsdMatch[1] : '',
+        rfcProveedorCertificacion: rfcProveedorMatch ? normalizeOcrRfc(rfcProveedorMatch[1]) : '',
+        noSerieCertificadoSat: noSerieSatMatch ? noSerieSatMatch[1] : '',
         confidence: {
             rfc: rfc ? 0.95 : 0,
+            rfcEmisor: rfcEmisor ? 0.95 : 0,
+            rfcReceptor: rfcReceptor ? 0.95 : 0,
             razonSocial: razonSocial ? 0.9 : 0,
+            nombreEmisor: nombreEmisor ? 0.9 : 0,
             regimenFiscal: regimenFiscal ? 0.8 : 0,
+            regimenFiscalEmisor: regimenFiscalEmisor ? 0.8 : 0,
             codigoPostal: codigoPostal ? 0.95 : 0,
             usoCfdi: usoCfdi ? 0.85 : 0,
             tipoCfdi: tipoCfdi ? 0.8 : 0,
-            uuid: uuidMatch ? 0.95 : 0,
+            uuid: (qrUuidMatch || uuidMatch) ? 0.98 : 0,
             banco: bancoDetectado ? 0.85 : 0,
             bancoEmisor: bancoEmisor ? 0.85 : 0,
             bancoReceptor: bancoReceptor ? 0.85 : 0,
             bancoEmisorCodigo: bancoEmisorCodigoMatch ? 0.95 : 0,
             bancoReceptorCodigo: bancoReceptorCodigoMatch ? 0.95 : 0,
             importe: Number.isFinite(amount) ? 0.95 : 0,
+            importePago: Number.isFinite(paymentAmount) ? 0.95 : 0,
+            subtotal: Number.isFinite(subtotal) ? 0.95 : 0,
             referencia: referencia ? 0.7 : 0,
             concepto: concept ? 0.85 : 0,
+            fechaEmision: fechaEmision ? 0.9 : 0,
             fechaPago: fechaPago ? 0.9 : 0,
             folioRecibo: folioRecibo ? 0.8 : 0,
             claveRastreo: claveRastreo ? 0.85 : 0,
             cuentaBeneficiaria: cuentaBeneficiaria ? 0.85 : 0,
             formaPago: formaPago ? 0.85 : 0,
-            moneda: moneda ? 0.85 : 0
+            moneda: moneda ? 0.85 : 0,
+            claveProdServ: productCodeMatch ? 0.85 : 0,
+            cantidad: quantityMatch ? 0.7 : 0,
+            claveUnidad: unitCodeMatch ? 0.8 : 0,
+            unidad: unitMatch ? 0.75 : 0,
+            valorUnitario: Number.isFinite(valorUnitario) ? 0.8 : 0,
+            importeLinea: Number.isFinite(importeLinea) ? 0.8 : 0,
+            objetoImpuesto: objectTaxMatch ? 0.8 : 0,
+            metodoPago: metodoPago ? 0.85 : 0,
+            noSerieCsd: noSerieCsdMatch ? 0.85 : 0,
+            rfcProveedorCertificacion: rfcProveedorMatch ? 0.9 : 0,
+            noSerieCertificadoSat: noSerieSatMatch ? 0.85 : 0
         }
     };
 }
 
 function cleanOcrValue(value) {
     return String(value || '').replace(/\s+/g, ' ').replace(/[|]+/g, '').trim().replace(/[.,;:]$/, '');
+}
+
+function normalizeOcrRfc(value) {
+    return cleanOcrValue(value).toUpperCase().replace(/[ .]/g, '');
+}
+
+function normalizeOcrUuid(value) {
+    // These substitutions are safe inside a hexadecimal UUID: the letters
+    // O/Q, I/L, S, G and Z cannot be valid UUID digits, but are common OCR
+    // confusions for 0, 1, 5, 6 and 2 respectively.
+    return String(value || '').toUpperCase().replace(/[OQ]/g, '0').replace(/[IL]/g, '1').replace(/S/g, '5').replace(/G/g, '6').replace(/Z/g, '2');
+}
+
+function normalizeOcrConcept(value) {
+    return cleanOcrValue(value)
+        .replace(/[\[\]{}<>|]/g, ' ')
+        .replace(/\bI\s+L(?:E|C)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function applyExtractedFields(fields) {
@@ -978,6 +1321,7 @@ function applyExtractedFields(fields) {
     if (fields.razonSocial) dossier.cliente = fields.razonSocial;
     if (fields.banco) dossier.banco = fields.banco;
     if (Number.isFinite(fields.importe)) dossier.importe = fields.importe;
+    if (Number.isFinite(fields.importePago)) dossier.importePago = fields.importePago;
     if (fields.referencia) dossier.referencia = fields.referencia;
     if (fields.concepto) dossier.concepto = fields.concepto;
     if (fields.fechaPago) dossier.fechaPago = fields.fechaPago;
@@ -995,6 +1339,23 @@ function applyExtractedFields(fields) {
     if (fields.cuentaBeneficiaria) dossier.cuentaBeneficiaria = fields.cuentaBeneficiaria;
     if (fields.formaPago) dossier.formaPago = fields.formaPago;
     if (fields.moneda) dossier.moneda = fields.moneda;
+    if (fields.rfcEmisor) dossier.rfcEmisor = fields.rfcEmisor;
+    if (fields.nombreEmisor) dossier.nombreEmisor = fields.nombreEmisor;
+    if (fields.regimenFiscalEmisor) dossier.regimenFiscalEmisor = fields.regimenFiscalEmisor;
+    if (fields.fechaEmision) dossier.fechaEmision = fields.fechaEmision;
+    if (fields.fechaCertificacion) dossier.fechaCertificacion = fields.fechaCertificacion;
+    if (fields.claveProdServ) dossier.claveProdServ = fields.claveProdServ;
+    if (fields.cantidad) dossier.cantidad = fields.cantidad;
+    if (fields.claveUnidad) dossier.claveUnidad = fields.claveUnidad;
+    if (fields.unidad) dossier.unidad = fields.unidad;
+    if (Number.isFinite(fields.valorUnitario)) dossier.valorUnitario = fields.valorUnitario;
+    if (Number.isFinite(fields.importeLinea)) dossier.importeLinea = fields.importeLinea;
+    if (fields.objetoImpuesto) dossier.objetoImpuesto = fields.objetoImpuesto;
+    if (fields.metodoPago) dossier.metodoPago = fields.metodoPago;
+    if (Number.isFinite(fields.subtotal)) dossier.subtotal = fields.subtotal;
+    if (fields.noSerieCsd) dossier.noSerieCsd = fields.noSerieCsd;
+    if (fields.rfcProveedorCertificacion) dossier.rfcProveedorCertificacion = fields.rfcProveedorCertificacion;
+    if (fields.noSerieCertificadoSat) dossier.noSerieCertificadoSat = fields.noSerieCertificadoSat;
 }
 
 // Load presets of test invoices
@@ -1066,7 +1427,6 @@ function renderDocumentList() {
 function updateStep2Fields() {
     if (!state.activeExpediente) return;
     const pending = 'Pendiente de lectura';
-    const amount = Number(state.activeExpediente.importe);
     document.getElementById('val-rfc').textContent = state.activeExpediente.rfc;
     document.getElementById('val-razon').textContent = state.activeExpediente.cliente;
     document.getElementById('val-regimen').textContent = state.activeExpediente.regimenFiscal;
@@ -1074,19 +1434,47 @@ function updateStep2Fields() {
     document.getElementById('val-cfdi').textContent = state.activeExpediente.usoCfdi;
     document.getElementById('val-correo').textContent = state.activeExpediente.correo;
 
+    const setDetected = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value || 'No detectado';
+    };
+    const formatDetectedAmount = value => value !== null && value !== '' && Number.isFinite(Number(value))
+        ? `$${Number(value).toFixed(2)} MXN`
+        : 'No detectado';
+    setDetected('val-rfc-emisor', state.activeExpediente.rfcEmisor);
+    setDetected('val-nombre-emisor', state.activeExpediente.nombreEmisor);
+    setDetected('val-regimen-emisor', state.activeExpediente.regimenFiscalEmisor);
+    setDetected('val-tipo-cfdi', state.activeExpediente.tipoCfdi ? state.activeExpediente.tipoCfdi.toUpperCase() : '');
+    setDetected('val-fecha-emision', state.activeExpediente.fechaEmision);
+    setDetected('val-uuid', state.activeExpediente.uuid);
+    setDetected('val-metodo-pago', state.activeExpediente.metodoPago);
+    setDetected('val-moneda', state.activeExpediente.moneda);
+    setDetected('val-subtotal', formatDetectedAmount(state.activeExpediente.subtotal));
+    setDetected('val-clave-prodserv', state.activeExpediente.claveProdServ);
+    setDetected('val-cantidad-unidad', [state.activeExpediente.cantidad, state.activeExpediente.claveUnidad, state.activeExpediente.unidad].filter(Boolean).join(' / '));
+    const lineValues = [
+        state.activeExpediente.valorUnitario !== null && state.activeExpediente.valorUnitario !== '' && Number.isFinite(Number(state.activeExpediente.valorUnitario)) ? `$${Number(state.activeExpediente.valorUnitario).toFixed(2)}` : '',
+        state.activeExpediente.importeLinea !== null && state.activeExpediente.importeLinea !== '' && Number.isFinite(Number(state.activeExpediente.importeLinea)) ? `$${Number(state.activeExpediente.importeLinea).toFixed(2)}` : ''
+    ].filter(Boolean);
+    setDetected('val-valores-linea', lineValues.length ? lineValues.join(' / ') + ' MXN' : '');
+    setDetected('val-objeto-impuesto', state.activeExpediente.objetoImpuesto);
+    const certificateValues = [state.activeExpediente.noSerieCsd, state.activeExpediente.rfcProveedorCertificacion, state.activeExpediente.noSerieCertificadoSat].filter(Boolean);
+    setDetected('val-certificados', certificateValues.length ? certificateValues.join(' / ') : '');
+
     // These values come from OCR only. The word "PAGADO" in a document is
     // not bank confirmation, so the validation status remains pending.
     document.getElementById('val-cis-folio').textContent = state.activeExpediente.folioRecibo || pending;
     document.getElementById('val-cis-fecha').textContent = state.activeExpediente.fechaPago || pending;
     document.getElementById('val-cis-concepto').textContent = state.activeExpediente.concepto || pending;
-    document.getElementById('val-cis-importe').textContent = Number.isFinite(amount) && amount > 0
-        ? `$${amount.toFixed(2)} MXN`
+    const paymentAmount = Number(state.activeExpediente.importePago);
+    document.getElementById('val-cis-importe').textContent = Number.isFinite(paymentAmount) && paymentAmount > 0
+        ? `$${paymentAmount.toFixed(2)} MXN`
         : pending;
 
     document.getElementById('val-banco').textContent = state.activeExpediente.banco || pending;
     document.getElementById('val-banco-fecha').textContent = state.activeExpediente.fechaPago || pending;
-    document.getElementById('val-banco-importe').textContent = Number.isFinite(amount) && amount > 0
-        ? `$${amount.toFixed(2)} MXN`
+    document.getElementById('val-banco-importe').textContent = Number.isFinite(paymentAmount) && paymentAmount > 0
+        ? `$${paymentAmount.toFixed(2)} MXN`
         : pending;
     document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia || pending;
     document.getElementById('val-banco-clave').textContent = state.activeExpediente.claveRastreo || pending;
@@ -1189,8 +1577,8 @@ function openBanxicoCepModal() {
     `);
 
     document.getElementById('cep-fecha').value = formatBanxicoDate(dossier.fechaPago);
-    document.getElementById('cep-monto').value = Number.isFinite(Number(dossier.importe)) && Number(dossier.importe) > 0
-        ? Number(dossier.importe).toFixed(2)
+    document.getElementById('cep-monto').value = Number.isFinite(Number(dossier.importePago)) && Number(dossier.importePago) > 0
+        ? Number(dossier.importePago).toFixed(2)
         : '';
     document.getElementById('cep-tipo-criterio').value = criterionType;
     document.getElementById('cep-criterio').value = criterionValue;
