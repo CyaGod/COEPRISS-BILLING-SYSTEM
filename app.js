@@ -19,7 +19,7 @@ const state = {
         certName: 'CSD_COEPRISS_2026.cer',
         keyName: 'CSD_COEPRISS_2026.key',
         expiry: '2028-09-12',
-        password: 'SinaloaFacturas2026'
+        password: ''
     },
 
     // In Process Dossiers (Expedientes) Mock Database
@@ -180,6 +180,101 @@ const state = {
     ocrBusy: false
 };
 
+// Never present seed/demo data as production records.
+Object.assign(state.currentUser, {
+    id: '',
+    name: 'Sin sesiÃ³n',
+    role: 'AutenticaciÃ³n no configurada',
+    avatar: '--'
+});
+state.csd = { uploaded: false, certName: '', keyName: '', expiry: '', password: '' };
+state.expedientes = [];
+state.facturas = [];
+state.historialCorreos = [];
+state.bitacoraSeguridad = [];
+
+function sanitizeUnconfiguredUi() {
+    const unavailablePanels = {
+        'step-panel-4': 'Timbrado PAC no configurado. No se generaran XML, UUID ni CFDI fiscales desde este navegador.',
+        'step-panel-5': 'Carga de comprobantes timbrados pendiente de configurar. No hay archivos fiscales disponibles.',
+        'step-panel-6': 'No existe una factura timbrada real para mostrar.',
+        'step-panel-7': 'No hay facturas persistentes. Conecte la base de datos antes de mostrar reportes.'
+    };
+
+    Object.entries(unavailablePanels).forEach(([id, message]) => {
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        panel.innerHTML = `<div class="app-card" style="margin-top: 20px; border-left: 4px solid var(--warning-color);"><h2 class="panel-title">Servicio no configurado</h2><p style="color: #6c757d; margin-top: 8px;">${message}</p></div>`;
+    });
+
+    [4, 5, 6, 7].forEach(step => {
+        const node = document.querySelector(`.step-node[data-step="${step}"]`);
+        if (node) {
+            node.style.opacity = '0.45';
+            node.style.pointerEvents = 'none';
+            node.setAttribute('aria-disabled', 'true');
+        }
+    });
+
+    const apiButton = document.getElementById('btn-api-banco');
+    if (apiButton) {
+        apiButton.disabled = true;
+        apiButton.textContent = 'Consulta bancaria no configurada';
+    }
+    const manualButton = document.getElementById('btn-manual-banco');
+    if (manualButton) {
+        manualButton.disabled = true;
+        manualButton.textContent = 'Validacion externa pendiente';
+    }
+
+    const stampButton = document.getElementById('btn-pac-stamp');
+    if (stampButton) {
+        stampButton.disabled = true;
+        stampButton.textContent = 'Timbrado PAC no configurado';
+    }
+    const csdPassword = document.getElementById('pac-csd-password');
+    if (csdPassword) {
+        csdPassword.value = '';
+        csdPassword.disabled = true;
+    }
+    const csdStatus = document.getElementById('csd-status');
+    if (csdStatus) {
+        csdStatus.textContent = 'CSD no configurado. Las llaves privadas no se guardan en el navegador.';
+        csdStatus.style.color = 'var(--warning-color)';
+    }
+    const pacCsdStatus = document.getElementById('lbl-pac-csd-status');
+    if (pacCsdStatus) {
+        pacCsdStatus.textContent = 'CSD no configurado';
+        pacCsdStatus.style.color = 'var(--warning-color)';
+    }
+
+    const roleSelect = document.getElementById('select-user-role');
+    if (roleSelect) roleSelect.disabled = true;
+    document.querySelectorAll('button[onclick^="loadPresetDossier"]').forEach(button => button.remove());
+    document.querySelectorAll('h3').forEach(title => {
+        if (title.textContent.toLowerCase().includes('presets')) title.remove();
+        if (title.textContent.toLowerCase().includes('simulaci')) title.textContent = 'Autenticacion no configurada';
+    });
+
+    const activityTitle = Array.from(document.querySelectorAll('h3')).find(title => title.textContent.includes('Actividad Reciente'));
+    const activityList = activityTitle?.parentElement.querySelector('ul');
+    if (activityList) activityList.innerHTML = '<li style="color: #6c757d;">Sin actividad persistente registrada.</li>';
+
+    ['dash-timbradas-count', 'dash-proc-count', 'dash-correos-count'].forEach(id => {
+        const counter = document.getElementById(id);
+        const card = counter?.closest('.app-card');
+        const caption = card?.querySelectorAll('span')[1];
+        if (caption) caption.textContent = 'Sin datos persistentes';
+    });
+
+    const avatar = document.querySelector('.user-avatar-gold');
+    const userName = document.querySelector('.user-name-top');
+    const userRole = document.querySelector('.user-role-top');
+    if (avatar) avatar.textContent = '--';
+    if (userName) userName.textContent = 'Sin sesion';
+    if (userRole) userRole.textContent = 'Autenticacion no configurada';
+}
+
 // Document Log Init
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
@@ -193,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderBitacoraTable();
     renderReportTable();
     updateDashboardCounts();
+    sanitizeUnconfiguredUi();
     
     // Start at Dashboard
     goToPanel('panel-inicio');
@@ -296,6 +392,9 @@ function resumeFlowAtStep(wizardStep, folio) {
 }
 
 function resendEmail(email, folio) {
+    showToast('EnvÃ­o de correo no configurado: no se enviÃ³ ningÃºn mensaje.', 'warning');
+    return;
+
     showToast(`Reenviando factura ${folio} a: ${email}...`, 'info');
     setTimeout(() => {
         showToast(`✓ Factura reenviada con éxito a: ${email}`, 'success');
@@ -748,6 +847,9 @@ function applyExtractedFields(fields) {
 
 // Load presets of test invoices
 function loadPresetDossier(presetIndex) {
+    showToast('Los expedientes de demostraciÃ³n estÃ¡n deshabilitados. Carga un documento real.', 'warning');
+    return;
+
     const defaultData = state.expedientes[presetIndex];
     if (!defaultData) return;
     
@@ -829,6 +931,9 @@ function updateStep2Fields() {
 function validatePaymentViaAPI() {
     if (!state.activeExpediente) return;
 
+    showToast('Consulta bancaria no configurada. No se verificÃ³ ningÃºn pago.', 'warning');
+    return;
+
     const apiBtn = document.getElementById('btn-api-banco');
     apiBtn.disabled = true;
     apiBtn.innerHTML = `
@@ -857,6 +962,9 @@ function validatePaymentViaAPI() {
 
 function validatePaymentManual() {
     if (!state.activeExpediente) return;
+
+    showToast('La validaciÃ³n manual solo puede registrarse cuando exista un proceso contable autorizado.', 'warning');
+    return;
 
     state.activeExpediente.estatus = 'Pago validado';
     addAuditLogToActive(`Pago validado manualmente. Autorizado por: ${state.currentUser.name}.`);
@@ -968,6 +1076,9 @@ function updatePreviewFields() {
 function stampInvoiceViaPAC() {
     if (!state.activeExpediente) return;
 
+    showToast('Timbrado PAC no configurado. No se generÃ³ UUID, XML ni factura fiscal.', 'warning');
+    return;
+
     const csdPassword = document.getElementById('pac-csd-password').value;
     if (!csdPassword) {
         showToast('Ingresa la contraseña del archivo CSD para firmar el XML.', 'warning');
@@ -1039,6 +1150,9 @@ function stampInvoiceViaPAC() {
 
 function downloadXML() {
     if (!state.activeExpediente) return;
+
+    showToast('XML no disponible: primero debe configurarse un PAC real o cargarse un XML timbrado.', 'warning');
+    return;
     
     showToast('Generando archivo XML...', 'info');
     
@@ -1171,6 +1285,11 @@ function initDragAndDrop() {
 
 // 7. Step 6: Invoice Preview & Stamped Verification
 function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = '$1,160.00') {
+    if (!state.activeExpediente?.uuid) {
+        showToast('No existe un CFDI timbrado real para previsualizar.', 'warning');
+        return;
+    }
+
     if (!clientName && state.activeExpediente) {
         clientName = state.activeExpediente.cliente;
     }
@@ -1211,6 +1330,9 @@ function closeModal(modalId) {
 
 function sendInvoiceByEmail() {
     if (!state.activeExpediente) return;
+
+    showToast('EnvÃ­o de correo no configurado: no se enviÃ³ ningÃºn archivo.', 'warning');
+    return;
     
     showToast(`Enviando factura por correo a: ${state.activeExpediente.correo}...`, 'info');
     
@@ -1245,6 +1367,9 @@ function sendInvoiceByEmail() {
 
 // Helper to trigger dummy file download
 function triggerDownload(filename) {
+    showToast(`Archivo no disponible: ${filename}. Configure el PAC o cargue el documento real.`, 'warning');
+    return;
+
     showToast(`Descargando archivo: ${filename}...`, 'info');
     setTimeout(() => {
         let content = '';
@@ -1406,6 +1531,9 @@ function restartProcess() {
 
 // Employee Role Switcher & Config Panel Management
 function changeUserRole(roleId) {
+    showToast('AutenticaciÃ³n y roles no configurados. No se cambiÃ³ la sesiÃ³n.', 'warning');
+    return;
+
     if (roleId === 'brenda') {
         state.currentUser = {
             id: 'brenda',
@@ -1519,12 +1647,9 @@ function renderClientesTable() {
 
     tbody.innerHTML = '';
     
-    // Group unique clients from dossiers and stamped list
-    const clients = [
-        { rfc: 'EEM010101XXX', razon: 'Empresa Ejemplo, S.A. de C.V.', regimen: '601 - General de Ley Personas Morales', cp: '80000', email: 'facturacion@empresaejemplo.com' },
-        { rfc: 'SPS090909AAA', razon: 'Sistemas Sinaloa, S.A. de C.V.', regimen: '601 - General de Ley Personas Morales', cp: '81000', email: 'proveedor@sistemasinaloa.mx' },
-        { rfc: 'GSI121212BBB', razon: 'Gas Sinaloa, S.A.', regimen: '601 - General de Ley Personas Morales', cp: '80100', email: 'contacto@gassinaloa.com' }
-    ];
+    // Clients will come from the real database once authentication and
+    // persistence are configured. Never seed the production UI with examples.
+    const clients = [];
 
     clients.forEach(c => {
         const tr = document.createElement('tr');
