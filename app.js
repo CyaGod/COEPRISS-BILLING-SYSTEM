@@ -673,7 +673,8 @@ async function startScanAnimation() {
         updatePreviewFields();
         renderTimeline();
         updatePaymentValidationUI();
-        showToast('Lectura terminada. Revisa y confirma los datos detectados.', 'success');
+        showToast('⚠ Pago no validado. El comprobante fue leído, pero falta confirmación bancaria real.', 'error');
+        showToast('Lectura terminada. Revisa los datos; el pago no está validado.', 'info');
         goToStep(2);
     } catch (error) {
         console.error('OCR error:', error);
@@ -1016,6 +1017,7 @@ function updatePaymentValidationUI() {
     const confirmBtn = document.getElementById('btn-confirm-step2');
 
     if (state.activeExpediente.estatus === 'Pago validado' || state.activeExpediente.estatus === 'Autorizado' || state.activeExpediente.estatus === 'Timbrado' || state.activeExpediente.estatus === 'Entregado') {
+        valBox.classList.remove('payment-not-validated');
         valBox.style.borderColor = 'var(--success-color)';
         valBox.style.backgroundColor = 'var(--success-bg)';
         valTitle.textContent = 'Pago Conciliado y Validado';
@@ -1023,15 +1025,18 @@ function updatePaymentValidationUI() {
         valDesc.textContent = `confirmado en la cuenta estatal por $${state.activeExpediente.importe.toFixed(2)} MXN.`;
         valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
         valIcon.setAttribute('class', 'badge-icon text-success');
+        valIcon.style.color = 'var(--success-color)';
         confirmBtn.disabled = false;
     } else {
-        valBox.style.borderColor = '#dee2e6';
-        valBox.style.backgroundColor = '#f8f9fa';
-        valTitle.textContent = 'Pendiente de Conciliación Bancaria';
-        valTitle.style.color = '#495057';
-        valDesc.textContent = 'El pago debe ser validado contra el estado de cuenta.';
+        valBox.classList.add('payment-not-validated');
+        valBox.style.borderColor = '#c92a2a';
+        valBox.style.backgroundColor = '#fff5f5';
+        valTitle.textContent = 'Pago no validado';
+        valTitle.style.color = '#c92a2a';
+        valDesc.textContent = 'No existe una confirmación bancaria real. El comprobante no autoriza el pago.';
         valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
-        valIcon.setAttribute('class', 'badge-icon-stroke text-warning');
+        valIcon.setAttribute('class', 'badge-icon-stroke text-danger');
+        valIcon.style.color = '#c92a2a';
         confirmBtn.disabled = true;
     }
 }
@@ -1892,6 +1897,8 @@ function showToast(message, type = 'success') {
         iconSvg = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
     } else if (type === 'info') {
         iconSvg = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+    } else if (type === 'error') {
+        iconSvg = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86l-7.2 12.48A2 2 0 004.82 19h14.36a2 2 0 001.73-2.66l-7.2-12.48a2 2 0 00-3.42 0z"/></svg>`;
     } else if (type === 'warning') {
         iconSvg = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>`;
     }

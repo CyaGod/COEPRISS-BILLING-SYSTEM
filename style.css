@@ -1640,6 +1640,7 @@ body {
 .toast.toast-success { border-left-color: var(--success-color); }
 .toast.toast-info { border-left-color: var(--info-color); }
 .toast.toast-warning { border-left-color: var(--warning-color); }
+.toast.toast-error { border-left-color: #c92a2a; }
 
 .toast-close {
     background: none;
@@ -1736,4 +1737,27 @@ body {
 }
 .toast.toast-warning svg {
     color: var(--warning-color);
+}
+.toast.toast-error svg {
+    color: #c92a2a;
+}
+
+/* Makes an unverified payment impossible to confuse with a successful one. */
+.payment-not-validated {
+    animation: paymentValidationPulse 1.8s ease-in-out 2;
+}
+
+@keyframes paymentValidationPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(201, 42, 42, 0);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(201, 42, 42, 0.14);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .payment-not-validated {
+        animation: none;
+    }
 }
