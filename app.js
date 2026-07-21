@@ -171,13 +171,20 @@ const state = {
 
     currentStep: 1,
     xmlUploaded: false,
-    pdfUploaded: false
+    pdfUploaded: false,
+
+    // Archivos reales seleccionados en el navegador. Se mantienen solo durante
+    // la sesiÃ³n para no enviar documentos fiscales a un servicio externo.
+    uploadedFiles: [],
+    ocrWorker: null,
+    ocrBusy: false
 };
 
 // Document Log Init
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initDragAndDrop();
+    initDocumentPicker();
     
     // Render dynamic data in tables
     renderProcesoTable();
@@ -407,7 +414,7 @@ function goToStep(stepNumber) {
 }
 
 // 2. Step 1: Laser Scan Animation
-function startScanAnimation() {
+function startScanAnimationLegacyDemo() {
     const scanner = document.getElementById('laser-scanner');
     const scanBtn = document.getElementById('btn-scan');
     
@@ -454,6 +461,242 @@ function startScanAnimation() {
     }, 1800);
 }
 
+// Real document picker and local OCR implementation.
+function initDocumentPicker() {
+    const dropzone = document.getElementById('dropzone-step1');
+    const input = document.getElementById('document-file-input');
+    if (!dropzone || !input) return;
+
+    dropzone.addEventListener('click', event => {
+        if (event.target !== input) input.click();
+    });
+    input.addEventListener('change', event => handleSelectedFiles(event.target.files));
+}
+
+function handleSelectedFiles(fileList) {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    files.forEach(file => {
+        const extension = file.name.toLowerCase().split('.').pop();
+        const validType = allowed.includes(file.type) || ['pdf', 'jpg', 'jpeg', 'png'].includes(extension);
+        if (!validType) {
+            showToast(`Formato no permitido: ${file.name}`, 'warning');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            showToast(`El archivo ${file.name} supera el limite de 10 MB.`, 'warning');
+            return;
+        }
+        if (state.uploadedFiles.some(item => item.name === file.name && item.file.size === file.size)) return;
+
+        state.uploadedFiles.push({
+            file,
+            name: file.name,
+            type: file.type === 'application/pdf' || extension === 'pdf' ? 'PDF' : 'Imagen',
+            status: 'Listo para leer'
+        });
+    });
+
+    createActiveExpedienteFromUploads();
+    if (state.activeExpediente) {
+        const existingNames = new Set(state.activeExpediente.archivos.map(item => item.name));
+        state.uploadedFiles.forEach(uploaded => {
+            if (!existingNames.has(uploaded.name)) {
+                state.activeExpediente.archivos.push({
+                    name: uploaded.name,
+                    type: uploaded.type === 'PDF' ? 'Documento PDF' : 'Documento imagen',
+                    status: uploaded.status
+                });
+            }
+        });
+    }
+    renderDocumentList();
+    const scanBtn = document.getElementById('btn-scan');
+    if (scanBtn) scanBtn.disabled = state.uploadedFiles.length === 0;
+    showToast(`${state.uploadedFiles.length} documento(s) listo(s) para OCR local.`, 'success');
+}
+
+function createActiveExpedienteFromUploads() {
+    if (state.activeExpediente || !state.uploadedFiles.length) return;
+
+    state.activeExpediente = {
+        folio: `REC-${String(Date.now()).slice(-6)}`,
+        cliente: 'Pendiente de lectura',
+        rfc: '',
+        regimenFiscal: '',
+        codigoPostal: '',
+        usoCfdi: 'G03 - Gastos en general',
+        correo: '',
+        importe: 0,
+        fechaRecibo: getCurrentDateTimeString(),
+        banco: '',
+        fechaPago: '',
+        referencia: '',
+        estatus: 'Recibido',
+        tipoCfdi: 'ingreso',
+        uuid: '',
+        archivos: [],
+        auditoria: [`[${getCurrentDateTimeString()}] Tramite recibido mediante carga de documentos.`]
+    };
+    document.getElementById('lbl-cliente-correo').textContent = 'Pendiente de lectura';
+    document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
+}
+
+async function startScanAnimation() {
+    const scanner = document.getElementById('laser-scanner');
+    const scanBtn = document.getElementById('btn-scan');
+    if (!scanner || !scanBtn || state.ocrBusy) return;
+    if (!state.uploadedFiles.length) {
+        showToast('Selecciona al menos un PDF, JPG o PNG real.', 'warning');
+        return;
+    }
+
+    state.ocrBusy = true;
+    scanBtn.disabled = true;
+    scanner.style.display = 'block';
+    scanBtn.textContent = 'Leyendo documentos...';
+    showToast('OCR local iniciado. Los documentos permanecen en este navegador.', 'info');
+
+    try {
+        const fields = await extractUploadedDocuments();
+        applyExtractedFields(fields);
+        state.uploadedFiles.forEach(file => { file.status = 'Leido correctamente (OCR local)'; });
+        if (state.activeExpediente) {
+            state.activeExpediente.archivos.forEach(file => { file.status = 'Leido correctamente (OCR local)'; });
+            state.activeExpediente.estatus = 'Pago pendiente';
+            addAuditLogToActive('Documentos procesados mediante OCR local. Datos pendientes de confirmacion.');
+            addSecurityLog('OCR local', `Lectura del expediente ${state.activeExpediente.folio} finalizada en el navegador.`);
+        }
+        renderDocumentList();
+        updateStep2Fields();
+        updatePreviewFields();
+        renderTimeline();
+        updatePaymentValidationUI();
+        showToast('Lectura terminada. Revisa y confirma los datos detectados.', 'success');
+        goToStep(2);
+    } catch (error) {
+        console.error('OCR error:', error);
+        showToast(`No se pudo leer el documento: ${error.message || 'error desconocido'}`, 'error');
+    } finally {
+        scanner.style.display = 'none';
+        state.ocrBusy = false;
+        scanBtn.disabled = state.uploadedFiles.length === 0;
+        scanBtn.textContent = 'Escanear / Leer documentos';
+        if (state.ocrWorker) {
+            await state.ocrWorker.terminate();
+            state.ocrWorker = null;
+        }
+    }
+}
+
+async function extractUploadedDocuments() {
+    if (!window.Tesseract) throw new Error('No se cargo el motor OCR.');
+    if (!window.pdfjsLib) throw new Error('No se cargo el lector PDF.');
+
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    state.ocrWorker = await Tesseract.createWorker('spa', 1, {
+        logger: message => {
+            if (message.status === 'recognizing text' && Number.isFinite(message.progress)) {
+                const scanBtn = document.getElementById('btn-scan');
+                if (scanBtn) scanBtn.textContent = `Leyendo OCR ${Math.round(message.progress * 100)}%...`;
+            }
+        }
+    });
+    await state.ocrWorker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+
+    let allText = '';
+    let pageCount = 0;
+    for (const uploaded of state.uploadedFiles) {
+        const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
+        if (!isPdf) {
+            const result = await state.ocrWorker.recognize(uploaded.file);
+            allText += `\n${result.data.text || ''}`;
+            pageCount += 1;
+            continue;
+        }
+
+        const pdf = await window.pdfjsLib.getDocument({ data: await uploaded.file.arrayBuffer() }).promise;
+        const pageLimit = Math.min(pdf.numPages, 3);
+        for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+            const page = await pdf.getPage(pageNumber);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str || '').join(' ').trim();
+            if (pageText.replace(/\s/g, '').length >= 30) {
+                allText += `\n${pageText}`;
+            } else {
+                const canvas = await renderPdfPageForOcr(page);
+                const result = await state.ocrWorker.recognize(canvas);
+                allText += `\n${result.data.text || ''}`;
+                canvas.width = 1;
+                canvas.height = 1;
+            }
+            pageCount += 1;
+        }
+        if (pdf.numPages > pageLimit) allText += '\n[Advertencia: el PDF supera el limite de 3 paginas.]';
+    }
+
+    if (!pageCount || allText.replace(/\s/g, '').length < 10) {
+        throw new Error('No se detecto texto legible. Usa una imagen nitida y bien iluminada.');
+    }
+    return parseExtractedFields(allText);
+}
+
+async function renderPdfPageForOcr(page) {
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = Math.max(1.2, Math.min(1.6, 1800 / Math.max(baseViewport.width, baseViewport.height)));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    return canvas;
+}
+
+function parseExtractedFields(text) {
+    const normalized = text.replace(/\r/g, '').replace(/[ \t]+/g, ' ');
+    const upper = normalized.toUpperCase();
+    const rfcMatch = upper.match(/\b[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}\b/);
+    const amountMatch = normalized.match(/(?:IMPORTE|TOTAL(?: A PAGAR)?|MONTO|DEPOSITO|PAGO)[^\d$]{0,40}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
+    const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION|FOLIO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
+    const reasonMatch = normalized.match(/(?:RAZON SOCIAL|RAZON|NOMBRE|CONTRIBUYENTE)[\s:#-]*([^\n]{4,100})/i);
+    const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'NU'];
+    const bank = bankNames.find(name => upper.includes(name)) || '';
+    const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
+    const razonSocial = reasonMatch ? cleanOcrValue(reasonMatch[1]) : '';
+    const referencia = referenceMatch ? cleanOcrValue(referenceMatch[1]) : '';
+    return {
+        rfc: rfcMatch ? rfcMatch[0].toUpperCase() : '',
+        razonSocial,
+        banco: bank,
+        importe: Number.isFinite(amount) ? amount : null,
+        referencia,
+        confidence: {
+            rfc: rfcMatch ? 0.95 : 0,
+            razonSocial: razonSocial ? 0.65 : 0,
+            banco: bank ? 0.85 : 0,
+            importe: Number.isFinite(amount) ? 0.8 : 0,
+            referencia: referencia ? 0.7 : 0
+        }
+    };
+}
+
+function cleanOcrValue(value) {
+    return value.replace(/\s+/g, ' ').replace(/[|]+/g, '').trim().replace(/[.,;:]$/, '');
+}
+
+function applyExtractedFields(fields) {
+    if (!state.activeExpediente) createActiveExpedienteFromUploads();
+    if (!state.activeExpediente) return;
+    const dossier = state.activeExpediente;
+    if (fields.rfc) dossier.rfc = fields.rfc;
+    if (fields.razonSocial) dossier.cliente = fields.razonSocial;
+    if (fields.banco) dossier.banco = fields.banco;
+    if (Number.isFinite(fields.importe)) dossier.importe = fields.importe;
+    if (fields.referencia) dossier.referencia = fields.referencia;
+}
+
 // Load presets of test invoices
 function loadPresetDossier(presetIndex) {
     const defaultData = state.expedientes[presetIndex];
@@ -461,6 +704,7 @@ function loadPresetDossier(presetIndex) {
     
     // Deep clone the preset data to allow mutations
     state.activeExpediente = JSON.parse(JSON.stringify(defaultData));
+    state.uploadedFiles = [];
     
     // Set view headers
     document.getElementById('lbl-cliente-correo').textContent = state.activeExpediente.correo;
@@ -790,7 +1034,7 @@ function removeUpload(type) {
 }
 
 // Drag & drop simulation
-function initDragAndDrop() {
+function initDragAndDropLegacyDemo() {
     const dropzone = document.getElementById('dropzone-step1');
     if (!dropzone) return;
 
@@ -854,6 +1098,25 @@ function initDragAndDrop() {
             renderDocumentList();
         }
     }, false);
+}
+
+// Override the original demo drop handler with real File objects.
+function initDragAndDrop() {
+    const dropzone = document.getElementById('dropzone-step1');
+    if (!dropzone) return;
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, event => {
+            event.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, event => {
+            event.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+    });
+    dropzone.addEventListener('drop', event => handleSelectedFiles(event.dataTransfer.files));
 }
 
 // 7. Step 6: Invoice Preview & Stamped Verification
