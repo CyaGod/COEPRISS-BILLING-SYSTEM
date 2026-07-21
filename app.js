@@ -628,6 +628,7 @@ function createActiveExpedienteFromUploads() {
         correo: '',
         importe: 0,
         fechaRecibo: getCurrentDateTimeString(),
+        concepto: '',
         banco: '',
         fechaPago: '',
         referencia: '',
@@ -809,23 +810,31 @@ function parseExtractedFields(text) {
     const amountMatch = normalized.match(/(?:IMPORTE|TOTAL(?: A PAGAR)?|MONTO|DEPOSITO|PAGO)[^\d$]{0,40}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || normalized.match(/\$\s*([\d,]+\.\d{1,2})/);
     const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION|FOLIO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const reasonMatch = normalized.match(/(?:RAZON SOCIAL|RAZON|NOMBRE|CONTRIBUYENTE)[\s:#-]*([^\n]{4,100})/i);
+    const conceptMatch = normalized.match(/(?:CONCEPTO|DESCRIPCION)[\s:#-]*([^\n]{4,120})/i);
+    const dateMatch = normalized.match(/(?:FECHA(?:\s+PAGO)?|FECHA DE PAGO)[\s:#-]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}(?:\s+\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?)?)/i);
     const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'NU'];
     const bank = bankNames.find(name => upper.includes(name)) || '';
     const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
     const razonSocial = reasonMatch ? cleanOcrValue(reasonMatch[1]) : '';
     const referencia = referenceMatch ? cleanOcrValue(referenceMatch[1]) : '';
+    const concepto = conceptMatch ? cleanOcrValue(conceptMatch[1]) : '';
+    const fechaPago = dateMatch ? cleanOcrValue(dateMatch[1]) : '';
     return {
         rfc: rfcMatch ? rfcMatch[0].toUpperCase() : '',
         razonSocial,
         banco: bank,
         importe: Number.isFinite(amount) ? amount : null,
         referencia,
+        concepto,
+        fechaPago,
         confidence: {
             rfc: rfcMatch ? 0.95 : 0,
             razonSocial: razonSocial ? 0.65 : 0,
             banco: bank ? 0.85 : 0,
             importe: Number.isFinite(amount) ? 0.8 : 0,
-            referencia: referencia ? 0.7 : 0
+            referencia: referencia ? 0.7 : 0,
+            concepto: concepto ? 0.8 : 0,
+            fechaPago: fechaPago ? 0.75 : 0
         }
     };
 }
@@ -843,6 +852,8 @@ function applyExtractedFields(fields) {
     if (fields.banco) dossier.banco = fields.banco;
     if (Number.isFinite(fields.importe)) dossier.importe = fields.importe;
     if (fields.referencia) dossier.referencia = fields.referencia;
+    if (fields.concepto) dossier.concepto = fields.concepto;
+    if (fields.fechaPago) dossier.fechaPago = fields.fechaPago;
 }
 
 // Load presets of test invoices
@@ -913,6 +924,8 @@ function renderDocumentList() {
 
 function updateStep2Fields() {
     if (!state.activeExpediente) return;
+    const pending = 'Pendiente de lectura';
+    const amount = Number(state.activeExpediente.importe);
     document.getElementById('val-rfc').textContent = state.activeExpediente.rfc;
     document.getElementById('val-razon').textContent = state.activeExpediente.cliente;
     document.getElementById('val-regimen').textContent = state.activeExpediente.regimenFiscal;
@@ -920,11 +933,21 @@ function updateStep2Fields() {
     document.getElementById('val-cfdi').textContent = state.activeExpediente.usoCfdi;
     document.getElementById('val-correo').textContent = state.activeExpediente.correo;
 
-    // Load bank values
-    document.getElementById('val-banco').textContent = state.activeExpediente.banco;
-    document.getElementById('val-banco-fecha').textContent = state.activeExpediente.fechaPago;
-    document.getElementById('val-banco-importe').textContent = `$${state.activeExpediente.importe.toFixed(2)} MXN`;
-    document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia;
+    // These values come from OCR only. The word "PAGADO" in a document is
+    // not bank confirmation, so the validation status remains pending.
+    document.getElementById('val-cis-folio').textContent = state.activeExpediente.folio || pending;
+    document.getElementById('val-cis-fecha').textContent = state.activeExpediente.fechaPago || pending;
+    document.getElementById('val-cis-concepto').textContent = state.activeExpediente.concepto || pending;
+    document.getElementById('val-cis-importe').textContent = Number.isFinite(amount) && amount > 0
+        ? `$${amount.toFixed(2)} MXN`
+        : pending;
+
+    document.getElementById('val-banco').textContent = state.activeExpediente.banco || pending;
+    document.getElementById('val-banco-fecha').textContent = state.activeExpediente.fechaPago || pending;
+    document.getElementById('val-banco-importe').textContent = Number.isFinite(amount) && amount > 0
+        ? `$${amount.toFixed(2)} MXN`
+        : pending;
+    document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia || pending;
 }
 
 // 3. Step 2: Payment API and Manual Validation
