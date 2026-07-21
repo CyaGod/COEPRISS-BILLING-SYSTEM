@@ -218,8 +218,9 @@ function sanitizeUnconfiguredUi() {
 
     const apiButton = document.getElementById('btn-api-banco');
     if (apiButton) {
-        apiButton.disabled = true;
-        apiButton.textContent = 'Consulta bancaria no configurada';
+        apiButton.disabled = false;
+        apiButton.textContent = 'Consultar en Banxico CEP';
+        apiButton.title = 'Abrir la consulta oficial del CEP de Banco de México';
     }
     const manualButton = document.getElementById('btn-manual-banco');
     if (manualButton) {
@@ -633,6 +634,8 @@ function createActiveExpedienteFromUploads() {
         banco: '',
         fechaPago: '',
         referencia: '',
+        claveRastreo: '',
+        cuentaBeneficiaria: '',
         estatus: 'Recibido',
         tipoCfdi: 'ingreso',
         uuid: '',
@@ -813,6 +816,8 @@ function parseExtractedFields(text) {
     const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DEL?\s+)?RECIBO|NO\.?\s+DE?\s+RECIBO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
     const reasonMatch = normalized.match(/(?:RAZON SOCIAL|RAZON|NOMBRE|CONTRIBUYENTE)[\s:#-]*([^\n]{4,100})/i);
+    const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|CLAVE\s+RASTREO|RASTREO)[\s:#-]*([A-Z0-9]{6,30})/i);
+    const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,20})/i);
     const conceptMatch = normalized.match(/(?:CONCEPTO|DESCRIPCION)[\s:#-]*([^\n]{4,120})/i);
     const dateMatch = normalized.match(/(?:FECHA(?:\s+PAGO)?|FECHA DE PAGO)[\s:#-]*(\d{1,2}[/-]\d{1,2}[/-]\d{4}(?:\s+\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?)?)/i);
     const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'NU'];
@@ -823,6 +828,8 @@ function parseExtractedFields(text) {
     const concepto = conceptMatch ? cleanOcrValue(conceptMatch[1]) : '';
     const fechaPago = dateMatch ? cleanOcrValue(dateMatch[1]) : '';
     const folioRecibo = folioReciboMatch ? cleanOcrValue(folioReciboMatch[1]) : '';
+    const claveRastreo = trackingMatch ? cleanOcrValue(trackingMatch[1]).replace(/[^A-Z0-9]/gi, '') : '';
+    const cuentaBeneficiaria = accountMatch ? accountMatch[1].replace(/\D/g, '') : '';
     return {
         rfc: rfcMatch ? rfcMatch[0].toUpperCase() : '',
         razonSocial,
@@ -832,6 +839,8 @@ function parseExtractedFields(text) {
         concepto,
         fechaPago,
         folioRecibo,
+        claveRastreo,
+        cuentaBeneficiaria,
         confidence: {
             rfc: rfcMatch ? 0.95 : 0,
             razonSocial: razonSocial ? 0.65 : 0,
@@ -840,7 +849,9 @@ function parseExtractedFields(text) {
             referencia: referencia ? 0.7 : 0,
             concepto: concepto ? 0.8 : 0,
             fechaPago: fechaPago ? 0.75 : 0,
-            folioRecibo: folioRecibo ? 0.8 : 0
+            folioRecibo: folioRecibo ? 0.8 : 0,
+            claveRastreo: claveRastreo ? 0.85 : 0,
+            cuentaBeneficiaria: cuentaBeneficiaria ? 0.85 : 0
         }
     };
 }
@@ -861,6 +872,8 @@ function applyExtractedFields(fields) {
     if (fields.concepto) dossier.concepto = fields.concepto;
     if (fields.fechaPago) dossier.fechaPago = fields.fechaPago;
     if (fields.folioRecibo) dossier.folioRecibo = fields.folioRecibo;
+    if (fields.claveRastreo) dossier.claveRastreo = fields.claveRastreo;
+    if (fields.cuentaBeneficiaria) dossier.cuentaBeneficiaria = fields.cuentaBeneficiaria;
 }
 
 // Load presets of test invoices
@@ -957,54 +970,196 @@ function updateStep2Fields() {
     document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia || pending;
 }
 
+function formatBanxicoDate(value) {
+    const match = String(value || '').match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+    if (!match) return '';
+    return `${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}-${match[3]}`;
+}
+
+function closeBanxicoCepModal() {
+    document.getElementById('banxico-cep-modal')?.remove();
+}
+
+function openBanxicoCepModal() {
+    if (!state.activeExpediente) return;
+    closeBanxicoCepModal();
+
+    const dossier = state.activeExpediente;
+    const hasTrackingKey = Boolean(dossier.claveRastreo);
+    const numericReference = /^\d{1,7}$/.test(String(dossier.referencia || '').trim());
+    const criterionType = hasTrackingKey || !numericReference ? 'T' : 'R';
+    const criterionValue = hasTrackingKey ? dossier.claveRastreo : (numericReference ? dossier.referencia : '');
+
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="cep-modal-backdrop" id="banxico-cep-modal" role="presentation">
+            <section class="cep-modal" role="dialog" aria-modal="true" aria-labelledby="cep-modal-title">
+                <header class="cep-modal-header">
+                    <div>
+                        <p class="cep-modal-eyebrow">Consulta oficial SPEI</p>
+                        <h2 id="cep-modal-title">Comprobante Electrónico de Pago (CEP)</h2>
+                    </div>
+                    <button type="button" class="cep-modal-close" id="cep-modal-close" aria-label="Cerrar">&times;</button>
+                </header>
+                <div class="cep-modal-notice">
+                    Banxico recibirá la consulta en su sitio oficial. Los campos detectados por OCR se cargan aquí; los datos que no estén en el comprobante deben confirmarse con el banco.
+                </div>
+                <form id="banxico-cep-form" class="cep-modal-form">
+                    <div class="cep-form-grid">
+                        <label>Fecha de operación
+                            <input id="cep-fecha" type="text" readonly>
+                        </label>
+                        <label>Monto detectado
+                            <input id="cep-monto" type="text" readonly>
+                        </label>
+                        <label>Criterio de búsqueda
+                            <select id="cep-tipo-criterio">
+                                <option value="T">Clave de rastreo</option>
+                                <option value="R">Número de referencia</option>
+                            </select>
+                        </label>
+                        <label><span id="cep-criterio-label">Clave de rastreo</span>
+                            <input id="cep-criterio" type="text" maxlength="30" autocomplete="off" placeholder="Dato del estado de cuenta">
+                        </label>
+                    </div>
+                    <div class="cep-form-grid">
+                        <label>Banco emisor — código Banxico *
+                            <input id="cep-emisor" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 40012">
+                        </label>
+                        <label>Banco receptor — código Banxico *
+                            <input id="cep-receptor" type="text" inputmode="numeric" maxlength="6" placeholder="Ej. 40012">
+                        </label>
+                        <label>Cuenta beneficiaria (CLABE/tarjeta/celular)
+                            <input id="cep-cuenta" type="text" inputmode="numeric" maxlength="20" placeholder="Opcional para consultar estado">
+                        </label>
+                        <label>Código de seguridad CAPTCHA
+                            <input id="cep-captcha" type="text" maxlength="5" autocomplete="off" placeholder="Lo solicita Banxico">
+                        </label>
+                    </div>
+                    <label class="cep-checkbox-row">
+                        <input id="cep-receptor-participante" type="checkbox" value="1">
+                        El beneficiario es directamente el banco receptor
+                    </label>
+                    <p class="cep-modal-help">Banco detectado por OCR: <strong id="cep-banco-detectado">No detectado</strong>. La consulta oficial puede solicitar CAPTCHA.</p>
+                    <div class="cep-modal-actions">
+                        <button type="button" class="btn btn-secondary" id="cep-modal-cancel">Cancelar</button>
+                        <a class="btn btn-secondary" href="https://www.banxico.org.mx/cep/" target="_blank" rel="noopener">Abrir formulario oficial</a>
+                        <button type="submit" class="btn btn-primary">Enviar consulta a Banxico</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    `);
+
+    document.getElementById('cep-fecha').value = formatBanxicoDate(dossier.fechaPago);
+    document.getElementById('cep-monto').value = Number.isFinite(Number(dossier.importe)) && Number(dossier.importe) > 0
+        ? Number(dossier.importe).toFixed(2)
+        : '';
+    document.getElementById('cep-tipo-criterio').value = criterionType;
+    document.getElementById('cep-criterio').value = criterionValue;
+    document.getElementById('cep-cuenta').value = dossier.cuentaBeneficiaria || '';
+    document.getElementById('cep-banco-detectado').textContent = dossier.banco || 'No detectado';
+
+    const updateCriterionLabel = () => {
+        const isReference = document.getElementById('cep-tipo-criterio').value === 'R';
+        const field = document.getElementById('cep-criterio');
+        document.getElementById('cep-criterio-label').textContent = isReference ? 'Número de referencia' : 'Clave de rastreo';
+        field.maxLength = isReference ? 7 : 30;
+        field.placeholder = isReference ? 'Hasta 7 dígitos' : 'Hasta 30 caracteres alfanuméricos';
+    };
+    document.getElementById('cep-tipo-criterio').addEventListener('change', updateCriterionLabel);
+    document.getElementById('cep-modal-close').addEventListener('click', closeBanxicoCepModal);
+    document.getElementById('cep-modal-cancel').addEventListener('click', closeBanxicoCepModal);
+    document.getElementById('banxico-cep-modal').addEventListener('click', event => {
+        if (event.target.id === 'banxico-cep-modal') closeBanxicoCepModal();
+    });
+    document.getElementById('banxico-cep-form').addEventListener('submit', submitBanxicoCepForm);
+    updateCriterionLabel();
+    document.getElementById('cep-criterio').focus();
+}
+
+function submitBanxicoCepForm(event) {
+    event.preventDefault();
+    const get = id => document.getElementById(id)?.value.trim() || '';
+    const fecha = get('cep-fecha');
+    const tipoCriterio = get('cep-tipo-criterio');
+    const criterio = get('cep-criterio');
+    const emisor = get('cep-emisor');
+    const receptor = get('cep-receptor');
+    const cuenta = get('cep-cuenta');
+    const monto = get('cep-monto');
+    const captcha = get('cep-captcha');
+
+    if (!fecha) {
+        showToast('No se detectó la fecha de operación. Confírmala en el comprobante o en el estado de cuenta.', 'error');
+        return;
+    }
+    const validCriterion = tipoCriterio === 'R' ? /^\d{1,7}$/.test(criterio) : /^[A-Za-z0-9]{1,30}$/.test(criterio);
+    if (!validCriterion) {
+        showToast(tipoCriterio === 'R' ? 'La referencia CEP debe contener de 1 a 7 dígitos.' : 'La clave de rastreo debe tener de 1 a 30 caracteres alfanuméricos.', 'error');
+        return;
+    }
+    if (!/^\d{3,6}$/.test(emisor) || !/^\d{3,6}$/.test(receptor) || emisor === receptor) {
+        showToast('Captura códigos Banxico válidos y diferentes para banco emisor y receptor.', 'error');
+        return;
+    }
+    if (cuenta && !/^\d{10,20}$/.test(cuenta)) {
+        showToast('La cuenta beneficiaria debe contener de 10 a 20 dígitos.', 'error');
+        return;
+    }
+    if (cuenta && (!monto || !/^\d+(\.\d{1,2})?$/.test(monto))) {
+        showToast('Captura un monto válido cuando uses cuenta beneficiaria.', 'error');
+        return;
+    }
+
+    const targetName = `banxicoCep_${Date.now()}`;
+    const targetWindow = window.open('', targetName);
+    if (!targetWindow) {
+        showToast('El navegador bloqueó la ventana de Banxico. Permite ventanas emergentes para este sitio.', 'error');
+        return;
+    }
+
+    const fields = {
+        fecha,
+        tipoCriterio,
+        criterio,
+        emisor,
+        receptor,
+        cuenta,
+        receptorParticipante: document.getElementById('cep-receptor-participante').checked ? '1' : '0',
+        monto,
+        captcha,
+        tipoConsulta: cuenta && monto ? '1' : '0'
+    };
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://www.banxico.org.mx/cep/valida.do';
+    form.target = targetName;
+    form.style.display = 'none';
+    Object.entries(fields).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => form.remove(), 1000);
+    closeBanxicoCepModal();
+    showToast('Consulta oficial abierta en Banxico. El resultado no se marcará como válido automáticamente.', 'info');
+}
+
 // 3. Step 2: Payment API and Manual Validation
 function validatePaymentViaAPI() {
     if (!state.activeExpediente) return;
 
-    showToast('Consulta bancaria no configurada. No se verificÃ³ ningÃºn pago.', 'warning');
-    return;
-
-    const apiBtn = document.getElementById('btn-api-banco');
-    apiBtn.disabled = true;
-    apiBtn.innerHTML = `
-        <svg class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" stroke-width="4"></circle><path d="M4 12a8 8 0 018-8v8H4z" fill="currentColor"></path></svg>
-        Buscando en BBVA/Recaudación...
-    `;
-
-    showToast(`Consultando movimientos bancarios del banco ${state.activeExpediente.banco}...`, 'info');
-
-    // Simulate API query delay
-    setTimeout(() => {
-        apiBtn.disabled = false;
-        apiBtn.innerHTML = 'Consultar Pago en Banco (API)';
-
-        state.activeExpediente.estatus = 'Pago validado';
-        addAuditLogToActive(`Pago validado mediante API bancaria (${state.activeExpediente.banco}). Estatus: Conciliado.`);
-        addSecurityLog('Validación Pago API', `Pago validado automáticamente vía API para el folio ${state.activeExpediente.folio}.`);
-
-        showToast(`✓ Pago validado con éxito. Depósito de $${state.activeExpediente.importe.toFixed(2)} confirmado.`, 'success');
-        
-        // Update views
-        updatePaymentValidationUI();
-        renderTimeline();
-    }, 1400);
+    openBanxicoCepModal();
 }
 
 function validatePaymentManual() {
     if (!state.activeExpediente) return;
 
-    showToast('La validaciÃ³n manual solo puede registrarse cuando exista un proceso contable autorizado.', 'warning');
-    return;
-
-    state.activeExpediente.estatus = 'Pago validado';
-    addAuditLogToActive(`Pago validado manualmente. Autorizado por: ${state.currentUser.name}.`);
-    addSecurityLog('Validación Pago Manual', `Validación contable manual para el folio ${state.activeExpediente.folio}.`);
-
-    showToast('✓ Pago validado manualmente de forma contable.', 'success');
-
-    // Update views
-    updatePaymentValidationUI();
-    renderTimeline();
+    showToast('La validación manual solo puede registrarse cuando exista un proceso contable autorizado.', 'warning');
 }
 
 function updatePaymentValidationUI() {

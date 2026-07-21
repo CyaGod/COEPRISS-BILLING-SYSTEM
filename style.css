@@ -1761,3 +1761,153 @@ body {
         animation: none;
     }
 }
+
+.cep-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(4, 24, 48, 0.58);
+}
+
+.cep-modal {
+    width: min(760px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.cep-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 24px;
+    color: #fff;
+    background: var(--primary-color);
+}
+
+.cep-modal-eyebrow {
+    margin: 0 0 4px;
+    color: #d7e6f4;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.cep-modal-header h2 {
+    margin: 0;
+    font-size: 1.08rem;
+}
+
+.cep-modal-close {
+    border: 0;
+    color: #fff;
+    background: transparent;
+    font-size: 1.7rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.cep-modal-notice {
+    margin: 20px 24px 0;
+    padding: 12px 14px;
+    border-left: 4px solid var(--info-color);
+    background: #eef7ff;
+    color: #31536f;
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.cep-modal-form {
+    padding: 20px 24px 24px;
+}
+
+.cep-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.cep-modal-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #495057;
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.cep-modal-form input,
+.cep-modal-form select {
+    width: 100%;
+    min-height: 38px;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    color: #212529;
+    background: #fff;
+    font: inherit;
+    font-weight: 400;
+}
+
+.cep-modal-form input[readonly] {
+    color: #495057;
+    background: #f1f3f5;
+}
+
+.cep-checkbox-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px !important;
+    margin: 4px 0 12px;
+}
+
+.cep-checkbox-row input {
+    width: auto;
+    min-height: auto;
+}
+
+.cep-modal-help {
+    margin: 0;
+    color: #6c757d;
+    font-size: 0.74rem;
+}
+
+.cep-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.cep-modal-actions .btn {
+    text-decoration: none;
+}
+
+@media (max-width: 640px) {
+    .cep-modal-backdrop {
+        padding: 10px;
+    }
+
+    .cep-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cep-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .cep-modal-actions .btn {
+        width: 100%;
+    }
+}
