@@ -1411,6 +1411,124 @@ body {
     transform: scale(1);
 }
 
+.ocr-result-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+
+.ocr-result-alert.ocr-needs-review {
+    background: #fff2f2 !important;
+    border-color: #ffb3b3 !important;
+    border-left-color: #d93025 !important;
+    color: #9f1f18 !important;
+    animation: ocr-review-pulse 1.8s ease-in-out 2;
+}
+
+@keyframes ocr-review-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0); }
+    50% { box-shadow: 0 0 0 5px rgba(217, 48, 37, 0.12); }
+}
+
+.scan-preview-button {
+    flex: 0 0 auto;
+    border: 1px solid currentColor;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.72);
+    color: inherit;
+    padding: 7px 11px;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ocr-field-missing {
+    color: #c5221f !important;
+    background: #fff2f2;
+    border-radius: 3px;
+    padding: 2px 5px;
+}
+
+.scan-preview-modal {
+    max-width: min(920px, 94vw);
+    max-height: 94vh;
+}
+
+.scan-preview-body {
+    background: #eef2f6;
+    overflow: auto;
+}
+
+.scan-quality-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    color: #52606d;
+    font-size: 0.76rem;
+}
+
+.scan-quality-badge {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #e6f4ea;
+    color: #137333;
+    padding: 5px 10px;
+    font-weight: 700;
+}
+
+.scan-quality-badge.quality-low {
+    background: #fce8e6;
+    color: #c5221f;
+}
+
+.scan-quality-badge.quality-medium {
+    background: #fef7e0;
+    color: #8a5a00;
+}
+
+.scan-preview-frame {
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+    border: 2px solid #1a73e8;
+    border-radius: 8px;
+    background: #263238;
+    box-shadow: 0 9px 24px rgba(16, 42, 67, 0.2);
+}
+
+.scan-preview-frame img {
+    display: block;
+    max-width: 100%;
+    max-height: 66vh;
+    object-fit: contain;
+    background: #ffffff;
+}
+
+.scan-preview-help {
+    margin: 12px 0 0;
+    color: #52606d;
+    font-size: 0.76rem;
+    line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+    .ocr-result-alert,
+    .scan-quality-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .scan-preview-button {
+        width: 100%;
+    }
+}
+
 .modal-header {
     background-color: var(--primary-color);
     color: #ffffff;

@@ -177,7 +177,10 @@ const state = {
     // la sesiÃ³n para no enviar documentos fiscales a un servicio externo.
     uploadedFiles: [],
     ocrWorker: null,
-    ocrBusy: false
+    ocrBusy: false,
+    scanPreviewUrl: '',
+    scanQuality: null,
+    lastOcrFields: null
 };
 
 // Never present seed/demo data as production records.
@@ -687,16 +690,23 @@ async function startScanAnimation() {
 
     try {
         const fields = await extractUploadedDocuments();
+        state.lastOcrFields = fields;
         applyExtractedFields(fields);
-        state.uploadedFiles.forEach(file => { file.status = 'Leido correctamente (OCR local)'; });
+        const needsReview = !state.scanQuality || state.scanQuality.level !== 'alta' || countReliableOcrFields(fields) < 5;
+        state.uploadedFiles.forEach(file => {
+            file.status = needsReview ? 'OCR completado - requiere revision' : 'Leido correctamente (OCR local)';
+        });
         if (state.activeExpediente) {
-            state.activeExpediente.archivos.forEach(file => { file.status = 'Leido correctamente (OCR local)'; });
+            state.activeExpediente.archivos.forEach(file => {
+                file.status = needsReview ? 'OCR completado - requiere revision' : 'Leido correctamente (OCR local)';
+            });
             state.activeExpediente.estatus = 'Pago pendiente';
             addAuditLogToActive('Documentos procesados mediante OCR local. Datos pendientes de confirmacion.');
             addSecurityLog('OCR local', `Lectura del expediente ${state.activeExpediente.folio} finalizada en el navegador.`);
         }
         renderDocumentList();
         updateStep2Fields();
+        updateOcrResultAlert(fields);
         updatePreviewFields();
         renderTimeline();
         updatePaymentValidationUI();
@@ -741,7 +751,7 @@ async function extractUploadedDocuments() {
     for (const uploaded of state.uploadedFiles) {
         const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
         if (!isPdf) {
-            allText += `\n${await recognizeImageWithFallback(uploaded.file)}`;
+            allText += `\n${await recognizeImageWithFallback(uploaded.file, uploaded)}`;
             pageCount += 1;
             continue;
         }
@@ -770,26 +780,73 @@ async function extractUploadedDocuments() {
     if (!pageCount || allText.replace(/\s/g, '').length < 10) {
         throw new Error('No se detecto texto legible. Usa una imagen nitida y bien iluminada.');
     }
-    return parseExtractedFields(allText);
+    return enforceOcrQualityGate(parseExtractedFields(allText));
+}
+
+function enforceOcrQualityGate(fields) {
+    if (!fields || state.scanQuality?.level !== 'baja') return fields;
+    const hasFiscalAnchor = Boolean(fields.uuid) || Boolean(fields.rfcEmisor && fields.rfcReceptor);
+    const hasBankAnchor = Boolean(
+        (fields.claveRastreo || fields.referencia)
+        && Number.isFinite(fields.importePago)
+        && fields.fechaPago
+    );
+    const hasReceiptAnchor = Boolean(fields.folioRecibo && Number.isFinite(fields.importePago));
+    if (hasFiscalAnchor || hasBankAnchor || hasReceiptAnchor) return fields;
+
+    const rejected = {};
+    Object.keys(fields).forEach(key => {
+        if (key === 'confidence') return;
+        rejected[key] = typeof fields[key] === 'number' ? null : '';
+    });
+    rejected.confidence = Object.fromEntries(Object.keys(fields.confidence || {}).map(key => [key, 0]));
+    rejected.qualityRejected = true;
+    return rejected;
 }
 
 // A full-page OCR pass can miss table cells because the borders confuse the
 // page segmentation model. If that happens, read horizontal bands as a
 // lightweight fallback. It keeps the work local to the employee's browser.
-async function recognizeImageWithFallback(file) {
+async function recognizeImageWithFallback(file, uploadedRecord = null) {
     const bitmap = await createImageBitmap(file);
     const canvas = document.createElement('canvas');
-    // Do not shrink a phone photograph before OCR. Small RFCs, UUIDs and
-    // amounts lose too much detail when the image is reduced to 1600 px.
-    const scale = Math.min(1.85, 2400 / bitmap.width, 2800 / bitmap.height);
+    const originalWidth = bitmap.width;
+    const originalHeight = bitmap.height;
+    // A 480p photograph needs much more than the old 1.85x enlargement.
+    // Scale adaptively until the photographed page is about 1800x2400, but
+    // cap memory so the browser remains responsive on ordinary office PCs.
+    const scale = Math.min(
+        5.5,
+        2600 / bitmap.width,
+        3200 / bitmap.height,
+        Math.max(1.85, 1800 / bitmap.width, 2400 / bitmap.height)
+    );
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const sourceContext = canvas.getContext('2d');
+    sourceContext.imageSmoothingEnabled = true;
+    sourceContext.imageSmoothingQuality = 'high';
+    sourceContext.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     if (typeof bitmap.close === 'function') bitmap.close();
 
     // First normalize the photograph like a document-scanner app: remove the
     // desk/hand margins and enlarge the sheet before Tesseract sees it.
     const scanCanvas = createDocumentScanCanvas(canvas);
+    const quality = assessScanQuality(scanCanvas, originalWidth, originalHeight);
+    state.scanQuality = quality;
+
+    // Keep the corrected sheet so the employee can verify the framing and
+    // compare every extracted value with the real source image.
+    const readableCanvas = createEnhancedOcrCanvas(scanCanvas);
+    // The preview preserves the real tones of the photographed sheet. The
+    // stronger black-and-white enhancement is used only by Tesseract so the
+    // employee does not mistake OCR artifacts for content in the source.
+    const previewUrl = scanCanvas.toDataURL('image/jpeg', 0.94);
+    state.scanPreviewUrl = previewUrl;
+    if (uploadedRecord) {
+        uploadedRecord.scanPreviewUrl = previewUrl;
+        uploadedRecord.scanQuality = quality;
+    }
     // Put the focused passes first. Tesseract can misread a small label in a
     // full-page photograph; parseExtractedFields keeps the first matching
     // value, so the cleaner regional reads must have priority.
@@ -798,13 +855,22 @@ async function recognizeImageWithFallback(file) {
     // One full-page pass is not enough for two-column CFDIs. These focused
     // passes spend a little more local CPU, but prevent small labels and the
     // concepts/payment blocks from being lost in the page layout.
-    const regions = [
-        { name: 'encabezado', top: 0.02, bottom: 0.36, psm: '6' },
-        { name: 'conceptos', top: 0.27, bottom: 0.57, psm: '11' },
-        { name: 'pago', top: 0.51, bottom: 0.73, psm: '6' }
-    ];
+    const regions = quality.level === 'baja'
+        ? [
+            { name: 'encabezado izquierdo', left: 0.01, right: 0.52, top: 0.02, bottom: 0.38, psm: '6' },
+            { name: 'encabezado derecho', left: 0.50, right: 0.99, top: 0.02, bottom: 0.38, psm: '6' },
+            { name: 'conceptos', left: 0.01, right: 0.99, top: 0.28, bottom: 0.59, psm: '11' },
+            { name: 'pago', left: 0.01, right: 0.99, top: 0.50, bottom: 0.76, psm: '6' },
+            { name: 'certificacion', left: 0.01, right: 0.99, top: 0.70, bottom: 0.99, psm: '11' }
+        ]
+        : [
+            { name: 'encabezado izquierdo', left: 0.01, right: 0.52, top: 0.02, bottom: 0.38, psm: '6' },
+            { name: 'encabezado derecho', left: 0.50, right: 0.99, top: 0.02, bottom: 0.38, psm: '6' },
+            { name: 'conceptos', left: 0.01, right: 0.99, top: 0.27, bottom: 0.60, psm: '11' },
+            { name: 'pago', left: 0.01, right: 0.99, top: 0.50, bottom: 0.76, psm: '6' }
+        ];
     for (const region of regions) {
-        const regionCanvas = createOcrRegionCanvas(scanCanvas, region.top, region.bottom);
+        const regionCanvas = createOcrRegionCanvas(readableCanvas, region.top, region.bottom, region.left, region.right);
         const button = document.getElementById('btn-scan');
         if (button) button.textContent = `Leyendo zona ${region.name}...`;
         text += `\n${await recognizeCanvasOnce(regionCanvas, region.psm)}`;
@@ -816,7 +882,7 @@ async function recognizeImageWithFallback(file) {
     // regions (for example footer metadata and long CFDI descriptions).
     const button = document.getElementById('btn-scan');
     if (button) button.textContent = 'Leyendo pagina completa...';
-    text += `\n${await recognizeCanvasWithFallback(scanCanvas, '6')}`;
+    text += `\n${await recognizeCanvasWithFallback(scanCanvas, quality.level === 'baja' ? '11' : '6')}`;
 
     // Mexican CFDI photographs normally include the SAT QR. When the
     // browser supports BarcodeDetector, it supplies an exact UUID/RFC/total
@@ -831,11 +897,10 @@ async function recognizeImageWithFallback(file) {
     // two-column header and the small fiscal metadata on the right.
     const hasFiscalCore = Boolean(firstFields.rfc && firstFields.razonSocial && firstFields.importe && firstFields.uuid);
     if (!hasFiscalCore) {
-        const enhancedCanvas = createEnhancedOcrCanvas(scanCanvas);
-        text += `\n${await recognizeCanvasWithFallback(enhancedCanvas, '11')}`;
-        enhancedCanvas.width = 1;
-        enhancedCanvas.height = 1;
+        text += `\n${await recognizeCanvasWithFallback(readableCanvas, '11')}`;
     }
+    readableCanvas.width = 1;
+    readableCanvas.height = 1;
     canvas.width = 1;
     canvas.height = 1;
     if (scanCanvas !== canvas) {
@@ -853,12 +918,21 @@ function createDocumentScanCanvas(sourceCanvas) {
     const height = bounds.bottom - bounds.top;
     if (width < sourceCanvas.width * 0.55 || height < sourceCanvas.height * 0.55) return sourceCanvas;
 
+    if (bounds.corners) {
+        const warped = warpDocumentQuadrilateral(sourceCanvas, bounds.corners);
+        if (warped) return warped;
+    }
+
     const canvas = document.createElement('canvas');
     const outputWidth = Math.min(2600, Math.max(1200, Math.round(width)));
     const outputHeight = Math.min(3200, Math.max(1600, Math.round(height * (outputWidth / width))));
     canvas.width = outputWidth;
     canvas.height = outputHeight;
     const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, outputWidth, outputHeight);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
     if (Number.isFinite(bounds.topSlope)) {
         // A vertical shear deskews the photographed sheet without requiring a
         // heavy computer-vision library. It is enough for the mild camera
@@ -944,6 +1018,32 @@ function estimateBrightDocumentBounds(sourceCanvas) {
     if ([left, top, right, bottom].some(value => value < 0)) return null;
 
     const topLine = estimateDocumentTopLine(gray, width, height, top, left, right);
+    const leftLine = estimateDocumentSideLine(gray, width, height, top, bottom, 'left', threshold);
+    const rightLine = estimateDocumentSideLine(gray, width, height, top, bottom, 'right', threshold);
+
+    let corners = null;
+    if (topLine && leftLine && rightLine) {
+        const topAtSide = sideLine => {
+            let y = topLine.atLeft;
+            for (let iteration = 0; iteration < 6; iteration += 1) {
+                const x = (sideLine.slope * y) + sideLine.intercept;
+                y = topLine.atLeft + (topLine.slope * (x - left));
+            }
+            return { x: (sideLine.slope * y) + sideLine.intercept, y };
+        };
+        const topLeft = topAtSide(leftLine);
+        const topRight = topAtSide(rightLine);
+        const bottomLeft = { x: (leftLine.slope * bottom) + leftLine.intercept, y: bottom };
+        const bottomRight = { x: (rightLine.slope * bottom) + rightLine.intercept, y: bottom };
+        const quadWidth = Math.min(topRight.x - topLeft.x, bottomRight.x - bottomLeft.x);
+        const quadHeight = Math.min(bottomLeft.y - topLeft.y, bottomRight.y - topRight.y);
+        if (quadWidth > width * 0.72 && quadHeight > height * 0.72) {
+            corners = [topLeft, topRight, bottomRight, bottomLeft].map(point => ({
+                x: Math.max(0, Math.min(sourceCanvas.width - 1, point.x / analysisScale)),
+                y: Math.max(0, Math.min(sourceCanvas.height - 1, point.y / analysisScale))
+            }));
+        }
+    }
 
     const marginX = Math.max(4, Math.round(width * 0.018));
     const marginY = Math.max(4, Math.round(height * 0.012));
@@ -953,8 +1053,106 @@ function estimateBrightDocumentBounds(sourceCanvas) {
         right: Math.min(sourceCanvas.width, Math.round((right + marginX) / analysisScale)),
         bottom: Math.min(sourceCanvas.height, Math.round((bottom + marginY) / analysisScale)),
         topSlope: topLine ? topLine.slope : NaN,
-        topAtLeft: topLine ? topLine.atLeft / analysisScale : NaN
+        topAtLeft: topLine ? topLine.atLeft / analysisScale : NaN,
+        corners
     };
+}
+
+function estimateDocumentSideLine(gray, width, height, top, bottom, side, threshold) {
+    const points = [];
+    const searchStart = side === 'left' ? 3 : Math.floor(width * 0.58);
+    const searchEnd = side === 'left' ? Math.ceil(width * 0.42) : width - 4;
+    for (let y = Math.max(top + 12, Math.floor(height * 0.18)); y < bottom - 8; y += 3) {
+        let bestX = -1;
+        let bestScore = 0;
+        for (let x = searchStart; x < searchEnd; x += 2) {
+            let inside = 0;
+            let outside = 0;
+            let count = 0;
+            for (let offset = 4; offset <= 14; offset += 2) {
+                const insideX = side === 'left' ? x + offset : x - offset;
+                const outsideX = side === 'left' ? x - offset : x + offset;
+                if (insideX < 0 || insideX >= width || outsideX < 0 || outsideX >= width) continue;
+                inside += gray[(y * width) + insideX];
+                outside += gray[(y * width) + outsideX];
+                count += 1;
+            }
+            if (!count) continue;
+            const score = (inside - outside) / count;
+            const insideValue = inside / count;
+            if (insideValue >= threshold - 18 && score > bestScore) {
+                bestScore = score;
+                bestX = x;
+            }
+        }
+        if (bestX >= 0 && bestScore >= 22) points.push({ x: bestX, y });
+    }
+    if (points.length < 20) return null;
+
+    const fit = values => {
+        let sumY = 0;
+        let sumX = 0;
+        let sumYY = 0;
+        let sumYX = 0;
+        values.forEach(point => {
+            sumY += point.y;
+            sumX += point.x;
+            sumYY += point.y * point.y;
+            sumYX += point.y * point.x;
+        });
+        const denominator = (values.length * sumYY) - (sumY * sumY);
+        if (Math.abs(denominator) < 0.001) return null;
+        const slope = ((values.length * sumYX) - (sumY * sumX)) / denominator;
+        const intercept = (sumX - (slope * sumY)) / values.length;
+        return { slope, intercept };
+    };
+    const initial = fit(points);
+    if (!initial || Math.abs(initial.slope) > 0.28) return null;
+    const filtered = points.filter(point => Math.abs(point.x - ((initial.slope * point.y) + initial.intercept)) < width * 0.035);
+    const refined = filtered.length >= 18 ? fit(filtered) : initial;
+    return refined && Math.abs(refined.slope) <= 0.28 ? refined : null;
+}
+
+function warpDocumentQuadrilateral(sourceCanvas, corners) {
+    if (!Array.isArray(corners) || corners.length !== 4) return null;
+    const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+    const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+    const measuredWidth = Math.max(distance(topLeft, topRight), distance(bottomLeft, bottomRight));
+    const measuredHeight = Math.max(distance(topLeft, bottomLeft), distance(topRight, bottomRight));
+    if (measuredWidth < 600 || measuredHeight < 800) return null;
+
+    const scale = Math.min(1.15, 2300 / measuredWidth, 3000 / measuredHeight);
+    const outputWidth = Math.max(1200, Math.round(measuredWidth * scale));
+    const outputHeight = Math.max(1600, Math.round(measuredHeight * scale));
+    const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });
+    const source = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
+    const output = document.createElement('canvas');
+    output.width = outputWidth;
+    output.height = outputHeight;
+    const outputContext = output.getContext('2d');
+    const image = outputContext.createImageData(outputWidth, outputHeight);
+    const target = image.data;
+
+    for (let y = 0; y < outputHeight; y += 1) {
+        const v = y / Math.max(1, outputHeight - 1);
+        const leftX = topLeft.x + ((bottomLeft.x - topLeft.x) * v);
+        const leftY = topLeft.y + ((bottomLeft.y - topLeft.y) * v);
+        const rightX = topRight.x + ((bottomRight.x - topRight.x) * v);
+        const rightY = topRight.y + ((bottomRight.y - topRight.y) * v);
+        for (let x = 0; x < outputWidth; x += 1) {
+            const u = x / Math.max(1, outputWidth - 1);
+            const sourceX = Math.max(0, Math.min(sourceCanvas.width - 1, Math.round(leftX + ((rightX - leftX) * u))));
+            const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(leftY + ((rightY - leftY) * u))));
+            const sourceIndex = ((sourceY * sourceCanvas.width) + sourceX) * 4;
+            const targetIndex = ((y * outputWidth) + x) * 4;
+            target[targetIndex] = source[sourceIndex];
+            target[targetIndex + 1] = source[sourceIndex + 1];
+            target[targetIndex + 2] = source[sourceIndex + 2];
+            target[targetIndex + 3] = 255;
+        }
+    }
+    outputContext.putImageData(image, 0, 0);
+    return output;
 }
 
 function estimateDocumentTopLine(gray, width, height, top, left, right) {
@@ -994,14 +1192,29 @@ function estimateDocumentTopLine(gray, width, height, top, left, right) {
     return best && best.score > 250 ? best : null;
 }
 
-function createOcrRegionCanvas(sourceCanvas, topRatio, bottomRatio) {
+function createOcrRegionCanvas(sourceCanvas, topRatio, bottomRatio, leftRatio = 0, rightRatio = 1) {
     const top = Math.max(0, Math.floor(sourceCanvas.height * topRatio));
     const bottom = Math.min(sourceCanvas.height, Math.ceil(sourceCanvas.height * bottomRatio));
+    const left = Math.max(0, Math.floor(sourceCanvas.width * leftRatio));
+    const right = Math.min(sourceCanvas.width, Math.ceil(sourceCanvas.width * rightRatio));
     const padding = Math.max(8, Math.round(sourceCanvas.height * 0.008));
     const canvas = document.createElement('canvas');
-    canvas.width = sourceCanvas.width;
+    canvas.width = Math.max(1, right - left + (padding * 2));
     canvas.height = Math.max(1, bottom - top + (padding * 2));
-    canvas.getContext('2d').drawImage(sourceCanvas, 0, Math.max(0, top - padding), sourceCanvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(
+        sourceCanvas,
+        Math.max(0, left - padding),
+        Math.max(0, top - padding),
+        Math.min(sourceCanvas.width - Math.max(0, left - padding), canvas.width),
+        Math.min(sourceCanvas.height - Math.max(0, top - padding), canvas.height),
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
     return canvas;
 }
 
@@ -1036,16 +1249,109 @@ function createEnhancedOcrCanvas(sourceCanvas) {
 
     const image = context.getImageData(0, 0, canvas.width, canvas.height);
     const data = image.data;
-    const contrast = 1.32;
+    const histogram = new Uint32Array(256);
+    for (let index = 0; index < data.length; index += 4) {
+        const gray = Math.round((data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114));
+        histogram[gray] += 1;
+    }
+    const pixelCount = Math.max(1, data.length / 4);
+    const percentile = target => {
+        let accumulated = 0;
+        for (let value = 0; value < histogram.length; value += 1) {
+            accumulated += histogram[value];
+            if (accumulated >= pixelCount * target) return value;
+        }
+        return 255;
+    };
+    const blackPoint = Math.min(150, percentile(0.015));
+    const whitePoint = Math.max(185, percentile(0.985));
+    const range = Math.max(30, whitePoint - blackPoint);
     for (let index = 0; index < data.length; index += 4) {
         const gray = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114);
-        const adjusted = Math.max(0, Math.min(255, ((gray - 128) * contrast) + 128));
+        const adjusted = Math.max(0, Math.min(255, ((gray - blackPoint) * 255) / range));
         data[index] = adjusted;
         data[index + 1] = adjusted;
         data[index + 2] = adjusted;
     }
     context.putImageData(image, 0, 0);
+
+    // Unsharp masking makes thin strokes more distinct after a 480p image is
+    // enlarged. It cannot invent missing pixels, but it improves separation
+    // between similar glyphs without sending the document to any service.
+    const blurred = document.createElement('canvas');
+    blurred.width = canvas.width;
+    blurred.height = canvas.height;
+    const blurredContext = blurred.getContext('2d', { willReadFrequently: true });
+    blurredContext.filter = 'blur(1.15px)';
+    blurredContext.drawImage(canvas, 0, 0);
+    blurredContext.filter = 'none';
+    const blurredData = blurredContext.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 0; index < data.length; index += 4) {
+        const base = data[index];
+        const sharpened = Math.max(0, Math.min(255, base + ((base - blurredData[index]) * 0.68)));
+        const cleaned = sharpened > 224 ? 255 : sharpened;
+        data[index] = cleaned;
+        data[index + 1] = cleaned;
+        data[index + 2] = cleaned;
+    }
+    context.putImageData(image, 0, 0);
+    blurred.width = 1;
+    blurred.height = 1;
     return canvas;
+}
+
+function assessScanQuality(canvas, originalWidth, originalHeight) {
+    const sampleScale = Math.min(1, 420 / Math.max(canvas.width, canvas.height));
+    const width = Math.max(1, Math.round(canvas.width * sampleScale));
+    const height = Math.max(1, Math.round(canvas.height * sampleScale));
+    const sample = document.createElement('canvas');
+    sample.width = width;
+    sample.height = height;
+    const context = sample.getContext('2d', { willReadFrequently: true });
+    context.drawImage(canvas, 0, 0, width, height);
+    const data = context.getImageData(0, 0, width, height).data;
+    const gray = new Uint8Array(width * height);
+    let minimum = 255;
+    let maximum = 0;
+    for (let index = 0, pixel = 0; index < data.length; index += 4, pixel += 1) {
+        const value = Math.round((data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114));
+        gray[pixel] = value;
+        minimum = Math.min(minimum, value);
+        maximum = Math.max(maximum, value);
+    }
+    let edgeTotal = 0;
+    let edgeCount = 0;
+    for (let y = 2; y < height - 1; y += 1) {
+        for (let x = 2; x < width - 1; x += 1) {
+            const index = (y * width) + x;
+            edgeTotal += Math.abs((gray[index - 1] * 2) - gray[index - 2] - gray[index])
+                + Math.abs((gray[index - width] * 2) - gray[index - (width * 2)] - gray[index]);
+            edgeCount += 2;
+        }
+    }
+    sample.width = 1;
+    sample.height = 1;
+
+    const shortSide = Math.min(originalWidth, originalHeight);
+    const longSide = Math.max(originalWidth, originalHeight);
+    const sharpness = edgeCount ? edgeTotal / edgeCount : 0;
+    const contrast = maximum - minimum;
+    let level = 'alta';
+    if (longSide < 900 || shortSide < 600 || sharpness < 2.8 || contrast < 90) level = 'baja';
+    else if (longSide < 1600 || shortSide < 900 || sharpness < 5.5 || contrast < 140) level = 'media';
+
+    return {
+        level,
+        originalWidth,
+        originalHeight,
+        sharpness: Number(sharpness.toFixed(1)),
+        contrast,
+        label: level === 'alta'
+            ? `Calidad alta (${originalWidth} x ${originalHeight}px)`
+            : level === 'media'
+                ? `Calidad media (${originalWidth} x ${originalHeight}px)`
+                : `Calidad baja (${originalWidth} x ${originalHeight}px)`
+    };
 }
 
 async function recognizeCanvasWithFallback(canvas, pageSegMode = '6') {
@@ -1122,7 +1428,8 @@ function parseExtractedFields(text) {
 
     const stopLabels = 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|CODIGO\\s+POSTAL|REGIMEN\\s+FISCAL|USO\\s+CFDI|FOLIO\\s+FISCAL|EFECTO\\s+DE\\s+COMPROBANTE|CONCEPTOS|DESCRIPCION|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL';
     const bankStopLabels = 'INSTITUCION\\s+(?:EMISORA?|RECEPTORA?)|BANCO\\s+(?:EMISOR|RECEPTOR|ORIGEN|DESTINO)|CODIGO|CLAVE|CUENTA|CLABE|MONTO|IMPORTE|REFERENCIA|FECHA|TOTAL|FOLIO';
-    const receiverName = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?RECEPTOR', stopLabels, 120);
+    const receiverNameRaw = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?RECEPTOR', stopLabels, 120);
+    const receiverName = cleanOcrValue(receiverNameRaw.replace(/\s+REGIM(?:E|EN|EN\s+FISCAL)?[\s\S]*$/i, ''));
     const nombreEmisor = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?EMISOR', 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|FOLIO\\s+FISCAL|NO\\.?\\s+DE\\s+SERIE|CODIGO\\s+POSTAL|EFECTO\\s+DE\\s+COMPROBANTE', 160);
     const legalName = extractOcrLabelValue(plain, 'RAZON\\s+SOCIAL', stopLabels, 120);
     const razonSocial = receiverName || legalName;
@@ -1134,6 +1441,8 @@ function parseExtractedFields(text) {
     const tipoCfdi = extractOcrLabelValue(plain, 'EFECTO\\s+DE\\s+COMPROBANTE', 'REGIMEN\\s+FISCAL|EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|DESCRIPCION|NOMBRE|RFC|CODIGO\\s+POSTAL', 40);
     const uuidMatch = plain.match(/FOLIO\s+FISCAL\s*[:\-]?\s*([0-9A-Z]{8}(?:-[0-9A-Z]{4}){3}-[0-9A-Z]{12})/i);
     const qrUuidMatch = plain.match(/(?:[?&]ID=|UUID\s*[:=])([0-9A-Z]{8}(?:-[0-9A-Z]{4}){3}-[0-9A-Z]{12})/i);
+    const uuidCandidate = normalizeOcrUuid((qrUuidMatch || uuidMatch)?.[1] || '');
+    const fiscalUuid = /^[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}$/.test(uuidCandidate) ? uuidCandidate : '';
     const qrRfcEmisorMatch = plain.match(/[?&]RE=([A-Z&N]{3,4}\d{6}[A-Z0-9]{2,3})/i);
     const qrRfcReceptorMatch = plain.match(/[?&]RR=([A-Z&N]{3,4}\d{6}[A-Z0-9]{2,3})/i);
     const bancoEmisor = extractOcrLabelValue(plain, '(?:INSTITUCION|BANCO)\\s+(?:EMISORA?|ORIGEN)(?:\\s+DEL\\s+PAGO)?', bankStopLabels, 80);
@@ -1172,7 +1481,11 @@ function parseExtractedFields(text) {
     const concept = conceptDateMatch && !conceptBase.includes(conceptDateMatch[1])
         ? `${conceptBase} ${conceptDateMatch[1]}`.trim()
         : conceptBase;
-    const formaPago = extractOcrLabelValue(plain, 'FORMA\\s+DE\\s+PAGO', 'METODO\\s+DE\\s+PAGO|MONEDA|SUBTOTAL|TOTAL|CONCEPTOS', 100);
+    const formaPagoRaw = extractOcrLabelValue(plain, 'FORMA\\s+DE\\s+PAGO', 'METODO\\s+DE\\s+PAGO|MONEDA|SUBTOTAL|TOTAL|CONCEPTOS', 100);
+    const formaPagoKnown = formaPagoRaw.match(/TRANSFERENCIA\s+ELECTRONICA\s+DE\s+FONDOS(?:\s*\(INCLUYE\s+SPEI\))?/i);
+    const formaPago = formaPagoKnown
+        ? cleanOcrValue(formaPagoKnown[0])
+        : cleanOcrValue(formaPagoRaw).replace(/\s+\$?[\d,.]+[\s\S]*$/, '').slice(0, 100);
     const monedaDetectada = extractOcrLabelValue(plain, 'MONEDA', 'FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|CONCEPTOS', 40);
     const moneda = /PESO\s+MEXICANO|P\s*EM(?:\s|$)/i.test(plain) ? 'PESO MEXICANO' : monedaDetectada;
     const datePattern = '(?:\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}|\\d{1,2}[/-]\\d{1,2}[/-]\\d{4})(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?';
@@ -1201,8 +1514,10 @@ function parseExtractedFields(text) {
     const importeLinea = lineImportMatch ? Number(lineImportMatch[1].replace(/,/g, '')) : null;
     const subtotal = subtotalMatch ? Number(subtotalMatch[1].replace(/,/g, '')) : null;
     const metodoPagoRaw = extractOcrLabelValue(plain, 'METODO\\s+DE\\s+PAGO', 'SELLO\\s+DIGITAL|CONCEPTOS|MONEDA|FORMA\\s+DE\\s+PAGO|SUBTOTAL|TOTAL', 80);
-    const metodoPagoKnown = metodoPagoRaw.match(/PAGO\s+EN\s+(?:UNA\s+SOLA\s+EXHIBICION|PARCIALIDADES\s+O\s+DIFERIDO)/i);
-    const metodoPago = metodoPagoKnown ? cleanOcrValue(metodoPagoKnown[0]) : cleanOcrValue(metodoPagoRaw).slice(0, 80);
+    const metodoPagoKnown = metodoPagoRaw.match(/PAGO\s+EN\s+(?:UNA\s+SOLA\s+EXHIBICI[O0E]N|PARCIALIDADES\s+O\s+DIFERIDO)/i);
+    const metodoPago = metodoPagoKnown
+        ? (/EXHIBICI/i.test(metodoPagoKnown[0]) ? 'PAGO EN UNA SOLA EXHIBICION' : cleanOcrValue(metodoPagoKnown[0]))
+        : cleanOcrValue(metodoPagoRaw).replace(/\s+\$?[\d,.]+[\s\S]*$/, '').slice(0, 80);
 
     return {
         rfc,
@@ -1216,7 +1531,7 @@ function parseExtractedFields(text) {
         usoCfdi,
         tipoCfdi,
         efectoComprobante: tipoCfdi,
-        uuid: (qrUuidMatch || uuidMatch) ? normalizeOcrUuid((qrUuidMatch || uuidMatch)[1]) : '',
+        uuid: fiscalUuid,
         banco: bancoDetectado,
         bancoEmisor,
         bancoReceptor,
@@ -1257,7 +1572,7 @@ function parseExtractedFields(text) {
             codigoPostal: codigoPostal ? 0.95 : 0,
             usoCfdi: usoCfdi ? 0.85 : 0,
             tipoCfdi: tipoCfdi ? 0.8 : 0,
-            uuid: (qrUuidMatch || uuidMatch) ? 0.98 : 0,
+            uuid: fiscalUuid ? 0.98 : 0,
             banco: bancoDetectado ? 0.85 : 0,
             bancoEmisor: bancoEmisor ? 0.85 : 0,
             bancoReceptor: bancoReceptor ? 0.85 : 0,
@@ -1424,6 +1739,95 @@ function renderDocumentList() {
     });
 }
 
+function countReliableOcrFields(fields) {
+    if (!fields || !fields.confidence) return 0;
+    return Object.values(fields.confidence).filter(value => Number(value) >= 0.8).length;
+}
+
+function updateOcrResultAlert(fields) {
+    const alert = document.getElementById('ocr-result-alert');
+    if (!alert) return;
+    const labels = alert.querySelectorAll('span');
+    const title = labels[0];
+    const description = labels[1];
+    const quality = state.scanQuality;
+    const reliableFields = countReliableOcrFields(fields);
+    const fiscalCore = [fields?.rfc, fields?.razonSocial, fields?.importe].filter(Boolean).length;
+    const needsReview = !quality || quality.level !== 'alta' || fiscalCore < 3 || reliableFields < 5;
+
+    alert.classList.toggle('ocr-needs-review', needsReview);
+    if (needsReview) {
+        if (title) title.textContent = fields?.qualityRejected
+            ? 'Resolucion insuficiente: datos dudosos descartados'
+            : 'Lectura incompleta: documento no confirmado';
+        if (description) {
+            const qualityText = quality?.label || 'calidad no determinada';
+            description.textContent = fields?.qualityRejected
+                ? `${qualityText}. No se encontro un UUID/RFC o una clave bancaria verificable. Toma otra foto mas cerca.`
+                : `${qualityText}. Revisa los campos en rojo; el OCR no sustituye la confirmacion fiscal o bancaria.`;
+        }
+    } else {
+        if (title) title.textContent = 'Datos detectados con buena legibilidad';
+        if (description) description.textContent = 'Compara los valores con la hoja encuadrada antes de continuar.';
+    }
+
+    let previewButton = document.getElementById('btn-view-scan');
+    if (!previewButton) {
+        previewButton = document.createElement('button');
+        previewButton.type = 'button';
+        previewButton.id = 'btn-view-scan';
+        previewButton.className = 'scan-preview-button';
+        previewButton.textContent = 'Ver hoja encuadrada';
+        previewButton.addEventListener('click', () => openScanPreview());
+        alert.appendChild(previewButton);
+    }
+    previewButton.hidden = !state.scanPreviewUrl;
+}
+
+function showScanPreview(previewUrl, quality = null) {
+    const image = document.getElementById('scan-preview-image');
+    const badge = document.getElementById('scan-quality-badge');
+    const details = document.getElementById('scan-quality-details');
+    if (!image || !badge || !details || !previewUrl) return;
+    image.src = previewUrl;
+    badge.className = 'scan-quality-badge';
+    if (quality?.level === 'baja') badge.classList.add('quality-low');
+    if (quality?.level === 'media') badge.classList.add('quality-medium');
+    badge.textContent = quality?.label || 'Imagen original';
+    details.textContent = quality
+        ? `Encuadre automatico aplicado. Nitidez estimada: ${quality.sharpness}; contraste: ${quality.contrast}.`
+        : 'Archivo real seleccionado; el encuadre se mostrara despues de ejecutar el OCR.';
+    document.getElementById('modal-scan-preview')?.classList.add('open');
+}
+
+function openScanPreview(docName = '') {
+    const uploaded = docName
+        ? state.uploadedFiles.find(item => item.name === docName)
+        : state.uploadedFiles.find(item => item.scanPreviewUrl) || state.uploadedFiles[0];
+    const previewUrl = uploaded?.scanPreviewUrl || state.scanPreviewUrl;
+    const quality = uploaded?.scanQuality || state.scanQuality;
+    if (previewUrl) {
+        showScanPreview(previewUrl, quality);
+        return;
+    }
+    if (!uploaded?.file) {
+        showToast('No hay una imagen real disponible para mostrar.', 'warning');
+        return;
+    }
+    const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
+    if (isPdf) {
+        const objectUrl = URL.createObjectURL(uploaded.file);
+        const opened = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        if (!opened) showToast('El navegador bloqueo la vista del PDF. Permite ventanas emergentes para verlo.', 'warning');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => showScanPreview(String(reader.result || ''), null);
+    reader.onerror = () => showToast('No se pudo abrir la imagen seleccionada.', 'error');
+    reader.readAsDataURL(uploaded.file);
+}
+
 function updateStep2Fields() {
     if (!state.activeExpediente) return;
     const pending = 'Pendiente de lectura';
@@ -1436,7 +1840,10 @@ function updateStep2Fields() {
 
     const setDetected = (id, value) => {
         const element = document.getElementById(id);
-        if (element) element.textContent = value || 'No detectado';
+        if (element) {
+            element.textContent = value || 'No detectado';
+            element.classList.toggle('ocr-field-missing', !value);
+        }
     };
     const formatDetectedAmount = value => value !== null && value !== '' && Number.isFinite(Number(value))
         ? `$${Number(value).toFixed(2)} MXN`
@@ -2240,9 +2647,12 @@ function restartProcess() {
     state.activeExpediente = null;
     state.uploadedFiles = [];
     state.ocrBusy = false;
+    state.scanPreviewUrl = '';
+    state.scanQuality = null;
+    state.lastOcrFields = null;
     const input = document.getElementById('document-file-input');
     if (input) input.value = '';
-    document.getElementById('lbl-cliente-correo').textContent = 'Seleccione un preset o arrastre archivos...';
+    document.getElementById('lbl-cliente-correo').textContent = 'Carga un documento real para iniciar...';
     document.getElementById('lbl-cliente-fecha').textContent = '--/--/---- --:--';
     
     const btnScan = document.getElementById('btn-scan');
@@ -2253,7 +2663,7 @@ function restartProcess() {
     if (listContainer) {
         listContainer.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; color: #868e96; padding: 30px 0; font-size: 0.82rem;">
-                Selecciona uno de los presets anteriores o arrastra archivos para iniciar el expediente.
+                Arrastra o selecciona archivos reales para iniciar el expediente.
             </div>
         `;
     }
@@ -2541,7 +2951,13 @@ function saveFiscalData(event) {
 
 // Document Preview window
 function previewDocument(docName, type) {
-    showToast(`Abriendo visor de documentos para ${docName}...`, 'info');
+    const realUpload = state.uploadedFiles.find(item => item.name === docName);
+    if (realUpload) {
+        openScanPreview(docName);
+        return;
+    }
+    showToast('No existe un archivo real asociado a este registro.', 'warning');
+    return;
 
     const dossier = state.activeExpediente;
     const hasExtractedData = dossier && (dossier.rfc || dossier.cliente || Number.isFinite(Number(dossier.importe)) && dossier.importe > 0);
