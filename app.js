@@ -227,11 +227,9 @@ function initNavigation() {
                 goToPanel('panel-inicio');
             } else if (id === 'nav-solicitud') {
                 item.classList.add('active-pulse');
-                if (!state.activeExpediente) {
-                    // Create default dummy dossier if none loaded
-                    loadPresetDossier(0);
-                }
-                goToStep(1); // Wizard step 1
+                // A new request must start empty. Demo presets remain available
+                // only through their explicit preset buttons below the dropzone.
+                restartProcess();
             } else if (id === 'nav-proceso') {
                 item.classList.add('active');
                 renderProcesoTable();
@@ -1374,6 +1372,10 @@ function exportReportToExcel() {
 
 function restartProcess() {
     state.activeExpediente = null;
+    state.uploadedFiles = [];
+    state.ocrBusy = false;
+    const input = document.getElementById('document-file-input');
+    if (input) input.value = '';
     document.getElementById('lbl-cliente-correo').textContent = 'Seleccione un preset o arrastre archivos...';
     document.getElementById('lbl-cliente-fecha').textContent = '--/--/---- --:--';
     
