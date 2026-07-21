@@ -596,7 +596,10 @@ async function extractUploadedDocuments() {
     if (!window.pdfjsLib) throw new Error('No se cargo el lector PDF.');
 
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    state.ocrWorker = await Tesseract.createWorker('spa', 1, {
+    // English traineddata is intentionally used for Mexican fiscal documents:
+    // RFCs, amounts and references are alphanumeric, and it is more reliable
+    // than the Spanish model on compressed/table-style bank receipts.
+    state.ocrWorker = await Tesseract.createWorker('eng', 1, {
         logger: message => {
             if (message.status === 'recognizing text' && Number.isFinite(message.progress)) {
                 const scanBtn = document.getElementById('btn-scan');
@@ -611,8 +614,7 @@ async function extractUploadedDocuments() {
     for (const uploaded of state.uploadedFiles) {
         const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
         if (!isPdf) {
-            const result = await state.ocrWorker.recognize(uploaded.file);
-            allText += `\n${result.data.text || ''}`;
+            allText += `\n${await recognizeImageWithFallback(uploaded.file)}`;
             pageCount += 1;
             continue;
         }
@@ -627,8 +629,7 @@ async function extractUploadedDocuments() {
                 allText += `\n${pageText}`;
             } else {
                 const canvas = await renderPdfPageForOcr(page);
-                const result = await state.ocrWorker.recognize(canvas);
-                allText += `\n${result.data.text || ''}`;
+                allText += `\n${await recognizeCanvasWithFallback(canvas)}`;
                 canvas.width = 1;
                 canvas.height = 1;
             }
@@ -641,6 +642,51 @@ async function extractUploadedDocuments() {
         throw new Error('No se detecto texto legible. Usa una imagen nitida y bien iluminada.');
     }
     return parseExtractedFields(allText);
+}
+
+// A full-page OCR pass can miss table cells because the borders confuse the
+// page segmentation model. If that happens, read horizontal bands as a
+// lightweight fallback. It keeps the work local to the employee's browser.
+async function recognizeImageWithFallback(file) {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1.5, 1600 / bitmap.width, 1800 / bitmap.height);
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    if (typeof bitmap.close === 'function') bitmap.close();
+
+    const text = await recognizeCanvasWithFallback(canvas);
+    canvas.width = 1;
+    canvas.height = 1;
+    return text;
+}
+
+async function recognizeCanvasWithFallback(canvas) {
+    const firstPass = await state.ocrWorker.recognize(canvas);
+    const firstText = firstPass.data.text || '';
+    const firstFields = parseExtractedFields(firstText);
+    const detectedFields = Object.values(firstFields.confidence).filter(value => value >= 0.65).length;
+    if (detectedFields >= 3 || canvas.height < 500) return firstText;
+
+    const bandCount = Math.min(8, Math.max(5, Math.ceil(canvas.height / 240)));
+    const bandHeight = Math.ceil(canvas.height / bandCount);
+    const overlap = Math.min(32, Math.ceil(bandHeight * 0.12));
+    const pieces = [firstText];
+
+    for (let y = 0; y < canvas.height; y += Math.max(1, bandHeight - overlap)) {
+        const height = Math.min(bandHeight + overlap, canvas.height - y);
+        const band = document.createElement('canvas');
+        band.width = canvas.width;
+        band.height = height;
+        band.getContext('2d').drawImage(canvas, 0, y, canvas.width, height, 0, 0, band.width, band.height);
+        const result = await state.ocrWorker.recognize(band);
+        pieces.push(result.data.text || '');
+        band.width = 1;
+        band.height = 1;
+    }
+
+    return pieces.join('\n');
 }
 
 async function renderPdfPageForOcr(page) {
@@ -710,9 +756,10 @@ function loadPresetDossier(presetIndex) {
     document.getElementById('lbl-cliente-correo').textContent = state.activeExpediente.correo;
     document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
     
-    // Enable the scan button
+    // A preset is only sample data. Do not allow a fake scan until a real file
+    // is selected, otherwise the UI can look successful without OCR running.
     const btnScan = document.getElementById('btn-scan');
-    if (btnScan) btnScan.disabled = false;
+    if (btnScan) btnScan.disabled = state.uploadedFiles.length === 0;
 
     // Render files
     renderDocumentList();
