@@ -174,7 +174,7 @@ const state = {
     pdfUploaded: false,
 
     // Archivos reales seleccionados en el navegador. Se mantienen solo durante
-    // la sesiÃ³n para no enviar documentos fiscales a un servicio externo.
+    // la sesión para no enviar documentos fiscales a un servicio externo.
     uploadedFiles: [],
     ocrWorker: null,
     ocrBusy: false,
@@ -186,8 +186,8 @@ const state = {
 // Never present seed/demo data as production records.
 Object.assign(state.currentUser, {
     id: '',
-    name: 'Sin sesiÃ³n',
-    role: 'AutenticaciÃ³n no configurada',
+    name: 'Sin sesión',
+    role: 'Autenticación no configurada',
     avatar: '--'
 });
 state.csd = { uploaded: false, certName: '', keyName: '', expiry: '', password: '' };
@@ -200,22 +200,34 @@ function sanitizeUnconfiguredUi() {
     const unavailablePanels = {
         'step-panel-4': 'Timbrado PAC no configurado. No se generaran XML, UUID ni CFDI fiscales desde este navegador.',
         'step-panel-5': 'Carga de comprobantes timbrados pendiente de configurar. No hay archivos fiscales disponibles.',
-        'step-panel-6': 'No existe una factura timbrada real para mostrar.',
-        'step-panel-7': 'No hay facturas persistentes. Conecte la base de datos antes de mostrar reportes.'
+        'step-panel-6': 'No existe una factura timbrada real para mostrar.'
     };
 
     Object.entries(unavailablePanels).forEach(([id, message]) => {
         const panel = document.getElementById(id);
         if (!panel) return;
-        panel.innerHTML = `<div class="app-card" style="margin-top: 20px; border-left: 4px solid var(--warning-color);"><h2 class="panel-title">Servicio no configurado</h2><p style="color: #6c757d; margin-top: 8px;">${message}</p></div>`;
+        const step = Number(id.split('-').pop());
+        panel.innerHTML = `
+            <div class="service-unavailable-card app-card">
+                <div class="service-unavailable-icon">!</div>
+                <div>
+                    <h2 class="panel-title">Servicio pendiente de configurar</h2>
+                    <p>${message}</p>
+                    <p class="service-unavailable-note">El boton responde, pero no se generaran resultados fiscales falsos.</p>
+                    <div class="service-unavailable-actions">
+                        <button type="button" class="btn btn-secondary" onclick="goBackFromServiceStep(${step})">Regresar</button>
+                        <button type="button" class="btn btn-primary" onclick="openRequiredConfiguration(${step})">Ver configuracion necesaria</button>
+                    </div>
+                </div>
+            </div>`;
     });
 
-    [4, 5, 6, 7].forEach(step => {
+    [4, 5, 6].forEach(step => {
         const node = document.querySelector(`.step-node[data-step="${step}"]`);
         if (node) {
-            node.style.opacity = '0.45';
-            node.style.pointerEvents = 'none';
-            node.setAttribute('aria-disabled', 'true');
+            node.classList.add('service-pending-step');
+            node.title = 'Abrir requisitos de configuracion';
+            node.removeAttribute('aria-disabled');
         }
     });
 
@@ -227,8 +239,9 @@ function sanitizeUnconfiguredUi() {
     }
     const manualButton = document.getElementById('btn-manual-banco');
     if (manualButton) {
-        manualButton.disabled = true;
-        manualButton.textContent = 'Validacion externa pendiente';
+        manualButton.disabled = false;
+        manualButton.textContent = 'Registrar validacion externa';
+        manualButton.title = 'Muestra los requisitos; no valida el pago sin evidencia bancaria real';
     }
 
     const stampButton = document.getElementById('btn-pac-stamp');
@@ -274,9 +287,140 @@ function sanitizeUnconfiguredUi() {
     const avatar = document.querySelector('.user-avatar-gold');
     const userName = document.querySelector('.user-name-top');
     const userRole = document.querySelector('.user-role-top');
+    const sidebarName = document.querySelector('.sidebar-footer .user-name');
+    const sidebarRole = document.querySelector('.sidebar-footer .user-role');
     if (avatar) avatar.textContent = '--';
     if (userName) userName.textContent = 'Sin sesion';
     if (userRole) userRole.textContent = 'Autenticacion no configurada';
+    if (sidebarName) sidebarName.textContent = 'Sin sesion';
+    if (sidebarRole) sidebarRole.textContent = 'Autenticacion pendiente';
+
+    renderReportTable();
+}
+
+function initGlobalButtonActions() {
+    const notificationButton = document.querySelector('.btn-notification');
+    if (notificationButton) {
+        notificationButton.type = 'button';
+        notificationButton.setAttribute('aria-label', 'Notificaciones del sistema');
+        notificationButton.addEventListener('click', event => {
+            event.stopPropagation();
+            showSystemNotifications();
+        });
+    }
+
+    const filtersButton = Array.from(document.querySelectorAll('#step-panel-7 button'))
+        .find(button => button.textContent.trim() === 'Filtros');
+    if (filtersButton) {
+        filtersButton.type = 'button';
+        filtersButton.addEventListener('click', toggleReportFilters);
+    }
+
+    document.addEventListener('click', event => {
+        const panel = document.getElementById('system-notifications-panel');
+        if (panel && !panel.contains(event.target) && !notificationButton?.contains(event.target)) panel.remove();
+    });
+}
+
+function showSystemNotifications() {
+    const existing = document.getElementById('system-notifications-panel');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+    const button = document.querySelector('.btn-notification');
+    if (!button) return;
+    const panel = document.createElement('div');
+    panel.id = 'system-notifications-panel';
+    panel.className = 'system-notifications-panel';
+    panel.innerHTML = [
+        '<strong>Estado del sistema</strong>',
+        '<div class="system-notice notice-ok">OCR local disponible</div>',
+        '<div class="system-notice notice-warning">Conciliacion: consulta manual en Banxico CEP</div>',
+        '<div class="system-notice notice-warning">PAC y correo: requieren backend y credenciales</div>'
+    ].join('');
+    button.parentElement.appendChild(panel);
+}
+
+function openRequiredConfiguration(step) {
+    const requirements = {
+        4: 'Configura un backend y las credenciales Sandbox o productivas de un PAC autorizado.',
+        5: 'Configura la recepcion segura del XML y PDF timbrados desde el backend.',
+        6: 'Primero debe existir un UUID y archivos fiscales reales devueltos por el PAC.'
+    };
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active', 'active-pulse'));
+    document.getElementById('nav-config')?.classList.add('active');
+    goToPanel('panel-config');
+    showToast(requirements[step] || 'La funcion requiere configuracion de backend.', 'warning');
+}
+
+function goBackFromServiceStep(step) {
+    if (!state.activeExpediente) {
+        goToStep(1);
+        showToast('Regresaste a recepcion porque aun no hay un documento procesado.', 'info');
+        return;
+    }
+    if (step === 4 && !hasRealPaymentValidation()) {
+        goToStep(2);
+        showToast('Regresaste a la validacion: el pago debe confirmarse antes de abrir la vista previa.', 'warning');
+        return;
+    }
+    goToStep(Math.max(1, step - 1));
+}
+
+function toggleReportFilters() {
+    let panel = document.getElementById('report-filter-panel');
+    if (panel) {
+        panel.hidden = !panel.hidden;
+        return;
+    }
+    const header = document.querySelector('#step-panel-7 .table-actions-header');
+    if (!header) return;
+    panel = document.createElement('div');
+    panel.id = 'report-filter-panel';
+    panel.className = 'report-filter-panel';
+    panel.innerHTML = '<label>Estatus <select id="report-status-filter" class="form-control"><option value="">Todos</option><option value="timbrada">Timbrada</option><option value="entregada">Entregada</option></select></label><button type="button" class="btn btn-secondary" id="btn-clear-report-filters">Limpiar</button>';
+    header.insertAdjacentElement('afterend', panel);
+    document.getElementById('report-status-filter').addEventListener('change', filterReportTable);
+    document.getElementById('btn-clear-report-filters').addEventListener('click', () => {
+        const search = document.getElementById('search-report');
+        const status = document.getElementById('report-status-filter');
+        if (search) search.value = '';
+        if (status) status.value = '';
+        filterReportTable();
+    });
+}
+
+function setReportPage(page) {
+    if (page !== 1 || state.facturas.length === 0) {
+        showToast('No hay mas paginas de resultados en esta sesion.', 'info');
+        return;
+    }
+    showToast('Pagina 1 de resultados.', 'info');
+}
+
+function initConfigurationControls() {
+    const certificate = document.getElementById('csd-cer-file');
+    const privateKey = document.getElementById('csd-key-file');
+    const status = document.getElementById('csd-status');
+    const updateCsdSelection = () => {
+        if (!status) return;
+        const selected = [certificate?.files?.[0]?.name, privateKey?.files?.[0]?.name].filter(Boolean);
+        status.textContent = selected.length
+            ? 'Seleccion local: ' + selected.join(' / ') + '. Pendiente de validacion por el backend.'
+            : 'CSD no configurado. Selecciona .cer y .key; no se subiran desde esta pagina estatica.';
+        status.style.color = selected.length === 2 ? 'var(--warning-color)' : '#6c757d';
+    };
+    certificate?.addEventListener('change', updateCsdSelection);
+    privateKey?.addEventListener('change', updateCsdSelection);
+
+    try {
+        const saved = JSON.parse(sessionStorage.getItem('coepriss-session-config') || '{}');
+        if (saved.smtpHost) document.getElementById('smtp-host').value = saved.smtpHost;
+        if (saved.smtpPort) document.getElementById('smtp-port').value = saved.smtpPort;
+    } catch (error) {
+        console.info('No se pudo restaurar la configuracion de esta sesion:', error);
+    }
 }
 
 // Document Log Init
@@ -284,6 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initDragAndDrop();
     initDocumentPicker();
+    initGlobalButtonActions();
+    initConfigurationControls();
     
     // Render dynamic data in tables
     renderProcesoTable();
@@ -305,11 +451,20 @@ function initNavigation() {
     stepNodes.forEach(node => {
         node.addEventListener('click', () => {
             const step = parseInt(node.getAttribute('data-step'));
-            // If active dossier is loaded, allow navigation; otherwise warn
-            if (state.activeExpediente) {
+            if (step === 1) {
+                goToStep(1);
+            } else if (step === 7) {
+                renderReportTable();
+                goToStep(7);
+            } else if ([4, 5, 6].includes(step)) {
+                goToStep(step);
+                showToast('Este paso abre correctamente, pero requiere configurar el servicio real indicado.', 'warning');
+            } else if (step === 3 && state.activeExpediente && !hasRealPaymentValidation()) {
+                showToast('La vista previa requiere una validacion bancaria real del pago.', 'error');
+            } else if (state.activeExpediente) {
                 goToStep(step);
             } else {
-                showToast('Selecciona un preset de demostración para iniciar el expediente del trámite.', 'warning');
+                showToast('Primero carga y procesa un documento real para abrir este paso.', 'warning');
             }
         });
     });
@@ -396,7 +551,7 @@ function resumeFlowAtStep(wizardStep, folio) {
 }
 
 function resendEmail(email, folio) {
-    showToast('EnvÃ­o de correo no configurado: no se enviÃ³ ningÃºn mensaje.', 'warning');
+    showToast('Envío de correo no configurado: no se envió ningún mensaje.', 'warning');
     return;
 
     showToast(`Reenviando factura ${folio} a: ${email}...`, 'info');
@@ -669,6 +824,9 @@ function createActiveExpedienteFromUploads() {
         archivos: [],
         auditoria: [`[${getCurrentDateTimeString()}] Tramite recibido mediante carga de documentos.`]
     };
+    state.expedientes.unshift(state.activeExpediente);
+    renderProcesoTable();
+    updateDashboardCounts();
     document.getElementById('lbl-cliente-correo').textContent = 'Pendiente de lectura';
     document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
 }
@@ -1675,7 +1833,7 @@ function applyExtractedFields(fields) {
 
 // Load presets of test invoices
 function loadPresetDossier(presetIndex) {
-    showToast('Los expedientes de demostraciÃ³n estÃ¡n deshabilitados. Carga un documento real.', 'warning');
+    showToast('Los expedientes de demostración están deshabilitados. Carga un documento real.', 'warning');
     return;
 
     const defaultData = state.expedientes[presetIndex];
@@ -2110,7 +2268,11 @@ function validatePaymentViaAPI() {
 function validatePaymentManual() {
     if (!state.activeExpediente) return;
 
-    showToast('La validación manual solo puede registrarse cuando exista un proceso contable autorizado.', 'warning');
+    showToast('No se cambio el estatus: falta evidencia bancaria y autorizacion contable identificable.', 'warning');
+}
+
+function hasRealPaymentValidation(expediente = state.activeExpediente) {
+    return Boolean(expediente && ['Pago validado', 'Autorizado', 'Timbrado', 'Entregado'].includes(expediente.estatus));
 }
 
 function updatePaymentValidationUI() {
@@ -2133,6 +2295,8 @@ function updatePaymentValidationUI() {
         valIcon.setAttribute('class', 'badge-icon text-success');
         valIcon.style.color = 'var(--success-color)';
         confirmBtn.disabled = false;
+        confirmBtn.classList.remove('btn-business-blocked');
+        confirmBtn.title = 'Continuar a la vista previa';
     } else {
         valBox.classList.add('payment-not-validated');
         valBox.style.borderColor = '#c92a2a';
@@ -2143,12 +2307,19 @@ function updatePaymentValidationUI() {
         valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
         valIcon.setAttribute('class', 'badge-icon-stroke text-danger');
         valIcon.style.color = '#c92a2a';
-        confirmBtn.disabled = true;
+        confirmBtn.disabled = false;
+        confirmBtn.classList.add('btn-business-blocked');
+        confirmBtn.title = 'Pulsa para ver por que el tramite aun no puede continuar';
     }
 }
 
 function confirmStep2() {
     if (!state.activeExpediente) return;
+    if (!hasRealPaymentValidation()) {
+        showToast('No se puede continuar: el pago aun no tiene validacion bancaria real.', 'error');
+        updatePaymentValidationUI();
+        return;
+    }
     
     state.activeExpediente.estatus = 'Autorizado';
     addAuditLogToActive('Trámite autorizado. Expediente listo para timbrar.');
@@ -2216,7 +2387,7 @@ function updatePreviewFields() {
 function stampInvoiceViaPAC() {
     if (!state.activeExpediente) return;
 
-    showToast('Timbrado PAC no configurado. No se generÃ³ UUID, XML ni factura fiscal.', 'warning');
+    showToast('Timbrado PAC no configurado. No se generó UUID, XML ni factura fiscal.', 'warning');
     return;
 
     const csdPassword = document.getElementById('pac-csd-password').value;
@@ -2319,11 +2490,13 @@ function downloadXML() {
 }
 
 function openSatPortal() {
-    showToast('Abriendo portal oficial del SAT en una pestaña nueva...', 'info');
+    const opened = window.open('https://www.sat.gob.mx/', '_blank', 'noopener,noreferrer');
+    if (!opened) {
+        showToast('El navegador bloqueo la pestaña del SAT. Permite ventanas emergentes para este sitio.', 'error');
+        return;
+    }
+    showToast('Portal oficial del SAT abierto en una pestaña nueva.', 'info');
     addSecurityLog('Redirección SAT', 'Apertura del portal de facturación del SAT.');
-    setTimeout(() => {
-        window.open('https://www.sat.gob.mx/', '_blank');
-    }, 800);
 }
 
 // 6. Step 5: Manual XML Stamping Upload
@@ -2465,13 +2638,13 @@ function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = 
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('open');
+    document.getElementById(modalId)?.classList.remove('open');
 }
 
 function sendInvoiceByEmail() {
     if (!state.activeExpediente) return;
 
-    showToast('EnvÃ­o de correo no configurado: no se enviÃ³ ningÃºn archivo.', 'warning');
+    showToast('Envío de correo no configurado: no se envió ningún archivo.', 'warning');
     return;
     
     showToast(`Enviando factura por correo a: ${state.activeExpediente.correo}...`, 'info');
@@ -2577,47 +2750,38 @@ startxref
 function triggerBrowserDownload(filename, text, mimeType) {
     const element = document.createElement('a');
     const file = new Blob([text], {type: mimeType});
-    element.href = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    element.href = objectUrl;
     element.download = filename;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 // 8. Step 7: Filter table and real CSV Excel Export
 function filterReportTable() {
     const input = document.getElementById('search-report');
-    const filter = input.value.toLowerCase();
+    const filter = (input?.value || '').toLowerCase();
+    const statusFilter = (document.getElementById('report-status-filter')?.value || '').toLowerCase();
     const table = document.getElementById('table-invoices');
-    const tr = table.getElementsByTagName('tr');
+    const rows = table?.querySelectorAll('tbody tr[data-invoice-row="true"]') || [];
     let matchesCount = 0;
 
-    for (let i = 1; i < tr.length; i++) {
-        let rowMatch = false;
-        const tds = tr[i].getElementsByTagName('td');
-        
-        // Skip header and action column
-        for (let j = 0; j < tds.length - 1; j++) {
-            if (tds[j]) {
-                const txtValue = tds[j].textContent || tds[j].innerText;
-                if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                    rowMatch = true;
-                    break;
-                }
-            }
-        }
-
-        if (rowMatch) {
-            tr[i].style.display = '';
+    rows.forEach(row => {
+        const matchesText = !filter || row.textContent.toLowerCase().includes(filter);
+        const matchesStatus = !statusFilter || row.dataset.status === statusFilter;
+        if (matchesText && matchesStatus) {
+            row.style.display = '';
             matchesCount++;
         } else {
-            tr[i].style.display = 'none';
+            row.style.display = 'none';
         }
-    }
+    });
 
     const showingText = document.getElementById('showing-results-text');
     if (showingText) {
-        showingText.textContent = `Mostrando ${matchesCount} de ${tr.length - 1} resultados`;
+        showingText.textContent = `Mostrando ${matchesCount} de ${state.facturas.length} resultados`;
     }
 }
 
@@ -2636,11 +2800,9 @@ function exportReportToExcel() {
 
     csvContent += `\n,,TOTAL FACTURADO,,${totalSum.toFixed(2)},\n`;
 
-    setTimeout(() => {
-        triggerBrowserDownload('Reporte_Facturas_COEPRISS.csv', csvContent, 'text/csv;charset=utf-8;');
-        showToast('✓ Reporte Excel (CSV) descargado con éxito.', 'success');
-        addSecurityLog('Exportación Reporte', `Exportación de reporte de facturación (${state.facturas.length} registros).`);
-    }, 800);
+    triggerBrowserDownload('Reporte_Facturas_COEPRISS.csv', csvContent, 'text/csv;charset=utf-8;');
+    showToast('✓ Reporte Excel (CSV) descargado con éxito.', 'success');
+    addSecurityLog('Exportación Reporte', `Exportación de reporte de facturación (${state.facturas.length} registros).`);
 }
 
 function restartProcess() {
@@ -2656,7 +2818,7 @@ function restartProcess() {
     document.getElementById('lbl-cliente-fecha').textContent = '--/--/---- --:--';
     
     const btnScan = document.getElementById('btn-scan');
-    if (btnScan) btnScan.disabled = true;
+    if (btnScan) btnScan.disabled = false;
     
     // Clear dynamic Step 1 doc lists
     const listContainer = document.getElementById('doc-list-container');
@@ -2674,7 +2836,7 @@ function restartProcess() {
 
 // Employee Role Switcher & Config Panel Management
 function changeUserRole(roleId) {
-    showToast('AutenticaciÃ³n y roles no configurados. No se cambiÃ³ la sesiÃ³n.', 'warning');
+    showToast('Autenticación y roles no configurados. No se cambió la sesión.', 'warning');
     return;
 
     if (roleId === 'brenda') {
@@ -2706,16 +2868,20 @@ function changeUserRole(roleId) {
 }
 
 function saveConfiguration() {
-    const smtpHost = document.getElementById('smtp-host').value;
-    const smtpPort = document.getElementById('smtp-port').value;
-
-    showToast('Guardando configuraciones...', 'info');
-
-    setTimeout(() => {
-        addSecurityLog('Configuración Actualizada', `Ajustes SMTP actualizados a ${smtpHost}:${smtpPort}.`);
+    const smtpHost = document.getElementById('smtp-host').value.trim();
+    const smtpPort = document.getElementById('smtp-port').value.trim();
+    if (!smtpHost || !/^\d{2,5}$/.test(smtpPort) || Number(smtpPort) > 65535) {
+        showToast('Captura un servidor SMTP y un puerto valido.', 'error');
+        return;
+    }
+    try {
+        sessionStorage.setItem('coepriss-session-config', JSON.stringify({ smtpHost, smtpPort }));
+        addSecurityLog('Configuración local', `SMTP guardado para esta sesion: ${smtpHost}:${smtpPort}.`);
         renderBitacoraTable();
-        showToast('✓ Configuraciones generales guardadas correctamente.', 'success');
-    }, 600);
+        showToast('Configuracion guardada en esta sesion. El envio requiere conectar el backend SMTP.', 'success');
+    } catch (error) {
+        showToast('El navegador no permitio guardar la configuracion de esta sesion.', 'error');
+    }
 }
 
 // 9. Tables Dynamic Rendering Core Functions
@@ -2763,6 +2929,10 @@ function renderCorreosTable() {
     if (!tbody) return;
 
     tbody.innerHTML = '';
+    if (state.historialCorreos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-table-cell">No hay correos enviados en esta sesion.</td></tr>';
+        return;
+    }
     state.historialCorreos.forEach(c => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -2793,6 +2963,11 @@ function renderClientesTable() {
     // Clients will come from the real database once authentication and
     // persistence are configured. Never seed the production UI with examples.
     const clients = [];
+
+    if (clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-table-cell">No hay clientes persistentes. La base de datos aun no esta conectada.</td></tr>';
+        return;
+    }
 
     clients.forEach(c => {
         const tr = document.createElement('tr');
@@ -2829,8 +3004,13 @@ function renderReportTable() {
     if (!tbody) return;
 
     tbody.innerHTML = '';
+    if (state.facturas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-table-cell">No hay facturas timbradas reales en esta sesion.</td></tr>';
+    }
     state.facturas.forEach(f => {
         const tr = document.createElement('tr');
+        tr.dataset.invoiceRow = 'true';
+        tr.dataset.status = String(f.estatus || '').toLowerCase();
         tr.innerHTML = `
             <td class="col-folio">${f.folioInterno}</td>
             <td>${f.folioRecibo}</td>
@@ -2858,6 +3038,10 @@ function renderReportTable() {
     const showingText = document.getElementById('showing-results-text');
     if (showingText) {
         showingText.textContent = `Mostrando ${state.facturas.length} de ${state.facturas.length} resultados`;
+    }
+    const pagination = document.querySelector('#step-panel-7 .pagination');
+    if (pagination) {
+        pagination.innerHTML = '<li class="page-item active"><a href="#" onclick="setReportPage(1); return false;" aria-label="Pagina 1">1</a></li>';
     }
 }
 
@@ -2929,6 +3113,27 @@ function openEditModal() {
 function saveFiscalData(event) {
     event.preventDefault();
     if (!state.activeExpediente) return;
+
+    const requiredFields = [
+        ['edit-rfc', 'RFC'],
+        ['edit-razon', 'razon social'],
+        ['edit-regimen', 'regimen fiscal'],
+        ['edit-cp', 'codigo postal'],
+        ['edit-cfdi', 'uso CFDI'],
+        ['edit-correo', 'correo electronico']
+    ];
+    const missing = requiredFields.find(([id]) => !document.getElementById(id)?.value.trim());
+    if (missing) {
+        document.getElementById(missing[0])?.focus();
+        showToast(`Completa el campo ${missing[1]} antes de guardar.`, 'error');
+        return;
+    }
+    const emailInput = document.getElementById('edit-correo');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim())) {
+        emailInput.focus();
+        showToast('Captura un correo electronico valido antes de guardar.', 'error');
+        return;
+    }
     
     state.activeExpediente.rfc = document.getElementById('edit-rfc').value.trim().toUpperCase();
     state.activeExpediente.cliente = document.getElementById('edit-razon').value.trim();

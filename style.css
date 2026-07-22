@@ -1452,6 +1452,131 @@ body {
     padding: 2px 5px;
 }
 
+.service-unavailable-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    margin-top: 20px;
+    border-left: 4px solid var(--warning-color);
+}
+
+.service-unavailable-card p {
+    margin-top: 8px;
+    color: #5f6b76;
+    line-height: 1.45;
+}
+
+.service-unavailable-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.service-unavailable-note {
+    font-size: 0.76rem;
+}
+
+.service-unavailable-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.step-node.service-pending-step {
+    opacity: 0.72;
+    cursor: pointer;
+}
+
+.step-node.service-pending-step:hover {
+    opacity: 1;
+}
+
+.btn-business-blocked {
+    background: #fff !important;
+    border: 1px solid #c92a2a !important;
+    color: #c92a2a !important;
+}
+
+.system-notifications-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 1200;
+    width: min(330px, 86vw);
+    padding: 14px;
+    border: 1px solid #d8dee5;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 35, 55, 0.18);
+}
+
+.topbar-right {
+    position: relative;
+}
+
+.system-notice {
+    margin-top: 9px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 0.74rem;
+}
+
+.system-notice.notice-ok {
+    background: #e6f4ea;
+    color: #137333;
+}
+
+.system-notice.notice-warning {
+    background: #fef7e0;
+    color: #7a5200;
+}
+
+.report-filter-panel {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin: -2px 0 14px;
+    padding: 12px;
+    border: 1px solid #dfe4ea;
+    border-radius: 6px;
+    background: #f8fafc;
+}
+
+.report-filter-panel label {
+    min-width: 210px;
+    color: #4b5563;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.report-filter-panel select {
+    margin-top: 5px;
+}
+
+.empty-table-cell {
+    padding: 28px !important;
+    text-align: center !important;
+    color: #77818c !important;
+}
+
+@media (max-width: 640px) {
+    .service-unavailable-card {
+        grid-template-columns: 1fr;
+    }
+
+    .report-filter-panel {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
 .scan-preview-modal {
     max-width: min(920px, 94vw);
     max-height: 94vh;

@@ -460,7 +460,7 @@
                     </div>
 
                     <div class="btn-container" style="border-top: none; padding-top: 5px;">
-                        <button class="btn btn-primary" id="btn-scan" onclick="startScanAnimation()" style="padding: 10px 24px;" disabled>
+                        <button class="btn btn-primary" id="btn-scan" onclick="startScanAnimation()" style="padding: 10px 24px;">
                             Escanear / Leer documentos
                         </button>
                     </div>
@@ -1045,7 +1045,7 @@
                 <button class="modal-close-btn" onclick="closeModal('modal-edit-fiscal')">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="form-edit-fiscal" onsubmit="saveFiscalData(event)">
+                <form id="form-edit-fiscal" onsubmit="saveFiscalData(event)" novalidate>
                     <div class="form-group">
                         <label class="form-label" for="edit-rfc">RFC</label>
                         <input type="text" id="edit-rfc" class="form-control" value="EEM010101XXX" required>
