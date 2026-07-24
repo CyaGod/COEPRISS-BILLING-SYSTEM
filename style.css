@@ -2549,6 +2549,14 @@ body {
     text-align: left;
 }
 
+.login-auth-note {
+    margin: 0 0 16px;
+    color: #495057;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    text-align: center;
+}
+
 /* Login Button */
 .btn-login-primary {
     width: 100%;
@@ -2714,4 +2722,3 @@ body {
         display: none;
     }
 }
-

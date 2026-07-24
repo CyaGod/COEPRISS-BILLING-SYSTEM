@@ -5,169 +5,23 @@ const state = {
     // Current Wizard Active Dossier (loaded from presets or created from scratch)
     activeExpediente: null,
     
-    // Logged-in Employee Session Profiles
-    currentUser: {
-        id: 'brenda',
-        name: 'Brenda González',
-        role: 'Administrador de Facturación',
-        avatar: 'BG'
-    },
+    // El usuario se obtiene exclusivamente de Firebase Authentication.
+    currentUser: null,
 
     // CSD Certificate State
     csd: {
-        uploaded: true,
-        certName: 'CSD_COEPRISS_2026.cer',
-        keyName: 'CSD_COEPRISS_2026.key',
-        expiry: '2028-09-12',
+        uploaded: false,
+        certName: '',
+        keyName: '',
+        expiry: '',
         password: ''
     },
 
-    // In Process Dossiers (Expedientes) Mock Database
-    expedientes: [
-        {
-            folio: 'REC-000245',
-            cliente: 'Empresa Ejemplo, S.A. de C.V.',
-            rfc: 'EEM010101XXX',
-            regimenFiscal: '601 - General de Ley Personas Morales',
-            codigoPostal: '80000',
-            usoCfdi: 'G03 - Gastos en general',
-            correo: 'facturacion@empresaejemplo.com',
-            importe: 1160.00,
-            fechaRecibo: '16/07/2026 10:22 a.m.',
-            banco: 'BBVA México',
-            fechaPago: '16/07/2026 09:15 a.m.',
-            referencia: 'TRASPASO 2456',
-            estatus: 'Recibido', // Recibido | Pago pendiente | Pago validado | Autorizado | Timbrado | Entregado
-            tipoCfdi: 'ingreso',
-            uuid: '',
-            archivos: [
-                { name: 'SAT_CSF_EEM01.pdf', type: 'Constancia de situación fiscal', status: 'Listo para escanear' },
-                { name: 'RECIBO_CIS_245.pdf', type: 'Recibo del CIS', status: 'Listo para escanear' },
-                { name: 'TRANSFERENCIA_BBVA_2456.jpg', type: 'Transferencia bancaria', status: 'Listo para escanear' }
-            ],
-            auditoria: [
-                '[16/07/2026 10:22 a.m.] Trámite recibido. Creado por Brenda González.'
-            ]
-        },
-        {
-            folio: 'REC-000246',
-            cliente: 'Sistemas Sinaloa, S.A. de C.V.',
-            rfc: 'SPS090909AAA',
-            regimenFiscal: '601 - General de Ley Personas Morales',
-            codigoPostal: '81000',
-            usoCfdi: 'G03 - Gastos en general',
-            correo: 'proveedor@sistemasinaloa.mx',
-            importe: 3450.00,
-            fechaRecibo: '16/07/2026 05:40 p.m.',
-            banco: 'Santander',
-            fechaPago: '16/07/2026 11:20 a.m.',
-            referencia: 'REF-9908',
-            estatus: 'Pago pendiente',
-            tipoCfdi: 'ingreso',
-            uuid: '',
-            archivos: [
-                { name: 'SAT_CSF_SPS09.pdf', type: 'Constancia de situación fiscal', status: 'Listo para escanear' },
-                { name: 'RECIBO_CIS_246.pdf', type: 'Recibo del CIS', status: 'Listo para escanear' },
-                { name: 'DEPOSITO_SANTANDER.png', type: 'Transferencia bancaria', status: 'Listo para escanear' }
-            ],
-            auditoria: [
-                '[16/07/2026 05:40 p.m.] Trámite recibido. Creado por Brenda González.'
-            ]
-        },
-        {
-            folio: 'REC-000247',
-            cliente: 'Gas Sinaloa, S.A.',
-            rfc: 'GSI121212BBB',
-            regimenFiscal: '601 - General de Ley Personas Morales',
-            codigoPostal: '80100',
-            usoCfdi: 'G03 - Gastos en general',
-            correo: 'contacto@gassinaloa.com',
-            importe: 7800.00,
-            fechaRecibo: '17/07/2026 09:05 a.m.',
-            banco: 'Banamex',
-            fechaPago: '17/07/2026 01:10 p.m.',
-            referencia: 'REF-5431',
-            estatus: 'Pago validado',
-            tipoCfdi: 'ingreso',
-            uuid: '',
-            archivos: [
-                { name: 'SAT_CSF_GSI12.pdf', type: 'Constancia de situación fiscal', status: 'Leído correctamente (OCR)' },
-                { name: 'RECIBO_CIS_247.pdf', type: 'Recibo del CIS', status: 'Leído correctamente (OCR)' },
-                { name: 'COMPROBANTE_BANAMEX.pdf', type: 'Transferencia bancaria', status: 'Leído correctamente (OCR)' }
-            ],
-            auditoria: [
-                '[17/07/2026 09:05 a.m.] Trámite recibido. Creado por Brenda González.',
-                '[17/07/2026 10:15 a.m.] Pago validado mediante API bancaria (Banamex). Estatus: Pago Validado.'
-            ]
-        }
-    ],
-
-    // Stamped Invoices Database
-    facturas: [
-        {
-            folioInterno: 'F-00045',
-            folioRecibo: 'REC-000245',
-            cliente: 'Empresa Ejemplo, S.A. de C.V.',
-            fecha: '16/07/2026 10:22 a.m.',
-            importe: 1160.00,
-            estatus: 'Timbrada',
-            uuid: 'BAB3F6E2-4D78-4C1A-B06D-D7ABBD2F123'
-        },
-        {
-            folioInterno: 'F-00044',
-            folioRecibo: 'REC-000244',
-            cliente: 'Juan Pérez López',
-            fecha: '16/07/2026 10:10 a.m.',
-            importe: 850.00,
-            estatus: 'Timbrada',
-            uuid: 'A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D'
-        },
-        {
-            folioInterno: 'F-00043',
-            folioRecibo: 'REC-000243',
-            cliente: 'Comercial del Norte, S.A. de C.V.',
-            fecha: '16/07/2026 09:05 a.m.',
-            importe: 1450.00,
-            estatus: 'Timbrada',
-            uuid: 'F1E2D3C4-B5A6-9F8E-7D6C-5B4A3F2E1D0C'
-        },
-        {
-            folioInterno: 'F-00042',
-            folioRecibo: 'REC-000242',
-            cliente: 'María García Sánchez',
-            fecha: '15/07/2026 04:35 p.m.',
-            importe: 550.00,
-            estatus: 'Timbrada',
-            uuid: 'C3D4E5F6-A7B8-9C0D-1E2F-3A4B5C6D7E8F'
-        }
-    ],
-
-    // Sent Emails Log Database
-    historialCorreos: [
-        {
-            fecha: '16/07/2026 12:16 p.m.',
-            destinatario: 'facturacion@empresaejemplo.com',
-            folio: 'F-00045',
-            adjuntos: 'FACTURA_REC000245.pdf, .xml',
-            estatus: 'Entregado'
-        }
-    ],
-
-    // Security & Audit Log
-    bitacoraSeguridad: [
-        {
-            fecha: '20/07/2026 09:30 a.m.',
-            usuario: 'Brenda González',
-            accion: 'Inicio de sesión',
-            detalles: 'Sesión iniciada con éxito en Culiacán, Sin.'
-        },
-        {
-            fecha: '20/07/2026 09:32 a.m.',
-            usuario: 'Brenda González',
-            accion: 'Acceso a CSD',
-            detalles: 'Verificación de vigencia de sello CSD_COEPRISS_2026.'
-        }
-    ],
+    // Datos reales: se cargan desde Firebase después de autenticar al usuario.
+    expedientes: [],
+    facturas: [],
+    historialCorreos: [],
+    bitacoraSeguridad: [],
 
     currentStep: 1,
     xmlUploaded: false,
@@ -183,267 +37,215 @@ const state = {
     lastOcrFields: null
 };
 
-// Authorized Application Users
-const AUTH_USERS = {
-    'brenda.gonzalez': {
-        id: 'brenda',
-        name: 'Brenda González',
-        role: 'Administrador de Facturación',
-        avatar: 'BG',
-        password: 'SinaloaFacturas2026'
-    },
-    'jose.perez': {
-        id: 'jose',
-        name: 'José Pérez',
-        role: 'Auditor Contable',
-        avatar: 'JP',
-        password: 'SinaloaAuditor2026'
-    }
-};
-
-let loginFailedAttempts = 0;
-let loginLockUntil = 0;
 let inactivityTimer = null;
+let inactivityListenersAttached = false;
+let inactivityResetHandler = null;
 
 // Firebase Realtime Database Integration for coepriss-facturacion
 let firebaseDb = null;
+let firebaseAuth = null;
 let firebaseInitialized = false;
+let cloudListenerAttached = false;
 
-function initFirebaseSync() {
-    if (typeof firebase !== 'undefined' && !firebaseInitialized) {
-        try {
-            const firebaseConfig = {
-                apiKey: "AIzaSyDBFizK-nkRwtMc-2ATWKcxENYOcDTiUX0",
-                authDomain: "coepriss-facturacion.firebaseapp.com",
-                databaseURL: "https://coepriss-facturacion-default-rtdb.firebaseio.com",
-                projectId: "coepriss-facturacion",
-                storageBucket: "coepriss-facturacion.firebasestorage.app",
-                messagingSenderId: "220063660669",
-                appId: "1:220063660669:web:8c51854841a5b8a6814f14"
-            };
-
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-            firebaseDb = firebase.database();
-            firebaseInitialized = true;
-
-            // Listen for Realtime Cloud updates across all devices/users
-            firebaseDb.ref('coepriss_data').on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    if (Array.isArray(data.expedientes)) state.expedientes = data.expedientes;
-                    if (Array.isArray(data.facturas)) state.facturas = data.facturas;
-                    if (Array.isArray(data.historialCorreos)) state.historialCorreos = data.historialCorreos;
-                    if (Array.isArray(data.bitacoraSeguridad)) state.bitacoraSeguridad = data.bitacoraSeguridad;
-
-                    try {
-                        localStorage.setItem('coepriss_db', JSON.stringify(data));
-                    } catch (e) {}
-
-                    renderProcesoTable();
-                    renderCorreosTable();
-                    renderClientesTable();
-                    renderBitacoraTable();
-                    renderReportTable();
-                    updateDashboardCounts();
-                }
-            });
-            console.log('✅ Base de datos Firebase para coepriss-facturacion conectada.');
-        } catch (error) {
-            console.warn('⚠️ No se pudo inicializar Firebase Cloud:', error);
-        }
-    }
-}
-
-// Persistent Database Management (localStorage + Firebase Cloud Sync)
-function saveDatabaseToStorage() {
-    const dbData = {
+function getCloudData() {
+    return {
         expedientes: state.expedientes,
         facturas: state.facturas,
         historialCorreos: state.historialCorreos,
         bitacoraSeguridad: state.bitacoraSeguridad
     };
+}
+
+function resetCloudCollections() {
+    state.expedientes = [];
+    state.facturas = [];
+    state.historialCorreos = [];
+    state.bitacoraSeguridad = [];
+}
+
+function renderCloudCollections() {
+    renderProcesoTable();
+    renderCorreosTable();
+    renderClientesTable();
+    renderBitacoraTable();
+    renderReportTable();
+    updateDashboardCounts();
+}
+
+function initFirebaseSync() {
+    if (firebaseInitialized) return true;
+    if (typeof firebase === 'undefined' || typeof firebase.auth !== 'function') {
+        showLoginError('No se pudo cargar el acceso seguro. Recarga la página e inténtalo de nuevo.');
+        return false;
+    }
 
     try {
-        localStorage.setItem('coepriss_db', JSON.stringify(dbData));
-        window.dispatchEvent(new Event('coepriss_db_updated'));
-    } catch (e) {
-        console.error('Error al guardar datos en almacenamiento local:', e);
-    }
+        const firebaseConfig = {
+            apiKey: "AIzaSyDBFizK-nkRwtMc-2ATWKcxENYOcDTiUX0",
+            authDomain: "coepriss-facturacion.firebaseapp.com",
+            databaseURL: "https://coepriss-facturacion-default-rtdb.firebaseio.com",
+            projectId: "coepriss-facturacion",
+            storageBucket: "coepriss-facturacion.firebasestorage.app",
+            messagingSenderId: "220063660669",
+            appId: "1:220063660669:web:8c51854841a5b8a6814f14"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
-    if (firebaseDb) {
-        try {
-            firebaseDb.ref('coepriss_data').set(dbData);
-        } catch (e) {
-            console.error('Error al guardar datos en Firebase Cloud:', e);
-        }
+        firebaseDb = firebase.database();
+        firebaseAuth = firebase.auth();
+        firebaseInitialized = true;
+        firebaseAuth.onAuthStateChanged(user => {
+            if (user) {
+                activateAuthenticatedSession(user);
+            } else {
+                detachCloudListener();
+                state.currentUser = null;
+                resetCloudCollections();
+                showLoginUi();
+            }
+        });
+        return true;
+    } catch (error) {
+        console.error('No se pudo inicializar Firebase:', error);
+        showLoginError('No fue posible inicializar la conexión segura. Intenta recargar la página.');
+        return false;
     }
+}
+
+function activateAuthenticatedSession(user) {
+    const name = user.displayName || user.email || 'Usuario autorizado';
+    const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'UA';
+    state.currentUser = {
+        id: user.uid,
+        name,
+        role: 'Usuario autorizado',
+        avatar: initials
+    };
+
+    hideLoginError();
+    showAuthenticatedUi();
+    attachCloudListener();
+    initInactivityTimer();
+}
+
+function attachCloudListener() {
+    if (!firebaseDb || !firebaseAuth?.currentUser || cloudListenerAttached) return;
+    cloudListenerAttached = true;
+    firebaseDb.ref('coepriss_data').on('value', snapshot => {
+        const data = snapshot.val();
+        resetCloudCollections();
+        if (data) {
+            if (Array.isArray(data.expedientes)) state.expedientes = data.expedientes;
+            if (Array.isArray(data.facturas)) state.facturas = data.facturas;
+            if (Array.isArray(data.historialCorreos)) state.historialCorreos = data.historialCorreos;
+            if (Array.isArray(data.bitacoraSeguridad)) state.bitacoraSeguridad = data.bitacoraSeguridad;
+        }
+        renderCloudCollections();
+    }, error => {
+        cloudListenerAttached = false;
+        console.error('Firebase rechazó la lectura:', error);
+        showToast('No fue posible leer la base de datos autorizada.', 'error');
+    });
+}
+
+function detachCloudListener() {
+    if (firebaseDb && cloudListenerAttached) firebaseDb.ref('coepriss_data').off();
+    cloudListenerAttached = false;
+}
+
+// Persistencia exclusiva en Firebase. No se guardan expedientes en este navegador.
+function saveDatabaseToStorage() {
+    if (!firebaseDb || !firebaseAuth?.currentUser) {
+        showToast('Inicia sesión para guardar cambios en Firebase.', 'warning');
+        return Promise.resolve(false);
+    }
+    return firebaseDb.ref('coepriss_data').set(getCloudData())
+        .then(() => {
+            window.dispatchEvent(new Event('coepriss_db_updated'));
+            return true;
+        })
+        .catch(error => {
+            console.error('Error al guardar en Firebase:', error);
+            showToast('Firebase no aceptó el cambio. No se guardó como un dato local.', 'error');
+            return false;
+        });
 }
 
 function loadDatabaseFromStorage() {
-    initFirebaseSync();
     try {
-        const saved = localStorage.getItem('coepriss_db');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed.expedientes) && parsed.expedientes.length > 0) state.expedientes = parsed.expedientes;
-            if (Array.isArray(parsed.facturas) && parsed.facturas.length > 0) state.facturas = parsed.facturas;
-            if (Array.isArray(parsed.historialCorreos) && parsed.historialCorreos.length > 0) state.historialCorreos = parsed.historialCorreos;
-            if (Array.isArray(parsed.bitacoraSeguridad) && parsed.bitacoraSeguridad.length > 0) state.bitacoraSeguridad = parsed.bitacoraSeguridad;
-        } else {
-            saveDatabaseToStorage();
-        }
-    } catch (e) {
-        console.error('Error al cargar datos:', e);
+        localStorage.removeItem('coepriss_db');
+        localStorage.removeItem('coepriss_session');
+    } catch (error) {
+        console.info('No fue posible limpiar el almacenamiento local anterior.', error);
     }
+    resetCloudCollections();
+    initFirebaseSync();
 }
 
-// Authentication & Session Guard
+// Authentication & Session Guard: Firebase is the only source of truth.
 function checkAuthSession() {
-    const session = localStorage.getItem('coepriss_session');
-    const loginContainer = document.getElementById('login-container');
-    const appContainer = document.getElementById('app-main-container');
-
-    if (session) {
-        try {
-            const user = JSON.parse(session);
-            state.currentUser = user;
-
-            if (loginContainer) loginContainer.style.display = 'none';
-            if (appContainer) appContainer.style.display = 'flex';
-
-            updateUserHeaderUi();
-            initInactivityTimer();
-            return true;
-        } catch (e) {
-            localStorage.removeItem('coepriss_session');
-        }
+    if (firebaseAuth?.currentUser) {
+        activateAuthenticatedSession(firebaseAuth.currentUser);
+        return true;
     }
-
-    if (loginContainer) loginContainer.style.display = 'flex';
-    if (appContainer) appContainer.style.display = 'none';
+    showLoginUi();
     return false;
 }
 
 function handleLoginSubmit(event) {
     event.preventDefault();
+    signInWithGoogle();
+}
 
-    const now = Date.now();
-    if (now < loginLockUntil) {
-        const secondsLeft = Math.ceil((loginLockUntil - now) / 1000);
-        showLoginError(`Acceso bloqueado. Reintente en ${secondsLeft} segundos.`);
-        return;
-    }
-
-    const usernameInput = document.getElementById('login-username').value.trim().toLowerCase();
-    const passwordInput = document.getElementById('login-password').value.trim();
-
-    const userConfig = AUTH_USERS[usernameInput] || (usernameInput === 'brenda' ? AUTH_USERS['brenda.gonzalez'] : (usernameInput === 'jose' ? AUTH_USERS['jose.perez'] : null));
-
-    if (userConfig && userConfig.password === passwordInput) {
-        loginFailedAttempts = 0;
-        hideLoginError();
-
-        const sessionUser = {
-            id: userConfig.id,
-            name: userConfig.name,
-            role: userConfig.role,
-            avatar: userConfig.avatar
+async function signInWithGoogle() {
+    if (!initFirebaseSync() || !firebaseAuth) return;
+    const button = document.getElementById('btn-google-login');
+    if (button) button.disabled = true;
+    hideLoginError();
+    try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await firebaseAuth.signInWithPopup(provider);
+    } catch (error) {
+        console.error('No se pudo iniciar sesión:', error);
+        const messages = {
+            'auth/popup-closed-by-user': 'Inicio de sesión cancelado.',
+            'auth/unauthorized-domain': 'Este dominio aún no está autorizado en Firebase Authentication.',
+            'auth/operation-not-allowed': 'El acceso con Google todavía no está habilitado en Firebase.'
         };
-        state.currentUser = sessionUser;
-        localStorage.setItem('coepriss_session', JSON.stringify(sessionUser));
-
-        addSecurityLog('Inicio de Sesión', `Acceso autorizado para ${userConfig.name} (${userConfig.role}).`);
-        saveDatabaseToStorage();
-
-        showToast(`¡Bienvenido(a), ${userConfig.name}!`, 'success');
-
-        const loginContainer = document.getElementById('login-container');
-        const appContainer = document.getElementById('app-main-container');
-        if (loginContainer) loginContainer.style.display = 'none';
-        if (appContainer) appContainer.style.display = 'flex';
-
-        updateUserHeaderUi();
-        renderProcesoTable();
-        renderReportTable();
-        renderBitacoraTable();
-        renderCorreosTable();
-        updateDashboardCounts();
-        initInactivityTimer();
-        goToPanel('panel-inicio');
-    } else {
-        loginFailedAttempts++;
-        addSecurityLog('Fallo de Autenticación', `Intento fallido de inicio de sesión para el usuario "${usernameInput}".`);
-        saveDatabaseToStorage();
-
-        if (loginFailedAttempts >= 3) {
-            loginLockUntil = Date.now() + 30000;
-            showLoginError('Acceso bloqueado temporalmente por 30 segundos debido a 3 intentos fallidos.');
-            startLoginLockCountdown(30);
-        } else {
-            showLoginError(`Usuario o contraseña incorrectos. Intentos restantes: ${3 - loginFailedAttempts}`);
-        }
+        showLoginError(messages[error.code] || 'No fue posible iniciar sesión con Google. Inténtalo nuevamente.');
+    } finally {
+        if (button) button.disabled = false;
     }
 }
 
-function startLoginLockCountdown(seconds) {
-    const btn = document.getElementById('btn-login-submit');
-    if (!btn) return;
-
-    btn.disabled = true;
-    let remaining = seconds;
-
-    const interval = setInterval(() => {
-        remaining--;
-        if (remaining <= 0) {
-            clearInterval(interval);
-            btn.disabled = false;
-            const btnSpan = btn.querySelector('span');
-            if (btnSpan) btnSpan.textContent = 'Ingresar al sistema';
-            hideLoginError();
-        } else {
-            const btnSpan = btn.querySelector('span');
-            if (btnSpan) btnSpan.textContent = `Bloqueado (${remaining}s)`;
-        }
-    }, 1000);
+async function handleLogout() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    try {
+        await firebaseAuth?.signOut();
+        showToast('Sesión cerrada correctamente.', 'info');
+    } catch (error) {
+        console.error('No se pudo cerrar la sesión:', error);
+        showToast('No fue posible cerrar la sesión segura.', 'error');
+    }
 }
 
-function handleLogout() {
-    localStorage.removeItem('coepriss_session');
-    showToast('Sesión cerrada correctamente.', 'info');
-
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-
+function showLoginUi() {
     const loginContainer = document.getElementById('login-container');
     const appContainer = document.getElementById('app-main-container');
-
     if (loginContainer) loginContainer.style.display = 'flex';
     if (appContainer) appContainer.style.display = 'none';
-
-    const usernameInput = document.getElementById('login-username');
-    const passwordInput = document.getElementById('login-password');
-    if (usernameInput) usernameInput.value = '';
-    if (passwordInput) passwordInput.value = '';
-    hideLoginError();
 }
 
-function togglePasswordVisibility() {
-    const passInput = document.getElementById('login-password');
-    const eyeIcon = document.getElementById('eye-icon');
-    if (!passInput) return;
+function showAuthenticatedUi() {
+    const loginContainer = document.getElementById('login-container');
+    const appContainer = document.getElementById('app-main-container');
+    if (loginContainer) loginContainer.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'flex';
 
-    if (passInput.type === 'password') {
-        passInput.type = 'text';
-        if (eyeIcon) eyeIcon.setAttribute('stroke', '#0040A8');
-    } else {
-        passInput.type = 'password';
-        if (eyeIcon) eyeIcon.setAttribute('stroke', 'currentColor');
-    }
-}
-
-function showForgotModal() {
-    showToast('Contacte al departamento de TI en soporte.ti@coepriss.gob.mx para restablecer sus credenciales.', 'info');
+    updateUserHeaderUi();
+    renderCloudCollections();
+    goToPanel('panel-inicio');
 }
 
 function showLoginError(msg) {
@@ -465,29 +267,30 @@ function updateUserHeaderUi() {
     const u = state.currentUser;
     if (!u) return;
 
-    document.querySelectorAll('.user-avatar-gold, .user-avatar').forEach(el => el.textContent = u.avatar || 'BG');
-    document.querySelectorAll('.user-name-top, .user-name').forEach(el => el.textContent = u.name || 'Brenda González');
-    document.querySelectorAll('.user-role-top, .user-role').forEach(el => el.textContent = u.role || 'Administrador');
+    document.querySelectorAll('.user-avatar-gold, .user-avatar').forEach(el => el.textContent = u.avatar || 'UA');
+    document.querySelectorAll('.user-name-top, .user-name').forEach(el => el.textContent = u.name || 'Usuario autorizado');
+    document.querySelectorAll('.user-role-top, .user-role').forEach(el => el.textContent = u.role || 'Usuario autorizado');
 }
 
 function initInactivityTimer() {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-
-    const resetTimer = () => {
-        if (inactivityTimer) clearTimeout(inactivityTimer);
-        // Auto logout after 15 minutes of inactivity (900,000 ms)
-        inactivityTimer = setTimeout(() => {
-            if (localStorage.getItem('coepriss_session')) {
-                showToast('Su sesión ha expirado por inactividad.', 'warning');
-                handleLogout();
-            }
-        }, 900000);
-    };
-
-    ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
-        window.addEventListener(evt, resetTimer, { passive: true });
-    });
-    resetTimer();
+    if (!inactivityListenersAttached) {
+        inactivityResetHandler = () => {
+            if (!firebaseAuth?.currentUser) return;
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            // Auto logout after 15 minutes of inactivity (900,000 ms)
+            inactivityTimer = setTimeout(() => {
+                if (firebaseAuth?.currentUser) {
+                    showToast('Su sesión ha expirado por inactividad.', 'warning');
+                    handleLogout();
+                }
+            }, 900000);
+        };
+        ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
+            window.addEventListener(evt, inactivityResetHandler, { passive: true });
+        });
+        inactivityListenersAttached = true;
+    }
+    inactivityResetHandler();
 }
 
 function sanitizeUnconfiguredUi() {
@@ -639,26 +442,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderReportTable();
     updateDashboardCounts();
     
-    // Multi-tab / Multi-window Real-time Sync
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'coepriss_db') {
-            loadDatabaseFromStorage();
-            renderProcesoTable();
-            renderCorreosTable();
-            renderClientesTable();
-            renderBitacoraTable();
-            renderReportTable();
-            updateDashboardCounts();
-        }
-    });
-
     window.addEventListener('coepriss_db_updated', () => {
-        renderProcesoTable();
-        renderCorreosTable();
-        renderClientesTable();
-        renderBitacoraTable();
-        renderReportTable();
-        updateDashboardCounts();
+        renderCloudCollections();
     });
 
     if (isAuthenticated) {
@@ -774,22 +559,6 @@ function resumeFlowAtStep(wizardStep, folio) {
 
 function resendEmail(email, folio) {
     showToast('Envío de correo no configurado: no se envió ningún mensaje.', 'warning');
-    return;
-
-    showToast(`Reenviando factura ${folio} a: ${email}...`, 'info');
-    setTimeout(() => {
-        showToast(`✓ Factura reenviada con éxito a: ${email}`, 'success');
-        // Add log
-        state.historialCorreos.unshift({
-            fecha: getCurrentDateTimeString(),
-            destinatario: email,
-            folio: folio,
-            adjuntos: `FACTURA_${folio.replace('-', '')}.pdf, .xml`,
-            estatus: 'Entregado'
-        });
-        renderCorreosTable();
-        updateDashboardCounts();
-    }, 1000);
 }
 
 // Global panel switching (handles general views and wizard views)
@@ -2608,107 +2377,12 @@ function updatePreviewFields() {
 // 5. Step 4: PAC Automatic Timbrado
 function stampInvoiceViaPAC() {
     if (!state.activeExpediente) return;
-
     showToast('Timbrado PAC no configurado. No se generó UUID, XML ni factura fiscal.', 'warning');
-    return;
-
-    const csdPassword = document.getElementById('pac-csd-password').value;
-    if (!csdPassword) {
-        showToast('Ingresa la contraseña del archivo CSD para firmar el XML.', 'warning');
-        return;
-    }
-
-    const loaderBox = document.getElementById('pac-loading-box');
-    const stampBtn = document.getElementById('btn-pac-stamp');
-    const loadTitle = document.getElementById('pac-loading-title');
-    const loadDesc = document.getElementById('pac-loading-desc');
-
-    stampBtn.disabled = true;
-    loaderBox.style.display = 'flex';
-
-    // Simulated API call sequence
-    setTimeout(() => {
-        loadTitle.textContent = 'Generando firma con Sello CSD...';
-        loadDesc.textContent = 'Sellando la cadena original del CFDI 4.0.';
-        
-        setTimeout(() => {
-            loadTitle.textContent = 'Enviando a API del PAC...';
-            loadDesc.textContent = 'Estableciendo comunicación segura cifrada.';
-            
-            setTimeout(() => {
-                loadTitle.textContent = 'Factura Certificada ante el SAT';
-                loadDesc.textContent = 'Obteniendo sello del SAT y UUID fiscal.';
-                
-                setTimeout(() => {
-                    // Generate Mock Stamped Data
-                    const mockUUID = generateMockUUID();
-                    state.activeExpediente.uuid = mockUUID;
-                    state.activeExpediente.estatus = 'Timbrado';
-                    
-                    addAuditLogToActive(`Factura timbrada con éxito vía PAC. Folio Fiscal UUID: ${mockUUID}.`);
-                    
-                    // Add invoice to report table database
-                    const nextFolioInterno = `F-000${state.facturas.length + 42}`;
-                    state.facturas.unshift({
-                        folioInterno: nextFolioInterno,
-                        folioRecibo: state.activeExpediente.folio,
-                        cliente: state.activeExpediente.cliente,
-                        fecha: getCurrentDateTimeString(),
-                        importe: state.activeExpediente.importe,
-                        estatus: 'Timbrada',
-                        uuid: mockUUID
-                    });
-
-                    // Add safety log
-                    addSecurityLog('Timbrado Automático PAC', `Factura ${nextFolioInterno} timbrada vía PAC. UUID: ${mockUUID}.`);
-
-                    showToast('✓ ¡La factura ha sido timbrada con éxito vía PAC!', 'success');
-                    
-                    // Reset UI
-                    loaderBox.style.display = 'none';
-                    stampBtn.disabled = false;
-                    
-                    // Go to Step 6 (Stamped Details View)
-                    openInvoicePreviewModal(nextFolioInterno, state.activeExpediente.cliente, `$${state.activeExpediente.importe.toFixed(2)}`);
-                    goToStep(6);
-                    
-                    // Refresh logs
-                    renderReportTable();
-                    updateDashboardCounts();
-                }, 800);
-            }, 800);
-        }, 800);
-    }, 500);
 }
 
 function downloadXML() {
     if (!state.activeExpediente) return;
-
     showToast('XML no disponible: primero debe configurarse un PAC real o cargarse un XML timbrado.', 'warning');
-    return;
-    
-    showToast('Generando archivo XML...', 'info');
-    
-    const mockXML = `<?xml version="1.0" encoding="utf-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" Version="4.0" Serie="F" Folio="${state.activeExpediente.folio.split('-')[1]}" Fecha="2026-07-20T10:30:00" SubTotal="${(state.activeExpediente.importe / 1.16).toFixed(2)}" Total="${state.activeExpediente.importe.toFixed(2)}" Moneda="MXN" TipoDeComprobante="${state.activeExpediente.tipoCfdi === 'ingreso' ? 'I' : 'P'}" Exportacion="01" MetodoPago="PUE" LugarExpedicion="80000">
-    <cfdi:Emisor Rfc="CEP050915XXX" Nombre="COMISION ESTATAL PARA LA PROTECCION CONTRA RIESGOS SANITARIOS DE SINALOA" RegimenFiscal="603"/>
-    <cfdi:Receptor Rfc="${state.activeExpediente.rfc}" Nombre="${state.activeExpediente.cliente.toUpperCase()}" DomicilioFiscalReceptor="${state.activeExpediente.codigoPostal}" RegimenFiscalReceptor="601" UsoCFDI="G03"/>
-    <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="90101500" Cantidad="1" ClaveUnidad="E48" Unidad="Servicio" Descripcion="Servicio de tramite de COEPRISS" ValorUnitario="${(state.activeExpediente.importe / 1.16).toFixed(2)}" Importe="${(state.activeExpediente.importe / 1.16).toFixed(2)}" ObjetoImp="02">
-            <cfdi:Impuestos>
-                <cfdi:Traslados>
-                    <cfdi:Traslado Base="${(state.activeExpediente.importe / 1.16).toFixed(2)}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="${(state.activeExpediente.importe - (state.activeExpediente.importe / 1.16)).toFixed(2)}"/>
-                </cfdi:Traslados>
-            </cfdi:Impuestos>
-        </cfdi:Concepto>
-    </cfdi:Conceptos>
-</cfdi:Comprobante>`;
-
-    setTimeout(() => {
-        triggerBrowserDownload(`FACTURA_${state.activeExpediente.folio.replace('-', '')}.xml`, mockXML, 'text/xml');
-        showToast('✓ XML descargado correctamente.', 'success');
-        addSecurityLog('Descarga XML', `Descarga de XML pre-generado para el trámite ${state.activeExpediente.folio}.`);
-    }, 600);
 }
 
 function openSatPortal() {
@@ -2732,73 +2406,6 @@ function removeUpload(type) {
     }
 }
 
-// Drag & drop simulation
-function initDragAndDropLegacyDemo() {
-    const dropzone = document.getElementById('dropzone-step1');
-    if (!dropzone) return;
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropzone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            dropzone.classList.add('dragover');
-        }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropzone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            dropzone.classList.remove('dragover');
-        }, false);
-    });
-
-    dropzone.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files.length > 0) {
-            showToast(`Archivo "${files[0].name}" cargado correctamente para análisis.`, 'success');
-            
-            // Generate dummy active dossier if none loaded
-            if (!state.activeExpediente) {
-                state.activeExpediente = {
-                    folio: 'REC-000248',
-                    cliente: 'Contribuyente Particular',
-                    rfc: 'XAXX010101000',
-                    regimenFiscal: '605 - Sueldos y Salarios',
-                    codigoPostal: '80000',
-                    usoCfdi: 'G03 - Gastos en general',
-                    correo: 'correo@contribuyente.com',
-                    importe: 500.00,
-                    fechaRecibo: getCurrentDateTimeString(),
-                    banco: 'Banco del Bienestar',
-                    fechaPago: getCurrentDateTimeString(),
-                    referencia: 'DEP-8890',
-                    estatus: 'Recibido',
-                    tipoCfdi: 'ingreso',
-                    uuid: '',
-                    archivos: [
-                        { name: files[0].name, type: 'Documento cargado', status: 'Listo para escanear' }
-                    ],
-                    auditoria: [
-                        `[${getCurrentDateTimeString()}] Trámite recibido. Creado por Brenda González.`
-                    ]
-                };
-                document.getElementById('lbl-cliente-correo').textContent = state.activeExpediente.correo;
-                document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
-                
-                const btnScan = document.getElementById('btn-scan');
-                if (btnScan) btnScan.disabled = false;
-            } else {
-                state.activeExpediente.archivos.push({
-                    name: files[0].name,
-                    type: 'Archivo adicional',
-                    status: 'Listo para escanear'
-                });
-            }
-            renderDocumentList();
-        }
-    }, false);
-}
-
 // Override the original demo drop handler with real File objects.
 function initDragAndDrop() {
     const dropzone = document.getElementById('dropzone-step1');
@@ -2819,7 +2426,7 @@ function initDragAndDrop() {
 }
 
 // 7. Step 6: Invoice Preview & Stamped Verification
-function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = '$1,160.00') {
+function openInvoicePreviewModal(folio = '', clientName = '', totalVal = '') {
     if (!state.activeExpediente?.uuid) {
         showToast('No existe un CFDI timbrado real para previsualizar.', 'warning');
         return;
@@ -2829,20 +2436,20 @@ function openInvoicePreviewModal(folio = 'F-00045', clientName = '', totalVal = 
         clientName = state.activeExpediente.cliente;
     }
     
-    // Find matching invoice uuid
+    // Solo se muestran datos devueltos por un PAC real o cargados como CFDI timbrado.
     const matchedFac = state.facturas.find(f => f.folioInterno === folio);
-    const mockUUID = matchedFac ? matchedFac.uuid : (state.activeExpediente ? state.activeExpediente.uuid : 'BAB3F6E2-4D78-4C1A-B06D-D7ABBD2F123');
+    const uuid = matchedFac ? matchedFac.uuid : state.activeExpediente.uuid;
 
     document.getElementById('pdf-folio').textContent = folio;
     document.getElementById('pdf-receptor-name').textContent = clientName;
-    document.getElementById('pdf-receptor-rfc').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? state.activeExpediente.rfc : 'XAXX010101000';
-    document.getElementById('pdf-receptor-regimen').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? (state.activeExpediente.regimenFiscal || 'Pendiente de confirmación') : '601';
-    document.getElementById('pdf-receptor-cfdi').textContent = clientName === (state.activeExpediente ? state.activeExpediente.cliente : '') ? state.activeExpediente.usoCfdi : 'G03 - Gastos en general';
+    document.getElementById('pdf-receptor-rfc').textContent = state.activeExpediente.rfc || 'Pendiente de confirmación';
+    document.getElementById('pdf-receptor-regimen').textContent = state.activeExpediente.regimenFiscal || 'Pendiente de confirmación';
+    document.getElementById('pdf-receptor-cfdi').textContent = state.activeExpediente.usoCfdi || 'Pendiente de confirmación';
     
     // Set UUID in box
     const uuidBox = document.getElementById('pdf-uuid-val');
     if (uuidBox) {
-        uuidBox.textContent = mockUUID;
+        uuidBox.textContent = uuid;
     }
 
     const numericTotal = parseFloat(totalVal.replace('$', '').replace(',', ''));
@@ -2865,107 +2472,12 @@ function closeModal(modalId) {
 
 function sendInvoiceByEmail() {
     if (!state.activeExpediente) return;
-
     showToast('Envío de correo no configurado: no se envió ningún archivo.', 'warning');
-    return;
-    
-    showToast(`Enviando factura por correo a: ${state.activeExpediente.correo}...`, 'info');
-    
-    setTimeout(() => {
-        showToast(`✓ Factura enviada con éxito a: ${state.activeExpediente.correo}`, 'success');
-        
-        // Find folio Interno from state.facturas
-        const matched = state.facturas.find(f => f.folioRecibo === state.activeExpediente.folio);
-        const folioInterno = matched ? matched.folioInterno : 'F-00045';
-
-        // Add history log
-        state.historialCorreos.unshift({
-            fecha: getCurrentDateTimeString(),
-            destinatario: state.activeExpediente.correo,
-            folio: folioInterno,
-            adjuntos: `FACTURA_${state.activeExpediente.folio.replace('-', '')}.pdf, .xml`,
-            estatus: 'Entregado'
-        });
-
-        // Add safety log
-        addSecurityLog('Envío Correo', `Factura ${folioInterno} enviada a ${state.activeExpediente.correo}.`);
-
-        renderCorreosTable();
-        updateDashboardCounts();
-
-        setTimeout(() => {
-            closeModal('modal-invoice-preview');
-            goToStep(7);
-        }, 800);
-    }, 1200);
 }
 
-// Helper to trigger dummy file download
+// Descargas de CFDI solo se habilitarán al recibir archivos reales del backend PAC.
 function triggerDownload(filename) {
     showToast(`Archivo no disponible: ${filename}. Configure el PAC o cargue el documento real.`, 'warning');
-    return;
-
-    showToast(`Descargando archivo: ${filename}...`, 'info');
-    setTimeout(() => {
-        let content = '';
-        let contentType = '';
-        
-        if (filename.endsWith('.pdf')) {
-            content = `%PDF-1.5
-1 0 obj
-<< /Type /Catalog
-   /Pages 2 0 R
->>
-endobj
-2 0 obj
-<< /Type /Pages
-   /Kids [3 0 R]
-   /Count 1
->>
-endobj
-3 0 obj
-<< /Type /Page
-   /Parent 2 0 R
-   /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >>
-   /MediaBox [0 0 595.28 841.89]
-   /Contents 4 0 R
->>
-endobj
-4 0 obj
-<< /Length 73 >>
-stream
-BT
-/F1 20 Tf
-70 750 Td
-(COEPRISS SINALOA - FACTURA DIGITAL TIMBRADA) Tj
-ET
-endstream
-endobj
-xref
-0 5
-0000000000 65535 f
-0000000009 00000 n
-0000000062 00000 n
-0000000125 00000 n
-0000000300 00000 n
-trailer
-<< /Size 5
-   /Root 1 0 R
->>
-startxref
-420
-%%EOF`;
-            contentType = 'application/pdf';
-        } else {
-            content = `<cfdi:Comprobante Version="4.0" xmlns:cfdi="http://www.sat.gob.mx/cfd/4">
-    <cfdi:Emisor Rfc="CEP050915XXX" Nombre="COMISION ESTATAL PARA LA PROTECCION CONTRA RIESGOS SANITARIOS DE SINALOA"/>
-</cfdi:Comprobante>`;
-            contentType = 'text/xml';
-        }
-        
-        triggerBrowserDownload(filename, content, contentType);
-        showToast(`✓ Descarga finalizada: ${filename}`, 'success');
-    }, 800);
 }
 
 // Browser downloader
@@ -3230,6 +2742,7 @@ function renderReportTable() {
         tbody.innerHTML = '<tr><td colspan="7" class="empty-table-cell">No hay facturas timbradas reales en esta sesion.</td></tr>';
     }
     state.facturas.forEach(f => {
+        const statusClass = ['Timbrada', 'Entregada'].includes(String(f.estatus)) ? 'badge-success' : 'badge-warning';
         const tr = document.createElement('tr');
         tr.dataset.invoiceRow = 'true';
         tr.dataset.status = String(f.estatus || '').toLowerCase();
@@ -3240,7 +2753,7 @@ function renderReportTable() {
             <td style="color: #6c757d;">${f.fecha}</td>
             <td style="text-align: right; font-weight: 700; color: #212529;">$${f.importe.toFixed(2)}</td>
             <td style="text-align: center;">
-                <span class="badge badge-success">
+                <span class="badge ${statusClass}">
                     <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                     ${f.estatus}
                 </span>
@@ -3250,7 +2763,7 @@ function renderReportTable() {
                     <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal('${f.folioInterno}', '${f.cliente}', '$${f.importe.toFixed(2)}')" title="Ver factura"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
                     <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_${f.folioRecibo.replace('-', '')}.pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                     <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_${f.folioRecibo.replace('-', '')}.xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                    <button class="action-icon-btn btn-email" onclick="resendEmail('${state.activeExpediente ? state.activeExpediente.correo : 'facturacion@empresaejemplo.com'}', '${f.folioInterno}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                    <button class="action-icon-btn btn-email" onclick="resendEmail('${f.correo || ''}', '${f.folioInterno}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
                 </div>
             </td>
         `;
@@ -3285,23 +2798,10 @@ function updateDashboardCounts() {
 function addSecurityLog(action, details) {
     state.bitacoraSeguridad.unshift({
         fecha: getCurrentDateTimeString(),
-        usuario: state.currentUser.name,
+        usuario: state.currentUser?.name || 'Usuario no autenticado',
         action: action,
         detalles: details
     });
-}
-
-function generateMockUUID() {
-    const chars = '0123456789ABCDEF';
-    let uuid = '';
-    for (let i = 0; i < 36; i++) {
-        if (i === 8 || i === 13 || i === 18 || i === 23) {
-            uuid += '-';
-        } else {
-            uuid += chars[Math.floor(Math.random() * 16)];
-        }
-    }
-    return uuid;
 }
 
 function getCurrentDateTimeString() {
@@ -3376,54 +2876,14 @@ function saveFiscalData(event) {
     showToast('Datos fiscales actualizados correctamente.', 'success');
 }
 
-// Document Preview window
-function previewDocument(docName, type) {
+// La vista previa sólo abre el archivo original seleccionado por el usuario.
+function previewDocument(docName) {
     const realUpload = state.uploadedFiles.find(item => item.name === docName);
     if (realUpload) {
         openScanPreview(docName);
         return;
     }
     showToast('No existe un archivo real asociado a este registro.', 'warning');
-    return;
-
-    const dossier = state.activeExpediente;
-    const hasExtractedData = dossier && (dossier.rfc || dossier.cliente || Number.isFinite(Number(dossier.importe)) && dossier.importe > 0);
-    const previewName = hasExtractedData && dossier.cliente !== 'Pendiente de lectura' ? dossier.cliente : docName;
-    const previewRfc = hasExtractedData && dossier.rfc ? dossier.rfc : 'OCR pendiente';
-    const previewRegimen = hasExtractedData && dossier.regimenFiscal ? dossier.regimenFiscal : 'Pendiente de confirmación';
-    const previewCfdi = hasExtractedData && dossier.usoCfdi ? dossier.usoCfdi : `Tipo de archivo: ${type}`;
-    const numericTotal = hasExtractedData ? Number(dossier.importe) : NaN;
-
-    document.getElementById('pdf-folio').textContent = hasExtractedData ? dossier.folio : 'RECIBO-CIS-MOCK';
-    document.getElementById('pdf-receptor-name').textContent = previewName;
-    document.getElementById('pdf-receptor-rfc').textContent = previewRfc;
-    document.getElementById('pdf-receptor-regimen').textContent = previewRegimen;
-    document.getElementById('pdf-receptor-cfdi').textContent = previewCfdi;
-    const conceptoPreview = document.getElementById('pdf-concepto');
-    if (conceptoPreview) conceptoPreview.textContent = hasExtractedData && dossier.concepto ? dossier.concepto : 'Información extraída del documento';
-
-    const uuidBox = document.getElementById('pdf-uuid-val');
-    if (uuidBox) {
-        uuidBox.textContent = dossier?.uuid || 'PREVISUALIZACION-OCR-SIN-TIMBRAR';
-    }
-
-    if (Number.isFinite(numericTotal) && numericTotal > 0) {
-        const subtotal = numericTotal / 1.16;
-        const iva = numericTotal - subtotal;
-        document.getElementById('pdf-unit-price').textContent = `$${subtotal.toFixed(2)}`;
-        document.getElementById('pdf-subtotal').textContent = `$${subtotal.toFixed(2)}`;
-        document.getElementById('pdf-iva').textContent = `$${iva.toFixed(2)}`;
-        document.getElementById('pdf-total').textContent = `$${numericTotal.toFixed(2)}`;
-    } else {
-        document.getElementById('pdf-unit-price').textContent = '-';
-        document.getElementById('pdf-subtotal').textContent = '-';
-        document.getElementById('pdf-iva').textContent = '-';
-        document.getElementById('pdf-total').textContent = '-';
-    }
-
-    setTimeout(() => {
-        document.getElementById('modal-invoice-preview').classList.add('open');
-    }, 400);
 }
 
 // Toast Notifications Helper
