@@ -205,23 +205,84 @@ let loginFailedAttempts = 0;
 let loginLockUntil = 0;
 let inactivityTimer = null;
 
-// Persistent Database Management (localStorage + multi-tab sync)
+// Firebase Realtime Database Integration for coepriss-facturacion
+let firebaseDb = null;
+let firebaseInitialized = false;
+
+function initFirebaseSync() {
+    if (typeof firebase !== 'undefined' && !firebaseInitialized) {
+        try {
+            const firebaseConfig = {
+                apiKey: "AIzaSyDBFizK-nkRwtMc-2ATWKcxENYOcDTiUX0",
+                authDomain: "coepriss-facturacion.firebaseapp.com",
+                databaseURL: "https://coepriss-facturacion-default-rtdb.firebaseio.com",
+                projectId: "coepriss-facturacion",
+                storageBucket: "coepriss-facturacion.firebasestorage.app",
+                messagingSenderId: "220063660669",
+                appId: "1:220063660669:web:8c51854841a5b8a6814f14"
+            };
+
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            firebaseDb = firebase.database();
+            firebaseInitialized = true;
+
+            // Listen for Realtime Cloud updates across all devices/users
+            firebaseDb.ref('coepriss_data').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    if (Array.isArray(data.expedientes)) state.expedientes = data.expedientes;
+                    if (Array.isArray(data.facturas)) state.facturas = data.facturas;
+                    if (Array.isArray(data.historialCorreos)) state.historialCorreos = data.historialCorreos;
+                    if (Array.isArray(data.bitacoraSeguridad)) state.bitacoraSeguridad = data.bitacoraSeguridad;
+
+                    try {
+                        localStorage.setItem('coepriss_db', JSON.stringify(data));
+                    } catch (e) {}
+
+                    renderProcesoTable();
+                    renderCorreosTable();
+                    renderClientesTable();
+                    renderBitacoraTable();
+                    renderReportTable();
+                    updateDashboardCounts();
+                }
+            });
+            console.log('✅ Base de datos Firebase para coepriss-facturacion conectada.');
+        } catch (error) {
+            console.warn('⚠️ No se pudo inicializar Firebase Cloud:', error);
+        }
+    }
+}
+
+// Persistent Database Management (localStorage + Firebase Cloud Sync)
 function saveDatabaseToStorage() {
+    const dbData = {
+        expedientes: state.expedientes,
+        facturas: state.facturas,
+        historialCorreos: state.historialCorreos,
+        bitacoraSeguridad: state.bitacoraSeguridad
+    };
+
     try {
-        const db = {
-            expedientes: state.expedientes,
-            facturas: state.facturas,
-            historialCorreos: state.historialCorreos,
-            bitacoraSeguridad: state.bitacoraSeguridad
-        };
-        localStorage.setItem('coepriss_db', JSON.stringify(db));
+        localStorage.setItem('coepriss_db', JSON.stringify(dbData));
         window.dispatchEvent(new Event('coepriss_db_updated'));
     } catch (e) {
         console.error('Error al guardar datos en almacenamiento local:', e);
     }
+
+    if (firebaseDb) {
+        try {
+            firebaseDb.ref('coepriss_data').set(dbData);
+        } catch (e) {
+            console.error('Error al guardar datos en Firebase Cloud:', e);
+        }
+    }
 }
 
 function loadDatabaseFromStorage() {
+    initFirebaseSync();
     try {
         const saved = localStorage.getItem('coepriss_db');
         if (saved) {
@@ -231,7 +292,6 @@ function loadDatabaseFromStorage() {
             if (Array.isArray(parsed.historialCorreos) && parsed.historialCorreos.length > 0) state.historialCorreos = parsed.historialCorreos;
             if (Array.isArray(parsed.bitacoraSeguridad) && parsed.bitacoraSeguridad.length > 0) state.bitacoraSeguridad = parsed.bitacoraSeguridad;
         } else {
-            // Initialize default persistent database
             saveDatabaseToStorage();
         }
     } catch (e) {
