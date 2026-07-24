@@ -183,119 +183,256 @@ const state = {
     lastOcrFields: null
 };
 
-// Never present seed/demo data as production records.
-Object.assign(state.currentUser, {
-    id: '',
-    name: 'Sin sesión',
-    role: 'Autenticación no configurada',
-    avatar: '--'
-});
-state.csd = { uploaded: false, certName: '', keyName: '', expiry: '', password: '' };
-state.expedientes = [];
-state.facturas = [];
-state.historialCorreos = [];
-state.bitacoraSeguridad = [];
+// Authorized Application Users
+const AUTH_USERS = {
+    'brenda.gonzalez': {
+        id: 'brenda',
+        name: 'Brenda González',
+        role: 'Administrador de Facturación',
+        avatar: 'BG',
+        password: 'SinaloaFacturas2026'
+    },
+    'jose.perez': {
+        id: 'jose',
+        name: 'José Pérez',
+        role: 'Auditor Contable',
+        avatar: 'JP',
+        password: 'SinaloaAuditor2026'
+    }
+};
 
-function sanitizeUnconfiguredUi() {
-    const unavailablePanels = {
-        'step-panel-4': 'Timbrado PAC no configurado. No se generaran XML, UUID ni CFDI fiscales desde este navegador.',
-        'step-panel-5': 'Carga de comprobantes timbrados pendiente de configurar. No hay archivos fiscales disponibles.',
-        'step-panel-6': 'No existe una factura timbrada real para mostrar.'
+let loginFailedAttempts = 0;
+let loginLockUntil = 0;
+let inactivityTimer = null;
+
+// Persistent Database Management (localStorage + multi-tab sync)
+function saveDatabaseToStorage() {
+    try {
+        const db = {
+            expedientes: state.expedientes,
+            facturas: state.facturas,
+            historialCorreos: state.historialCorreos,
+            bitacoraSeguridad: state.bitacoraSeguridad
+        };
+        localStorage.setItem('coepriss_db', JSON.stringify(db));
+        window.dispatchEvent(new Event('coepriss_db_updated'));
+    } catch (e) {
+        console.error('Error al guardar datos en almacenamiento local:', e);
+    }
+}
+
+function loadDatabaseFromStorage() {
+    try {
+        const saved = localStorage.getItem('coepriss_db');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed.expedientes) && parsed.expedientes.length > 0) state.expedientes = parsed.expedientes;
+            if (Array.isArray(parsed.facturas) && parsed.facturas.length > 0) state.facturas = parsed.facturas;
+            if (Array.isArray(parsed.historialCorreos) && parsed.historialCorreos.length > 0) state.historialCorreos = parsed.historialCorreos;
+            if (Array.isArray(parsed.bitacoraSeguridad) && parsed.bitacoraSeguridad.length > 0) state.bitacoraSeguridad = parsed.bitacoraSeguridad;
+        } else {
+            // Initialize default persistent database
+            saveDatabaseToStorage();
+        }
+    } catch (e) {
+        console.error('Error al cargar datos:', e);
+    }
+}
+
+// Authentication & Session Guard
+function checkAuthSession() {
+    const session = localStorage.getItem('coepriss_session');
+    const loginContainer = document.getElementById('login-container');
+    const appContainer = document.getElementById('app-main-container');
+
+    if (session) {
+        try {
+            const user = JSON.parse(session);
+            state.currentUser = user;
+
+            if (loginContainer) loginContainer.style.display = 'none';
+            if (appContainer) appContainer.style.display = 'flex';
+
+            updateUserHeaderUi();
+            initInactivityTimer();
+            return true;
+        } catch (e) {
+            localStorage.removeItem('coepriss_session');
+        }
+    }
+
+    if (loginContainer) loginContainer.style.display = 'flex';
+    if (appContainer) appContainer.style.display = 'none';
+    return false;
+}
+
+function handleLoginSubmit(event) {
+    event.preventDefault();
+
+    const now = Date.now();
+    if (now < loginLockUntil) {
+        const secondsLeft = Math.ceil((loginLockUntil - now) / 1000);
+        showLoginError(`Acceso bloqueado. Reintente en ${secondsLeft} segundos.`);
+        return;
+    }
+
+    const usernameInput = document.getElementById('login-username').value.trim().toLowerCase();
+    const passwordInput = document.getElementById('login-password').value.trim();
+
+    const userConfig = AUTH_USERS[usernameInput] || (usernameInput === 'brenda' ? AUTH_USERS['brenda.gonzalez'] : (usernameInput === 'jose' ? AUTH_USERS['jose.perez'] : null));
+
+    if (userConfig && userConfig.password === passwordInput) {
+        loginFailedAttempts = 0;
+        hideLoginError();
+
+        const sessionUser = {
+            id: userConfig.id,
+            name: userConfig.name,
+            role: userConfig.role,
+            avatar: userConfig.avatar
+        };
+        state.currentUser = sessionUser;
+        localStorage.setItem('coepriss_session', JSON.stringify(sessionUser));
+
+        addSecurityLog('Inicio de Sesión', `Acceso autorizado para ${userConfig.name} (${userConfig.role}).`);
+        saveDatabaseToStorage();
+
+        showToast(`¡Bienvenido(a), ${userConfig.name}!`, 'success');
+
+        const loginContainer = document.getElementById('login-container');
+        const appContainer = document.getElementById('app-main-container');
+        if (loginContainer) loginContainer.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'flex';
+
+        updateUserHeaderUi();
+        renderProcesoTable();
+        renderReportTable();
+        renderBitacoraTable();
+        renderCorreosTable();
+        updateDashboardCounts();
+        initInactivityTimer();
+        goToPanel('panel-inicio');
+    } else {
+        loginFailedAttempts++;
+        addSecurityLog('Fallo de Autenticación', `Intento fallido de inicio de sesión para el usuario "${usernameInput}".`);
+        saveDatabaseToStorage();
+
+        if (loginFailedAttempts >= 3) {
+            loginLockUntil = Date.now() + 30000;
+            showLoginError('Acceso bloqueado temporalmente por 30 segundos debido a 3 intentos fallidos.');
+            startLoginLockCountdown(30);
+        } else {
+            showLoginError(`Usuario o contraseña incorrectos. Intentos restantes: ${3 - loginFailedAttempts}`);
+        }
+    }
+}
+
+function startLoginLockCountdown(seconds) {
+    const btn = document.getElementById('btn-login-submit');
+    if (!btn) return;
+
+    btn.disabled = true;
+    let remaining = seconds;
+
+    const interval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(interval);
+            btn.disabled = false;
+            const btnSpan = btn.querySelector('span');
+            if (btnSpan) btnSpan.textContent = 'Ingresar al sistema';
+            hideLoginError();
+        } else {
+            const btnSpan = btn.querySelector('span');
+            if (btnSpan) btnSpan.textContent = `Bloqueado (${remaining}s)`;
+        }
+    }, 1000);
+}
+
+function handleLogout() {
+    localStorage.removeItem('coepriss_session');
+    showToast('Sesión cerrada correctamente.', 'info');
+
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+
+    const loginContainer = document.getElementById('login-container');
+    const appContainer = document.getElementById('app-main-container');
+
+    if (loginContainer) loginContainer.style.display = 'flex';
+    if (appContainer) appContainer.style.display = 'none';
+
+    const usernameInput = document.getElementById('login-username');
+    const passwordInput = document.getElementById('login-password');
+    if (usernameInput) usernameInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    hideLoginError();
+}
+
+function togglePasswordVisibility() {
+    const passInput = document.getElementById('login-password');
+    const eyeIcon = document.getElementById('eye-icon');
+    if (!passInput) return;
+
+    if (passInput.type === 'password') {
+        passInput.type = 'text';
+        if (eyeIcon) eyeIcon.setAttribute('stroke', '#0040A8');
+    } else {
+        passInput.type = 'password';
+        if (eyeIcon) eyeIcon.setAttribute('stroke', 'currentColor');
+    }
+}
+
+function showForgotModal() {
+    showToast('Contacte al departamento de TI en soporte.ti@coepriss.gob.mx para restablecer sus credenciales.', 'info');
+}
+
+function showLoginError(msg) {
+    const errBox = document.getElementById('login-error-msg');
+    if (errBox) {
+        errBox.textContent = msg;
+        errBox.style.display = 'block';
+    }
+}
+
+function hideLoginError() {
+    const errBox = document.getElementById('login-error-msg');
+    if (errBox) {
+        errBox.style.display = 'none';
+    }
+}
+
+function updateUserHeaderUi() {
+    const u = state.currentUser;
+    if (!u) return;
+
+    document.querySelectorAll('.user-avatar-gold, .user-avatar').forEach(el => el.textContent = u.avatar || 'BG');
+    document.querySelectorAll('.user-name-top, .user-name').forEach(el => el.textContent = u.name || 'Brenda González');
+    document.querySelectorAll('.user-role-top, .user-role').forEach(el => el.textContent = u.role || 'Administrador');
+}
+
+function initInactivityTimer() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+
+    const resetTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        // Auto logout after 15 minutes of inactivity (900,000 ms)
+        inactivityTimer = setTimeout(() => {
+            if (localStorage.getItem('coepriss_session')) {
+                showToast('Su sesión ha expirado por inactividad.', 'warning');
+                handleLogout();
+            }
+        }, 900000);
     };
 
-    Object.entries(unavailablePanels).forEach(([id, message]) => {
-        const panel = document.getElementById(id);
-        if (!panel) return;
-        const step = Number(id.split('-').pop());
-        panel.innerHTML = `
-            <div class="service-unavailable-card app-card">
-                <div class="service-unavailable-icon">!</div>
-                <div>
-                    <h2 class="panel-title">Servicio pendiente de configurar</h2>
-                    <p>${message}</p>
-                    <p class="service-unavailable-note">El boton responde, pero no se generaran resultados fiscales falsos.</p>
-                    <div class="service-unavailable-actions">
-                        <button type="button" class="btn btn-secondary" onclick="goBackFromServiceStep(${step})">Regresar</button>
-                        <button type="button" class="btn btn-primary" onclick="openRequiredConfiguration(${step})">Ver configuracion necesaria</button>
-                    </div>
-                </div>
-            </div>`;
+    ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
+        window.addEventListener(evt, resetTimer, { passive: true });
     });
+    resetTimer();
+}
 
-    [4, 5, 6].forEach(step => {
-        const node = document.querySelector(`.step-node[data-step="${step}"]`);
-        if (node) {
-            node.classList.add('service-pending-step');
-            node.title = 'Abrir requisitos de configuracion';
-            node.removeAttribute('aria-disabled');
-        }
-    });
-
-    const apiButton = document.getElementById('btn-api-banco');
-    if (apiButton) {
-        apiButton.disabled = false;
-        apiButton.textContent = 'Consultar en Banxico CEP';
-        apiButton.title = 'Abrir la consulta oficial del CEP de Banco de México';
-    }
-    const manualButton = document.getElementById('btn-manual-banco');
-    if (manualButton) {
-        manualButton.disabled = false;
-        manualButton.textContent = 'Registrar validacion externa';
-        manualButton.title = 'Muestra los requisitos; no valida el pago sin evidencia bancaria real';
-    }
-
-    const stampButton = document.getElementById('btn-pac-stamp');
-    if (stampButton) {
-        stampButton.disabled = true;
-        stampButton.textContent = 'Timbrado PAC no configurado';
-    }
-    const csdPassword = document.getElementById('pac-csd-password');
-    if (csdPassword) {
-        csdPassword.value = '';
-        csdPassword.disabled = true;
-    }
-    const csdStatus = document.getElementById('csd-status');
-    if (csdStatus) {
-        csdStatus.textContent = 'CSD no configurado. Las llaves privadas no se guardan en el navegador.';
-        csdStatus.style.color = 'var(--warning-color)';
-    }
-    const pacCsdStatus = document.getElementById('lbl-pac-csd-status');
-    if (pacCsdStatus) {
-        pacCsdStatus.textContent = 'CSD no configurado';
-        pacCsdStatus.style.color = 'var(--warning-color)';
-    }
-
-    const roleSelect = document.getElementById('select-user-role');
-    if (roleSelect) roleSelect.disabled = true;
-    document.querySelectorAll('button[onclick^="loadPresetDossier"]').forEach(button => button.remove());
-    document.querySelectorAll('h3').forEach(title => {
-        if (title.textContent.toLowerCase().includes('presets')) title.remove();
-        if (title.textContent.toLowerCase().includes('simulaci')) title.textContent = 'Autenticacion no configurada';
-    });
-
-    const activityTitle = Array.from(document.querySelectorAll('h3')).find(title => title.textContent.includes('Actividad Reciente'));
-    const activityList = activityTitle?.parentElement.querySelector('ul');
-    if (activityList) activityList.innerHTML = '<li style="color: #6c757d;">Sin actividad persistente registrada.</li>';
-
-    ['dash-timbradas-count', 'dash-proc-count', 'dash-correos-count'].forEach(id => {
-        const counter = document.getElementById(id);
-        const card = counter?.closest('.app-card');
-        const caption = card?.querySelectorAll('span')[1];
-        if (caption) caption.textContent = 'Sin datos persistentes';
-    });
-
-    const avatar = document.querySelector('.user-avatar-gold');
-    const userName = document.querySelector('.user-name-top');
-    const userRole = document.querySelector('.user-role-top');
-    const sidebarName = document.querySelector('.sidebar-footer .user-name');
-    const sidebarRole = document.querySelector('.sidebar-footer .user-role');
-    if (avatar) avatar.textContent = '--';
-    if (userName) userName.textContent = 'Sin sesion';
-    if (userRole) userRole.textContent = 'Autenticacion no configurada';
-    if (sidebarName) sidebarName.textContent = 'Sin sesion';
-    if (sidebarRole) sidebarRole.textContent = 'Autenticacion pendiente';
-
-    renderReportTable();
+function sanitizeUnconfiguredUi() {
+    // Keep UI ready and responsive
+    updateUserHeaderUi();
 }
 
 function initGlobalButtonActions() {
@@ -425,6 +562,9 @@ function initConfigurationControls() {
 
 // Document Log Init
 document.addEventListener('DOMContentLoaded', () => {
+    loadDatabaseFromStorage();
+    const isAuthenticated = checkAuthSession();
+
     initNavigation();
     initDragAndDrop();
     initDocumentPicker();
@@ -438,10 +578,32 @@ document.addEventListener('DOMContentLoaded', () => {
     renderBitacoraTable();
     renderReportTable();
     updateDashboardCounts();
-    sanitizeUnconfiguredUi();
     
-    // Start at Dashboard
-    goToPanel('panel-inicio');
+    // Multi-tab / Multi-window Real-time Sync
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'coepriss_db') {
+            loadDatabaseFromStorage();
+            renderProcesoTable();
+            renderCorreosTable();
+            renderClientesTable();
+            renderBitacoraTable();
+            renderReportTable();
+            updateDashboardCounts();
+        }
+    });
+
+    window.addEventListener('coepriss_db_updated', () => {
+        renderProcesoTable();
+        renderCorreosTable();
+        renderClientesTable();
+        renderBitacoraTable();
+        renderReportTable();
+        updateDashboardCounts();
+    });
+
+    if (isAuthenticated) {
+        goToPanel('panel-inicio');
+    }
 });
 
 // 1. Navigation & Panel Control

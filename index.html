@@ -7,7 +7,143 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- LOGIN SCREEN WRAPPER -->
+    <div id="login-container" class="login-wrapper">
+        <div class="login-bg-split">
+            <div class="login-bg-left" style="background-image: url('login_bg_coastal.jpg');"></div>
+            <div class="login-bg-right" style="background-image: url('login_bg_lab.jpg');"></div>
+            <div class="login-bg-overlay"></div>
+            <div class="login-waves">
+                <svg viewBox="0 0 1440 320" preserveAspectRatio="none">
+                    <path fill="#0A2240" fill-opacity="0.85" d="M0,192L48,202.7C96,213,192,235,288,224C384,213,480,171,576,165.3C672,160,768,192,864,208C960,224,1056,224,1152,208C1248,192,1344,160,1392,144L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
+                    <path fill="#1a3a60" fill-opacity="0.6" d="M0,256L48,245.3C96,235,192,213,288,218.7C384,224,480,256,576,261.3C672,267,768,245,864,224C960,203,1056,181,1152,186.7C1248,192,1344,224,1392,240L1440,256L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="login-card-container">
+            <div class="login-card">
+                <!-- Header -->
+                <div class="login-card-header">
+                    <div class="login-logo-group">
+                        <svg class="login-logo-svg" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" stroke="#0A2240" stroke-width="2" fill="none" />
+                            <path d="M50 15 L80 35 L80 65 L50 85 L20 65 L20 35 Z" fill="#0A2240" opacity="0.8" />
+                            <path d="M50 20 L50 80 M20 50 L80 50" stroke="#C8A84B" stroke-width="2" />
+                            <polygon points="50,30 55,42 68,42 58,50 62,62 50,54 38,62 42,50 32,42 45,42" fill="#C8A84B" />
+                        </svg>
+                        <div class="login-logo-text">
+                            <span class="login-brand-title">COEPRISS</span>
+                            <span class="login-brand-sub">COMISIÓN ESTATAL PARA LA PROTECCIÓN<br>CONTRA RIESGOS SANITARIOS DE SINALOA</span>
+                        </div>
+                    </div>
+                    <div class="login-header-divider"></div>
+                    <div class="login-system-title-group">
+                        <span class="login-system-title">FACTURAS</span>
+                        <span class="login-system-sub">Sistema de Facturación<br>Electrónica</span>
+                        <div class="login-title-gold-bar"></div>
+                    </div>
+                </div>
+
+                <!-- Central Badge Icon -->
+                <div class="login-icon-badge">
+                    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h2m-2 0H9" />
+                    </svg>
+                </div>
+
+                <!-- Welcome Text -->
+                <h2 class="login-welcome-title">Bienvenido al sistema</h2>
+                <p class="login-welcome-desc">Ingrese sus credenciales para acceder al<br>Sistema de Facturación Electrónica.</p>
+
+                <!-- Form -->
+                <form id="form-login" onsubmit="handleLoginSubmit(event)">
+                    <div class="form-group margin-bottom-16">
+                        <label class="login-label">Usuario</label>
+                        <div class="login-input-wrapper">
+                            <svg class="login-input-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                            <input type="text" id="login-username" class="login-input" placeholder="Ingrese su usuario" required autocomplete="username">
+                        </div>
+                    </div>
+
+                    <div class="form-group margin-bottom-12">
+                        <label class="login-label">Contraseña</label>
+                        <div class="login-input-wrapper">
+                            <svg class="login-input-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                            <input type="password" id="login-password" class="login-input" placeholder="Ingrese su contraseña" required autocomplete="current-password">
+                            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()" title="Mostrar/ocultar contraseña">
+                                <svg id="eye-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="forgot-password-container">
+                        <a href="#" onclick="showForgotModal(); return false;" class="forgot-password-link">¿Olvidó su contraseña?</a>
+                    </div>
+
+                    <div id="login-error-msg" class="login-error-alert" style="display: none;"></div>
+
+                    <button type="submit" id="btn-login-submit" class="btn-login-primary">
+                        <span>Ingresar al sistema</span>
+                        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                        </svg>
+                    </button>
+                </form>
+
+                <!-- Demo Credentials Helper Card -->
+                <div class="login-credentials-hint">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: #0A2240; margin-bottom: 4px;">Credenciales de Demostración:</div>
+                    <div style="font-size: 0.72rem; color: #495057;">• Admin: <code>brenda.gonzalez</code> / <code>SinaloaFacturas2026</code></div>
+                    <div style="font-size: 0.72rem; color: #495057;">• Auditor: <code>jose.perez</code> / <code>SinaloaAuditor2026</code></div>
+                </div>
+
+                <!-- Card Bottom Pillars -->
+                <div class="login-card-pillars">
+                    <div class="login-pillar-item">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        <span>Protección<br>sanitaria</span>
+                    </div>
+                    <div class="login-pillar-divider"></div>
+                    <div class="login-pillar-item">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span>Facturación<br>confiable</span>
+                    </div>
+                    <div class="login-pillar-divider"></div>
+                    <div class="login-pillar-item">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <span>Compromiso<br>con Sinaloa</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Text -->
+            <div class="login-page-footer">
+                <span>© 2026 COEPRISS</span>
+                <span class="footer-dot">|</span>
+                <span>Sistema de Facturación Electrónica</span>
+                <span class="footer-dot">|</span>
+                <span>Versión 2.0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER (GUARDED) -->
+    <div class="app-container" id="app-main-container" style="display: none;">
         <!-- 1. Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -163,6 +299,12 @@
                             <span class="user-role-top">Administrador</span>
                         </div>
                     </div>
+                    <button class="btn-logout-top" onclick="handleLogout()" title="Cerrar sesión">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width: 15px; height: 15px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                        <span>Cerrar sesión</span>
+                    </button>
                 </div>
             </div>
 
