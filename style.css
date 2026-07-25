@@ -2557,6 +2557,11 @@ body {
     text-align: center;
 }
 
+.login-optional-label {
+    color: #6B7280;
+    font-weight: 400;
+}
+
 /* Login Button */
 .btn-login-primary {
     width: 100%;
@@ -2586,6 +2591,32 @@ body {
     opacity: 0.65;
     cursor: not-allowed;
     transform: none;
+}
+
+.btn-login-secondary {
+    width: 100%;
+    min-height: 40px;
+    margin-top: 10px;
+    border: 1px solid #9CA3AF;
+    border-radius: 9px;
+    background: #FFFFFF;
+    color: #0A2240;
+    font-family: inherit;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-login-secondary:hover {
+    border-color: #0040A8;
+    color: #0040A8;
+    background: #F8FAFC;
+}
+
+.btn-login-secondary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
 }
 
 .btn-login-primary svg {
