@@ -393,7 +393,6 @@ function showSystemNotifications() {
     panel.innerHTML = [
         '<strong>Estado del sistema</strong>',
         '<div class="system-notice notice-ok">OCR local disponible</div>',
-        '<div class="system-notice notice-warning">Conciliacion: consulta manual en Banxico CEP</div>',
         '<div class="system-notice notice-warning">PAC y correo: requieren backend y credenciales</div>'
     ].join('');
     button.parentElement.appendChild(panel);
@@ -415,11 +414,6 @@ function goBackFromServiceStep(step) {
     if (!state.activeExpediente) {
         goToStep(1);
         showToast('Regresaste a recepcion porque aun no hay un documento procesado.', 'info');
-        return;
-    }
-    if (step === 4 && !hasRealPaymentValidation()) {
-        goToStep(2);
-        showToast('Regresaste a la validacion: el pago debe confirmarse antes de abrir la vista previa.', 'warning');
         return;
     }
     goToStep(Math.max(1, step - 1));
@@ -523,8 +517,6 @@ function initNavigation() {
             } else if ([4, 5, 6].includes(step)) {
                 goToStep(step);
                 showToast('Este paso abre correctamente, pero requiere configurar el servicio real indicado.', 'warning');
-            } else if (step === 3 && state.activeExpediente && !hasRealPaymentValidation()) {
-                showToast('La vista previa requiere una validacion bancaria real del pago.', 'error');
             } else if (state.activeExpediente) {
                 goToStep(step);
             } else {
@@ -745,7 +737,7 @@ function startScanAnimationLegacyDemo() {
         // Mark files as scanned (OCR)
         if (state.activeExpediente) {
             state.activeExpediente.archivos.forEach(file => file.status = 'Leído correctamente (OCR)');
-            state.activeExpediente.estatus = 'Pago pendiente';
+            state.activeExpediente.estatus = 'Datos extraídos';
             addAuditLogToActive('Documentos leídos mediante OCR.');
             
             // Register safety log
@@ -916,8 +908,7 @@ async function startScanAnimation() {
         updatePreviewFields();
         renderTimeline();
         updatePaymentValidationUI();
-        showToast('⚠ Pago no validado. El comprobante fue leído, pero falta confirmación bancaria real.', 'error');
-        showToast('Lectura terminada. Revisa los datos; el pago no está validado.', 'info');
+        showToast('Lectura terminada. Revisa o corrige los datos extraídos antes de continuar.', 'info');
         goToStep(2);
     } catch (error) {
         console.error('OCR error:', error);
@@ -2319,59 +2310,24 @@ function validatePaymentManual() {
     showToast('No se cambio el estatus: falta evidencia bancaria y autorizacion contable identificable.', 'warning');
 }
 
-function hasRealPaymentValidation(expediente = state.activeExpediente) {
-    return Boolean(expediente && ['Pago validado', 'Autorizado', 'Timbrado', 'Entregado'].includes(expediente.estatus));
-}
-
 function updatePaymentValidationUI() {
-    if (!state.activeExpediente) return;
-
-    const valBox = document.getElementById('box-validacion-pago');
-    const valTitle = document.getElementById('lbl-validacion-pago-title');
-    const valDesc = document.getElementById('lbl-validacion-pago-desc');
-    const valIcon = document.getElementById('icon-validacion-pago');
     const confirmBtn = document.getElementById('btn-confirm-step2');
+    if (!confirmBtn) return;
 
-    if (state.activeExpediente.estatus === 'Pago validado' || state.activeExpediente.estatus === 'Autorizado' || state.activeExpediente.estatus === 'Timbrado' || state.activeExpediente.estatus === 'Entregado') {
-        valBox.classList.remove('payment-not-validated');
-        valBox.style.borderColor = 'var(--success-color)';
-        valBox.style.backgroundColor = 'var(--success-bg)';
-        valTitle.textContent = 'Pago Conciliado y Validado';
-        valTitle.style.color = 'var(--success-color)';
-        valDesc.textContent = `confirmado en la cuenta estatal por $${state.activeExpediente.importe.toFixed(2)} MXN.`;
-        valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
-        valIcon.setAttribute('class', 'badge-icon text-success');
-        valIcon.style.color = 'var(--success-color)';
-        confirmBtn.disabled = false;
-        confirmBtn.classList.remove('btn-business-blocked');
-        confirmBtn.title = 'Continuar a la vista previa';
-    } else {
-        valBox.classList.add('payment-not-validated');
-        valBox.style.borderColor = '#c92a2a';
-        valBox.style.backgroundColor = '#fff5f5';
-        valTitle.textContent = 'Pago no validado';
-        valTitle.style.color = '#c92a2a';
-        valDesc.textContent = 'No existe una confirmación bancaria real. El comprobante no autoriza el pago.';
-        valIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
-        valIcon.setAttribute('class', 'badge-icon-stroke text-danger');
-        valIcon.style.color = '#c92a2a';
-        confirmBtn.disabled = false;
-        confirmBtn.classList.add('btn-business-blocked');
-        confirmBtn.title = 'Pulsa para ver por que el tramite aun no puede continuar';
-    }
+    const hasExpediente = Boolean(state.activeExpediente);
+    confirmBtn.disabled = !hasExpediente;
+    confirmBtn.classList.remove('btn-business-blocked');
+    confirmBtn.title = hasExpediente
+        ? 'Confirma que revisaste los datos del expediente antes de continuar.'
+        : 'Carga y procesa un documento para continuar.';
 }
 
 function confirmStep2() {
     if (!state.activeExpediente) return;
-    if (!hasRealPaymentValidation()) {
-        showToast('No se puede continuar: el pago aun no tiene validacion bancaria real.', 'error');
-        updatePaymentValidationUI();
-        return;
-    }
-    
-    state.activeExpediente.estatus = 'Autorizado';
-    addAuditLogToActive('Trámite autorizado. Expediente listo para timbrar.');
-    
+
+    state.activeExpediente.estatus = 'Datos confirmados';
+    addAuditLogToActive('Datos del expediente confirmados manualmente por el usuario.');
+    saveDatabaseToStorage();
     goToStep(3);
 }
 
@@ -2876,61 +2832,132 @@ function getCurrentDateTimeString() {
     return `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
 }
 
-// 11. Modal fiscal details update manual edits (Step 2 fallback)
+// 11. Edición manual completa del expediente (Step 2)
+const EXPEDIENTE_TEXT_EDIT_FIELDS = [
+    ['edit-rfc', 'rfc', true],
+    ['edit-razon', 'cliente'],
+    ['edit-regimen', 'regimenFiscal'],
+    ['edit-cp', 'codigoPostal'],
+    ['edit-cfdi', 'usoCfdi'],
+    ['edit-correo', 'correo'],
+    ['edit-rfc-emisor', 'rfcEmisor', true],
+    ['edit-nombre-emisor', 'nombreEmisor'],
+    ['edit-regimen-emisor', 'regimenFiscalEmisor'],
+    ['edit-tipo-cfdi', 'tipoCfdi', false, true],
+    ['edit-fecha-emision', 'fechaEmision'],
+    ['edit-fecha-certificacion', 'fechaCertificacion'],
+    ['edit-uuid', 'uuid', true],
+    ['edit-metodo-pago', 'metodoPago'],
+    ['edit-moneda', 'moneda', true],
+    ['edit-clave-prodserv', 'claveProdServ'],
+    ['edit-cantidad', 'cantidad'],
+    ['edit-clave-unidad', 'claveUnidad', true],
+    ['edit-unidad', 'unidad'],
+    ['edit-objeto-impuesto', 'objetoImpuesto'],
+    ['edit-no-serie-csd', 'noSerieCsd'],
+    ['edit-rfc-proveedor', 'rfcProveedorCertificacion', true],
+    ['edit-no-serie-sat', 'noSerieCertificadoSat'],
+    ['edit-folio-recibo', 'folioRecibo'],
+    ['edit-fecha-pago', 'fechaPago'],
+    ['edit-concepto', 'concepto'],
+    ['edit-banco', 'banco'],
+    ['edit-banco-emisor', 'bancoEmisor'],
+    ['edit-banco-receptor', 'bancoReceptor'],
+    ['edit-banco-emisor-codigo', 'bancoEmisorCodigo'],
+    ['edit-banco-receptor-codigo', 'bancoReceptorCodigo'],
+    ['edit-referencia', 'referencia'],
+    ['edit-clave-rastreo', 'claveRastreo', true],
+    ['edit-cuenta-beneficiaria', 'cuentaBeneficiaria'],
+    ['edit-forma-pago', 'formaPago']
+];
+
+const EXPEDIENTE_AMOUNT_EDIT_FIELDS = [
+    ['edit-subtotal', 'subtotal', 'subtotal'],
+    ['edit-importe', 'importe', 'total del CFDI'],
+    ['edit-valor-unitario', 'valorUnitario', 'valor unitario'],
+    ['edit-importe-linea', 'importeLinea', 'importe de la partida'],
+    ['edit-importe-pago', 'importePago', 'importe pagado']
+];
+
+function formatEditableAmount(value) {
+    return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '';
+}
+
 function openEditModal() {
     if (!state.activeExpediente) return;
-    document.getElementById('edit-rfc').value = state.activeExpediente.rfc;
-    document.getElementById('edit-razon').value = state.activeExpediente.cliente;
-    document.getElementById('edit-regimen').value = state.activeExpediente.regimenFiscal;
-    document.getElementById('edit-cp').value = state.activeExpediente.codigoPostal;
-    document.getElementById('edit-cfdi').value = state.activeExpediente.usoCfdi;
-    document.getElementById('edit-correo').value = state.activeExpediente.correo;
+    const dossier = state.activeExpediente;
+
+    EXPEDIENTE_TEXT_EDIT_FIELDS.forEach(([id, field]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = dossier[field] ?? '';
+    });
+    EXPEDIENTE_AMOUNT_EDIT_FIELDS.forEach(([id, field]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = formatEditableAmount(dossier[field]);
+    });
 
     document.getElementById('modal-edit-fiscal').classList.add('open');
 }
 
-function saveFiscalData(event) {
+function parseManualAmount(input, fieldLabel) {
+    const raw = input.value.trim();
+    if (!raw) return { value: null };
+    const amount = Number(raw.replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(amount) || amount < 0) {
+        input.focus();
+        showToast(`Captura un ${fieldLabel} válido.`, 'error');
+        return { error: true };
+    }
+    return { value: amount };
+}
+
+async function saveFiscalData(event) {
     event.preventDefault();
     if (!state.activeExpediente) return;
 
-    const requiredFields = [
-        ['edit-rfc', 'RFC'],
-        ['edit-razon', 'razon social'],
-        ['edit-regimen', 'regimen fiscal'],
-        ['edit-cp', 'codigo postal'],
-        ['edit-cfdi', 'uso CFDI'],
-        ['edit-correo', 'correo electronico']
-    ];
-    const missing = requiredFields.find(([id]) => !document.getElementById(id)?.value.trim());
-    if (missing) {
-        document.getElementById(missing[0])?.focus();
-        showToast(`Completa el campo ${missing[1]} antes de guardar.`, 'error');
+    const rfcInput = document.getElementById('edit-rfc');
+    const razonInput = document.getElementById('edit-razon');
+    if (!rfcInput.value.trim() || !razonInput.value.trim()) {
+        const missingInput = !rfcInput.value.trim() ? rfcInput : razonInput;
+        missingInput.focus();
+        showToast('Completa RFC y razón social antes de guardar.', 'error');
         return;
     }
+
     const emailInput = document.getElementById('edit-correo');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim())) {
+    const email = emailInput.value.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         emailInput.focus();
-        showToast('Captura un correo electronico valido antes de guardar.', 'error');
+        showToast('Captura un correo electrónico válido o déjalo vacío.', 'error');
         return;
     }
-    
-    state.activeExpediente.rfc = document.getElementById('edit-rfc').value.trim().toUpperCase();
-    state.activeExpediente.cliente = document.getElementById('edit-razon').value.trim();
-    state.activeExpediente.regimenFiscal = document.getElementById('edit-regimen').value.trim();
-    state.activeExpediente.codigoPostal = document.getElementById('edit-cp').value.trim();
-    state.activeExpediente.usoCfdi = document.getElementById('edit-cfdi').value.trim();
-    state.activeExpediente.correo = document.getElementById('edit-correo').value.trim();
 
-    addAuditLogToActive('Datos fiscales modificados manualmente por el usuario.');
-    addSecurityLog('Modificación Datos Fiscales', `Datos fiscales del expediente ${state.activeExpediente.folio} modificados.`);
+    const dossier = state.activeExpediente;
+    for (const [id, field, uppercase, lowercase] of EXPEDIENTE_TEXT_EDIT_FIELDS) {
+        const input = document.getElementById(id);
+        let value = input ? input.value.trim() : '';
+        if (uppercase) value = value.toUpperCase();
+        if (lowercase) value = value.toLowerCase();
+        dossier[field] = value;
+    }
 
-    // Re-render
+    for (const [id, field, label] of EXPEDIENTE_AMOUNT_EDIT_FIELDS) {
+        const input = document.getElementById(id);
+        const parsed = parseManualAmount(input, label);
+        if (parsed.error) return;
+        dossier[field] = parsed.value;
+    }
+
+    addAuditLogToActive('Datos del expediente modificados manualmente por el usuario.');
+    addSecurityLog('Modificación manual', `Datos del expediente ${dossier.folio} modificados.`);
     updateStep2Fields();
     updatePreviewFields();
     renderTimeline();
-
+    updatePaymentValidationUI();
     closeModal('modal-edit-fiscal');
-    showToast('Datos fiscales actualizados correctamente.', 'success');
+
+    const saved = await saveDatabaseToStorage();
+    if (saved) showToast('Datos del expediente actualizados y guardados.', 'success');
 }
 
 // La vista previa sólo abre el archivo original seleccionado por el usuario.

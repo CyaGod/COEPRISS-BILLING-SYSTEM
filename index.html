@@ -587,10 +587,10 @@
                         <!-- Fiscal Data Section -->
                         <div class="data-card-section" style="border-bottom: 1px solid #eaeaea; padding-bottom: 20px; margin-bottom: 0;">
                             <div class="section-card-header">
-                                <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Datos fiscales</h3>
-                                <button class="btn-link" onclick="openEditModal()" style="background: none; border: none; color: #d93025; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Datos del expediente</h3>
+                                <button class="btn-link" onclick="openEditModal()" aria-label="Editar todos los datos del expediente" style="background: none; border: none; color: #d93025; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                                    Editar
+                                    Editar datos
                                 </button>
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-top: 10px;">
@@ -682,29 +682,6 @@
                             </div>
                         </div>
 
-                        <!-- Bank Verification Section -->
-                        <div class="data-card-section" style="border-bottom: none; padding-bottom: 0; margin-bottom: 0;">
-                            <div class="section-card-header">
-                                <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Conciliación y Validación de Pago</h3>
-                            </div>
-                            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 12px;">
-                                <div style="display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 6px; border: 1.5px solid #dee2e6; background-color: #f8f9fa;" id="box-validacion-pago">
-                                    <svg class="badge-icon-stroke text-warning" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="width: 20px; height: 20px;" id="icon-validacion-pago"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    <div style="display: flex; flex-direction: column; line-height: 1.3;">
-                                        <span style="font-size: 0.8rem; font-weight: 700; color: #495057;" id="lbl-validacion-pago-title">Pendiente de Conciliación Bancaria</span>
-                                        <span style="font-size: 0.7rem; color: #868e96;" id="lbl-validacion-pago-desc">El pago debe ser validado contra el estado de cuenta.</span>
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <button class="btn btn-secondary" id="btn-api-banco" onclick="validatePaymentViaAPI()" style="font-size: 0.78rem; padding: 8px 16px; border: 1.5px solid var(--primary-color); color: var(--primary-color); background: none;">
-                                        Consultar Pago en Banco (API)
-                                    </button>
-                                    <button class="btn btn-secondary" id="btn-manual-banco" onclick="validatePaymentManual()" style="font-size: 0.78rem; padding: 8px 16px;">
-                                        Validación Manual
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Dossier Expediente Digital Card -->
@@ -719,7 +696,7 @@
 
                     <div class="btn-container" style="border-top: none; padding-top: 5px;">
                         <button class="btn btn-primary" id="btn-confirm-step2" onclick="confirmStep2()" style="padding: 10px 24px;" disabled>
-                            Confirmar y continuar
+                            Confirmar datos y continuar
                         </button>
                     </div>
                 </section>
@@ -1128,44 +1105,84 @@
         </div>
     </div>
 
-    <!-- MODAL: EDITAR DATOS FISCALES -->
+    <!-- MODAL: EDICIÓN MANUAL DEL EXPEDIENTE -->
     <div class="modal-overlay" id="modal-edit-fiscal">
-        <div class="modal-container">
+        <div class="modal-container" style="max-width: 900px;">
             <div class="modal-header">
-                <h3 class="modal-title">Editar Datos Fiscales</h3>
-                <button class="modal-close-btn" onclick="closeModal('modal-edit-fiscal')">&times;</button>
+                <h3 class="modal-title">Editar datos del expediente</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-edit-fiscal')" aria-label="Cerrar edición">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="max-height: 68vh; overflow-y: auto;">
+                <p style="margin: 0 0 16px; color: #5f6b7a; font-size: 0.86rem;">Corrige o completa manualmente cualquier dato que el OCR no haya leído correctamente. Los campos vacíos son opcionales.</p>
                 <form id="form-edit-fiscal" onsubmit="saveFiscalData(event)" novalidate>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-rfc">RFC</label>
-                        <input type="text" id="edit-rfc" class="form-control" value="" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-razon">Razón social</label>
-                        <input type="text" id="edit-razon" class="form-control" value="" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-regimen">Régimen fiscal</label>
-                        <input type="text" id="edit-regimen" class="form-control" value="" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-cp">Código postal</label>
-                        <input type="text" id="edit-cp" class="form-control" value="" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-cfdi">Uso CFDI</label>
-                        <input type="text" id="edit-cfdi" class="form-control" value="" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="edit-correo">Correo electrónico</label>
-                        <input type="email" id="edit-correo" class="form-control" value="" required>
-                    </div>
+                    <details open style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos fiscales del receptor</summary>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
+                            <div class="form-group"><label class="form-label" for="edit-rfc">RFC</label><input type="text" id="edit-rfc" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-razon">Razón social</label><input type="text" id="edit-razon" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-regimen">Régimen fiscal</label><input type="text" id="edit-regimen" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-cp">Código postal</label><input type="text" id="edit-cp" class="form-control" inputmode="numeric" maxlength="5" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-cfdi">Uso CFDI</label><input type="text" id="edit-cfdi" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-correo">Correo electrónico</label><input type="email" id="edit-correo" class="form-control" autocomplete="off"></div>
+                        </div>
+                    </details>
+
+                    <details style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos del CFDI detectado</summary>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
+                            <div class="form-group"><label class="form-label" for="edit-rfc-emisor">RFC emisor</label><input type="text" id="edit-rfc-emisor" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-nombre-emisor">Nombre emisor</label><input type="text" id="edit-nombre-emisor" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-regimen-emisor">Régimen emisor</label><input type="text" id="edit-regimen-emisor" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-tipo-cfdi">Efecto del comprobante</label><input type="text" id="edit-tipo-cfdi" class="form-control" placeholder="Ingreso, egreso..." autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-fecha-emision">Fecha de emisión</label><input type="text" id="edit-fecha-emision" class="form-control" placeholder="DD/MM/AAAA" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-fecha-certificacion">Fecha de certificación</label><input type="text" id="edit-fecha-certificacion" class="form-control" placeholder="DD/MM/AAAA" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-uuid">Folio fiscal (UUID)</label><input type="text" id="edit-uuid" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-metodo-pago">Método de pago</label><input type="text" id="edit-metodo-pago" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-moneda">Moneda</label><input type="text" id="edit-moneda" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-subtotal">Subtotal</label><input type="text" id="edit-subtotal" class="form-control" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-importe">Total del CFDI</label><input type="text" id="edit-importe" class="form-control" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-clave-prodserv">Clave producto/servicio</label><input type="text" id="edit-clave-prodserv" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-cantidad">Cantidad</label><input type="text" id="edit-cantidad" class="form-control" inputmode="decimal" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-clave-unidad">Clave de unidad</label><input type="text" id="edit-clave-unidad" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-unidad">Unidad</label><input type="text" id="edit-unidad" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-valor-unitario">Valor unitario</label><input type="text" id="edit-valor-unitario" class="form-control" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-importe-linea">Importe de la partida</label><input type="text" id="edit-importe-linea" class="form-control" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-objeto-impuesto">Objeto de impuesto</label><input type="text" id="edit-objeto-impuesto" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-no-serie-csd">No. de serie CSD</label><input type="text" id="edit-no-serie-csd" class="form-control" inputmode="numeric" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-rfc-proveedor">RFC proveedor de certificación</label><input type="text" id="edit-rfc-proveedor" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-no-serie-sat">No. de serie certificado SAT</label><input type="text" id="edit-no-serie-sat" class="form-control" inputmode="numeric" autocomplete="off"></div>
+                        </div>
+                    </details>
+
+                    <details style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos del pago (recibo CIS)</summary>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
+                            <div class="form-group"><label class="form-label" for="edit-folio-recibo">Folio recibo</label><input type="text" id="edit-folio-recibo" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-fecha-pago">Fecha de pago</label><input type="text" id="edit-fecha-pago" class="form-control" placeholder="DD/MM/AAAA" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-importe-pago">Importe pagado</label><input type="text" id="edit-importe-pago" class="form-control" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+                            <div class="form-group" style="grid-column: 1 / -1;"><label class="form-label" for="edit-concepto">Concepto</label><textarea id="edit-concepto" class="form-control" rows="2"></textarea></div>
+                        </div>
+                    </details>
+
+                    <details style="border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos de la transferencia</summary>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
+                            <div class="form-group"><label class="form-label" for="edit-banco">Banco</label><input type="text" id="edit-banco" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-banco-emisor">Banco emisor</label><input type="text" id="edit-banco-emisor" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-banco-receptor">Banco receptor</label><input type="text" id="edit-banco-receptor" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-banco-emisor-codigo">Código Banxico emisor</label><input type="text" id="edit-banco-emisor-codigo" class="form-control" inputmode="numeric" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-banco-receptor-codigo">Código Banxico receptor</label><input type="text" id="edit-banco-receptor-codigo" class="form-control" inputmode="numeric" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-referencia">Referencia</label><input type="text" id="edit-referencia" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-clave-rastreo">Clave de rastreo</label><input type="text" id="edit-clave-rastreo" class="form-control" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-cuenta-beneficiaria">Cuenta beneficiaria</label><input type="text" id="edit-cuenta-beneficiaria" class="form-control" inputmode="numeric" autocomplete="off"></div>
+                            <div class="form-group"><label class="form-label" for="edit-forma-pago">Forma de pago declarada</label><input type="text" id="edit-forma-pago" class="form-control" autocomplete="off"></div>
+                        </div>
+                    </details>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('modal-edit-fiscal')">Cancelar</button>
-                <button class="btn btn-primary" type="submit" form="form-edit-fiscal">Guardar cambios</button>
+                <button class="btn btn-primary" type="submit" form="form-edit-fiscal">Guardar todos los cambios</button>
             </div>
         </div>
     </div>
