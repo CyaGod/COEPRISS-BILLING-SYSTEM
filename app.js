@@ -46,7 +46,20 @@ let firebaseDb = null;
 let firebaseAuth = null;
 let firebaseInitialized = false;
 let cloudListenerAttached = false;
-const AUTHORIZED_SYSTEM_EMAILS = new Set(['coepriss1@gmail.com']);
+const SYSTEM_USERS = Object.freeze({
+    'brenda.gonzalez': {
+        email: 'brenda.gonzalez@usuarios.coepriss.test',
+        name: 'Brenda González',
+        role: 'Administrador',
+        avatar: 'BG'
+    },
+    'jose.perez': {
+        email: 'jose.perez@usuarios.coepriss.test',
+        name: 'José Pérez',
+        role: 'Auditor',
+        avatar: 'JP'
+    }
+});
 
 function getCloudData() {
     return {
@@ -114,18 +127,17 @@ function initFirebaseSync() {
 }
 
 function activateAuthenticatedSession(user) {
-    if (!isAuthorizedSystemUser(user)) {
+    const systemUser = getSystemUserByEmail(user?.email);
+    if (!systemUser) {
         firebaseAuth?.signOut();
-        showLoginError('Este correo no está autorizado para acceder al sistema.');
+        showLoginError('Este usuario no está autorizado para acceder al sistema.');
         return;
     }
-    const name = user.displayName || user.email || 'Usuario autorizado';
-    const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'UA';
     state.currentUser = {
         id: user.uid,
-        name,
-        role: 'Usuario autorizado',
-        avatar: initials
+        name: systemUser.name,
+        role: systemUser.role,
+        avatar: systemUser.avatar
     };
 
     hideLoginError();
@@ -134,8 +146,13 @@ function activateAuthenticatedSession(user) {
     initInactivityTimer();
 }
 
-function isAuthorizedSystemUser(user) {
-    return Boolean(user?.email && AUTHORIZED_SYSTEM_EMAILS.has(user.email.trim().toLowerCase()));
+function getSystemUserByEmail(email) {
+    const normalizedEmail = email?.trim().toLowerCase();
+    return Object.values(SYSTEM_USERS).find(user => user.email === normalizedEmail) || null;
+}
+
+function getSystemUserByUsername(username) {
+    return SYSTEM_USERS[username?.trim().toLowerCase()] || null;
 }
 
 function attachCloudListener() {
@@ -208,85 +225,52 @@ function handleLoginSubmit(event) {
 }
 
 function getLoginCredentials() {
-    const email = document.getElementById('login-email')?.value.trim().toLowerCase() || '';
+    const username = document.getElementById('login-username')?.value.trim().toLowerCase() || '';
     const password = document.getElementById('login-password')?.value || '';
-    const confirmation = document.getElementById('login-password-confirm')?.value || '';
-    return { email, password, confirmation };
+    return { username, password };
 }
 
 function setLoginBusy(isBusy, message) {
-    const loginButton = document.getElementById('btn-email-login');
-    const createButton = document.getElementById('btn-create-access');
+    const loginButton = document.getElementById('btn-system-login');
     if (loginButton) {
         loginButton.disabled = isBusy;
         loginButton.querySelector('span').textContent = isBusy ? message : 'Ingresar';
     }
-    if (createButton) {
-        createButton.disabled = isBusy;
-        createButton.textContent = isBusy ? 'Procesando…' : 'Crear acceso inicial';
-    }
 }
 
-function validateSystemCredentials({ email, password }, requireConfirmation = false, confirmation = '') {
-    if (!AUTHORIZED_SYSTEM_EMAILS.has(email)) {
-        showLoginError('El correo indicado no está autorizado para este sistema.');
-        return false;
+function validateSystemCredentials({ username, password }) {
+    const systemUser = getSystemUserByUsername(username);
+    if (!systemUser) {
+        showLoginError('El usuario o la contraseña no son correctos.');
+        return null;
     }
     if (password.length < 8) {
-        showLoginError('La contraseña del sistema debe tener al menos 8 caracteres.');
-        return false;
+        showLoginError('El usuario o la contraseña no son correctos.');
+        return null;
     }
-    if (requireConfirmation && password !== confirmation) {
-        showLoginError('La confirmación no coincide con la contraseña elegida.');
-        return false;
-    }
-    return true;
+    return systemUser;
 }
 
 async function signInWithSystemPassword() {
     if (!initFirebaseSync() || !firebaseAuth) return;
     const credentials = getLoginCredentials();
-    if (!validateSystemCredentials(credentials)) return;
+    const systemUser = validateSystemCredentials(credentials);
+    if (!systemUser) return;
 
     setLoginBusy(true, 'Ingresando…');
     hideLoginError();
     try {
-        await firebaseAuth.signInWithEmailAndPassword(credentials.email, credentials.password);
+        await firebaseAuth.signInWithEmailAndPassword(systemUser.email, credentials.password);
     } catch (error) {
         console.error('No se pudo iniciar sesión:', error);
         const messages = {
-            'auth/user-not-found': 'No existe un acceso con este correo. Usa “Crear acceso inicial”.',
-            'auth/wrong-password': 'La contraseña del sistema no es correcta.',
-            'auth/invalid-credential': 'El correo o la contraseña del sistema no son correctos.',
-            'auth/operation-not-allowed': 'El acceso con correo y contraseña todavía no está habilitado en Firebase.',
+            'auth/user-not-found': 'El usuario o la contraseña no son correctos.',
+            'auth/wrong-password': 'El usuario o la contraseña no son correctos.',
+            'auth/invalid-credential': 'El usuario o la contraseña no son correctos.',
+            'auth/operation-not-allowed': 'El acceso de usuarios todavía no está habilitado en Firebase.',
             'auth/too-many-requests': 'Demasiados intentos. Espera un momento antes de volver a intentarlo.'
         };
         showLoginError(messages[error.code] || 'No fue posible iniciar sesión. Inténtalo nuevamente.');
-    } finally {
-        setLoginBusy(false);
-    }
-}
-
-async function handleCreateAccess() {
-    if (!initFirebaseSync() || !firebaseAuth) return;
-    const credentials = getLoginCredentials();
-    if (!validateSystemCredentials(credentials, true, credentials.confirmation)) return;
-
-    setLoginBusy(true, 'Creando acceso…');
-    hideLoginError();
-    try {
-        await firebaseAuth.createUserWithEmailAndPassword(credentials.email, credentials.password);
-        document.getElementById('login-password-confirm').value = '';
-        showToast('Acceso inicial creado correctamente.', 'success');
-    } catch (error) {
-        console.error('No se pudo crear el acceso:', error);
-        const messages = {
-            'auth/email-already-in-use': 'Este correo ya tiene un acceso. Usa “Ingresar”.',
-            'auth/weak-password': 'La contraseña elegida no cumple el mínimo de seguridad de Firebase.',
-            'auth/invalid-email': 'Escribe un correo institucional válido.',
-            'auth/operation-not-allowed': 'El acceso con correo y contraseña todavía no está habilitado en Firebase.'
-        };
-        showLoginError(messages[error.code] || 'No fue posible crear el acceso inicial. Inténtalo nuevamente.');
     } finally {
         setLoginBusy(false);
     }
