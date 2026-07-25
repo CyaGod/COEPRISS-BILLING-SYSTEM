@@ -2884,8 +2884,16 @@ function formatEditableAmount(value) {
 }
 
 function openEditModal() {
-    if (!state.activeExpediente) return;
+    if (!state.activeExpediente) {
+        showToast('No hay un expediente activo seleccionado.', 'warning');
+        return;
+    }
     const dossier = state.activeExpediente;
+    const modal = document.getElementById('modal-edit-fiscal');
+
+    if (modal) {
+        modal.querySelectorAll('details').forEach(details => { details.open = true; });
+    }
 
     EXPEDIENTE_TEXT_EDIT_FIELDS.forEach(([id, field]) => {
         const input = document.getElementById(id);
@@ -2896,7 +2904,7 @@ function openEditModal() {
         if (input) input.value = formatEditableAmount(dossier[field]);
     });
 
-    document.getElementById('modal-edit-fiscal').classList.add('open');
+    if (modal) modal.classList.add('open');
 }
 
 function parseManualAmount(input, fieldLabel) {
@@ -2948,16 +2956,25 @@ async function saveFiscalData(event) {
         dossier[field] = parsed.value;
     }
 
-    addAuditLogToActive('Datos del expediente modificados manualmente por el usuario.');
-    addSecurityLog('Modificación manual', `Datos del expediente ${dossier.folio} modificados.`);
+    // Sync state.expedientes array so all tables and database records reflect the edits!
+    const idx = state.expedientes.findIndex(e => e.folio === dossier.folio);
+    if (idx !== -1) {
+        state.expedientes[idx] = { ...dossier };
+    }
+
+    addAuditLogToActive('Todos los datos del expediente fueron modificados y confirmados manualmente por el usuario.');
+    addSecurityLog('Modificación manual', `Datos del expediente ${dossier.folio} actualizados correctamente.`);
+    
     updateStep2Fields();
     updatePreviewFields();
+    renderProcesoTable();
+    renderReportTable();
     renderTimeline();
     updatePaymentValidationUI();
     closeModal('modal-edit-fiscal');
 
-    const saved = await saveDatabaseToStorage();
-    if (saved) showToast('Datos del expediente actualizados y guardados.', 'success');
+    saveDatabaseToStorage();
+    showToast('✅ Todos los datos del expediente fueron actualizados y guardados en la base de datos.', 'success');
 }
 
 // La vista previa sólo abre el archivo original seleccionado por el usuario.

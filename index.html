@@ -588,9 +588,9 @@
                         <div class="data-card-section" style="border-bottom: 1px solid #eaeaea; padding-bottom: 20px; margin-bottom: 0;">
                             <div class="section-card-header">
                                 <h3 class="section-card-title" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px;">Datos del expediente</h3>
-                                <button class="btn-link" onclick="openEditModal()" aria-label="Editar todos los datos del expediente" style="background: none; border: none; color: #d93025; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                                    Editar datos
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="openEditModal()" aria-label="Editar todos los datos del expediente" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; padding: 6px 14px; border-color: var(--secondary-color); color: var(--primary-color);">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                    Editar todos los datos
                                 </button>
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-top: 10px;">
@@ -1115,8 +1115,8 @@
             <div class="modal-body" style="max-height: 68vh; overflow-y: auto;">
                 <p style="margin: 0 0 16px; color: #5f6b7a; font-size: 0.86rem;">Corrige o completa manualmente cualquier dato que el OCR no haya leído correctamente. Los campos vacíos son opcionales.</p>
                 <form id="form-edit-fiscal" onsubmit="saveFiscalData(event)" novalidate>
-                    <details open style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
-                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos fiscales del receptor</summary>
+                    <details open style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px; background: #fafafa;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer; font-size: 0.92rem;">1. Datos fiscales del receptor (Cliente)</summary>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
                             <div class="form-group"><label class="form-label" for="edit-rfc">RFC</label><input type="text" id="edit-rfc" class="form-control" autocomplete="off"></div>
                             <div class="form-group"><label class="form-label" for="edit-razon">Razón social</label><input type="text" id="edit-razon" class="form-control" autocomplete="off"></div>
@@ -1127,8 +1127,8 @@
                         </div>
                     </details>
 
-                    <details style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
-                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos del CFDI detectado</summary>
+                    <details open style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px; background: #fafafa;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer; font-size: 0.92rem;">2. Detalles del CFDI detectados (Emisor y Comprobante)</summary>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
                             <div class="form-group"><label class="form-label" for="edit-rfc-emisor">RFC emisor</label><input type="text" id="edit-rfc-emisor" class="form-control" autocomplete="off"></div>
                             <div class="form-group"><label class="form-label" for="edit-nombre-emisor">Nombre emisor</label><input type="text" id="edit-nombre-emisor" class="form-control" autocomplete="off"></div>
@@ -1154,8 +1154,8 @@
                         </div>
                     </details>
 
-                    <details style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
-                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos del pago (recibo CIS)</summary>
+                    <details open style="margin-bottom: 14px; border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px; background: #fafafa;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer; font-size: 0.92rem;">3. Datos del pago (Recibo CIS)</summary>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
                             <div class="form-group"><label class="form-label" for="edit-folio-recibo">Folio recibo</label><input type="text" id="edit-folio-recibo" class="form-control" autocomplete="off"></div>
                             <div class="form-group"><label class="form-label" for="edit-fecha-pago">Fecha de pago</label><input type="text" id="edit-fecha-pago" class="form-control" placeholder="DD/MM/AAAA" autocomplete="off"></div>
@@ -1164,8 +1164,8 @@
                         </div>
                     </details>
 
-                    <details style="border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px;">
-                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer;">Datos de la transferencia</summary>
+                    <details open style="border: 1px solid #e3e8ee; border-radius: 8px; padding: 12px; background: #fafafa;">
+                        <summary style="font-weight: 700; color: var(--primary-color); cursor: pointer; font-size: 0.92rem;">4. Datos de la transferencia (SPEI / CEP)</summary>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 14px;">
                             <div class="form-group"><label class="form-label" for="edit-banco">Banco</label><input type="text" id="edit-banco" class="form-control" autocomplete="off"></div>
                             <div class="form-group"><label class="form-label" for="edit-banco-emisor">Banco emisor</label><input type="text" id="edit-banco-emisor" class="form-control" autocomplete="off"></div>
