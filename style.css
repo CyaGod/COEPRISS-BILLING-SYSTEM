@@ -2325,8 +2325,8 @@ body {
     justify-content: center;
     gap: 16px;
     width: 100%;
-    margin-bottom: 24px;
-    padding-bottom: 14px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
 }
 
 .login-logo-group {
@@ -2407,7 +2407,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
     border: 1px solid #DBEAFE;
 }
 
@@ -2422,13 +2422,13 @@ body {
     font-weight: 700;
     font-size: 1.45rem;
     color: #111827;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
 }
 
 .login-welcome-desc {
     font-size: 0.82rem;
     color: #6B7280;
-    margin-bottom: 24px;
+    margin-bottom: 14px;
     line-height: 1.4;
 }
 
@@ -2443,6 +2443,10 @@ body {
 
 .margin-bottom-12 {
     margin-bottom: 12px;
+}
+
+.login-field-group {
+    margin-bottom: 14px;
 }
 
 .login-label {
@@ -2545,7 +2549,7 @@ body {
 }
 
 .login-auth-note {
-    margin: 0 0 16px;
+    margin: 0 0 10px;
     color: #495057;
     font-size: 0.8rem;
     line-height: 1.45;
@@ -2569,6 +2573,7 @@ body {
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 64, 168, 0.25);
     transition: all 0.2s ease;
+    margin-top: 24px;
 }
 
 .btn-login-primary:hover {
