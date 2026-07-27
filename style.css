@@ -2332,19 +2332,14 @@ body {
 .login-logo-group {
     display: flex;
     align-items: center;
-    gap: 10px;
     text-align: left;
 }
 
-.login-logo-svg {
-    width: 44px;
-    height: 44px;
+.login-logo-img {
+    height: 48px;
+    width: auto;
+    display: block;
     flex-shrink: 0;
-}
-
-.login-logo-text {
-    display: flex;
-    flex-direction: column;
 }
 
 .login-brand-title {
