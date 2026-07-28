@@ -103,19 +103,10 @@ body {
     margin-bottom: 10px;
 }
 
-.sidebar-logo-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 55px;
-    height: 55px;
-    margin-bottom: 8px;
-}
-
-.sidebar-logo {
-    width: 100%;
-    height: 100%;
-    fill: var(--secondary-color);
+.sidebar-logo-img {
+    max-width: 180px;
+    height: auto;
+    display: block;
 }
 
 .sidebar-title {
@@ -1932,10 +1923,10 @@ body {
         padding: 10px 16px;
         border-bottom: 1.5px solid var(--secondary-color);
     }
-    .sidebar-logo-container {
-        width: 32px;
+    .sidebar-logo-img {
         height: 32px;
-        margin-bottom: 0;
+        max-width: none;
+        width: auto;
     }
     .sidebar-nav {
         padding: 0;
