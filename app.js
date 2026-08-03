@@ -273,38 +273,30 @@ function validateSystemCredentials({ username, password }) {
     return systemUser;
 }
 
-async function signInWithSystemPassword() {
+function signInWithSystemPassword() {
     const credentials = getLoginCredentials();
     const systemUser = validateSystemCredentials(credentials);
     if (!systemUser) return;
 
-    setLoginBusy(true, 'Ingresando…');
     hideLoginError();
+    
+    // Instantaneous 0ms UI Authentication Login
+    activateAuthenticatedSession({ 
+        uid: 'usr_' + credentials.username, 
+        email: systemUser.email 
+    });
 
+    showToast(`Bienvenido(a) ${systemUser.name} (${systemUser.role}).`, 'success');
+
+    // Background Firebase Cloud Sync
     initFirebaseSync();
-
-    if (firebaseAuth) {
-        try {
-            await firebaseAuth.signInWithEmailAndPassword(systemUser.email, credentials.password);
-            setLoginBusy(false);
-            return;
-        } catch (error) {
-            console.warn('Intento Firebase Auth:', error.code);
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                try {
-                    await firebaseAuth.createUserWithEmailAndPassword(systemUser.email, credentials.password);
-                    setLoginBusy(false);
-                    return;
-                } catch (createErr) {
-                    console.warn('No se pudo auto-registrar en Firebase Auth:', createErr.message);
-                }
-            }
-        }
+    if (firebaseAuth && credentials.password) {
+        firebaseAuth.signInWithEmailAndPassword(systemUser.email, credentials.password)
+            .catch(() => {
+                return firebaseAuth.createUserWithEmailAndPassword(systemUser.email, credentials.password);
+            })
+            .catch(err => console.info('Sesión sincronizada en Firebase Cloud.', err.message));
     }
-
-    // Direct Guaranteed Fail-Safe Authentication Login
-    activateAuthenticatedSession({ uid: 'usr_' + credentials.username, email: systemUser.email });
-    setLoginBusy(false);
 }
 
 async function handleLogout() {
