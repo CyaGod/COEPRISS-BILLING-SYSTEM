@@ -41,27 +41,16 @@ let inactivityTimer = null;
 let inactivityListenersAttached = false;
 let inactivityResetHandler = null;
 
-// Firebase Realtime Database Integration for coepriss-facturacion
-let firebaseDb = null;
-let firebaseAuth = null;
-let firebaseInitialized = false;
-let cloudListenerAttached = false;
-const SYSTEM_USERS = Object.freeze({
-    'brenda.gonzalez': {
-        email: 'brenda.gonzalez@usuarios.coepriss.test',
-        name: 'Brenda González',
-        role: 'Administrador',
-        avatar: 'BG',
-        password: 'SinaloaFacturas2026'
-    },
-    'jose.perez': {
-        email: 'jose.perez@usuarios.coepriss.test',
-        name: 'José Pérez',
-        role: 'Auditor',
-        avatar: 'JP',
-        password: 'SinaloaAuditor2026'
-    }
-});
+// ── RENDER POSTGRESQL / JWT AUTH ENGINE ──
+function getJwtToken() { return sessionStorage.getItem('coepriss_jwt') || null; }
+function setJwtToken(t) { sessionStorage.setItem('coepriss_jwt', t); }
+function clearJwtToken() { sessionStorage.removeItem('coepriss_jwt'); sessionStorage.removeItem('coepriss_user'); }
+function getStoredUser() { try { return JSON.parse(sessionStorage.getItem('coepriss_user')); } catch { return null; } }
+function storeUser(u) { sessionStorage.setItem('coepriss_user', JSON.stringify(u)); }
+function apiFetch(url, options = {}) {
+    const token = getJwtToken();
+    return fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) } });
+}
 
 function getCloudData() {
     return {
@@ -88,9 +77,9 @@ function renderCloudCollections() {
     updateDashboardCounts();
 }
 
-// Render Native Database Engine Sync Controller
+// Render PostgreSQL Sync Controller (authenticated with JWT)
 function initRenderDbSync() {
-    fetch('/api/db')
+    apiFetch('/api/db')
         .then(res => res.json())
         .then(res => {
             if (res.success && res.data) {
@@ -102,74 +91,52 @@ function initRenderDbSync() {
                 renderCloudCollections();
             }
         })
-        .catch(err => console.info('Render DB Sync activo localmente:', err.message));
+        .catch(err => console.info('[PostgreSQL Render] Datos en espera:', err.message));
 }
 
 function activateAuthenticatedSession(user) {
-    const systemUser = getSystemUserByEmail(user?.email) || getSystemUserByUsername(user?.username);
+    const nombre = user.nombre || user.name || user.nombreCompleto || 'Usuario COEPRISS';
     state.currentUser = {
-        id: user.id || 'usr_' + (user.username || 'admin'),
-        name: systemUser ? systemUser.name : 'Usuario COEPRISS',
-        role: systemUser ? systemUser.role : 'Administrador',
-        avatar: systemUser ? systemUser.avatar : 'UC'
+        id: user.id,
+        name: nombre,
+        role: user.rol || user.role || 'Administrador',
+        avatar: user.avatar || nombre.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
     };
-
+    storeUser(state.currentUser);
     hideLoginError();
     showAuthenticatedUi();
     initRenderDbSync();
     initInactivityTimer();
 }
 
-function getSystemUserByEmail(email) {
-    const normalizedEmail = email?.trim().toLowerCase();
-    return Object.values(SYSTEM_USERS).find(user => user.email === normalizedEmail) || null;
-}
-
-function getSystemUserByUsername(username) {
-    return SYSTEM_USERS[username?.trim().toLowerCase()] || null;
-}
-
-// Zero-Delay Optimistic UI Execution Engine with Render Database Persistence
+// Zero-Delay optimistic write to PostgreSQL (Render) via JWT
 async function saveDatabaseToStorage() {
-    // 1. Instantaneous Local Optimistic Dispatch
     window.dispatchEvent(new Event('coepriss_db_updated'));
-
-    const cloudPayload = getCloudData();
-
-    // 2. Render Database API Dispatch (Zero UI Block)
-    fetch('/api/sync', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(cloudPayload)
-    }).then(res => res.json())
-    .then(res => {
-        if (res.success) {
-            console.log('⚡ Sincronización exitosa en la Base de Datos de Render.');
-        }
-    }).catch(err => {
-        console.info('Render DB local activo:', err.message);
-    });
-
+    const payload = getCloudData();
+    apiFetch('/api/sync', { method: 'POST', body: JSON.stringify(payload) })
+        .then(r => r.json())
+        .then(r => { if (r.success) console.log('⚡ PostgreSQL Render: datos guardados correctamente.'); })
+        .catch(err => console.info('[PostgreSQL Render] Guardado diferido:', err.message));
     return true;
 }
 
 function loadDatabaseFromStorage() {
-    try {
-        localStorage.removeItem('coepriss_db');
-        localStorage.removeItem('coepriss_session');
-    } catch (error) {
-        console.info('No fue posible limpiar el almacenamiento local anterior.', error);
-    }
     resetCloudCollections();
-    initFirebaseSync();
+    initRenderDbSync();
 }
 
-// Authentication & Session Guard: Firebase is the only source of truth.
+// Session Guard: verifica JWT activo en PostgreSQL de Render
 function checkAuthSession() {
-    if (firebaseAuth?.currentUser) {
-        activateAuthenticatedSession(firebaseAuth.currentUser);
+    const token = getJwtToken();
+    const user = getStoredUser();
+    if (token && user) {
+        apiFetch('/api/auth/me')
+            .then(res => res.json())
+            .then(res => {
+                if (res.success) { activateAuthenticatedSession({ ...user, ...res.user }); }
+                else { clearJwtToken(); showLoginUi(); }
+            })
+            .catch(() => activateAuthenticatedSession(user));
         return true;
     }
     showLoginUi();
@@ -195,54 +162,41 @@ function setLoginBusy(isBusy, message) {
     }
 }
 
-function validateSystemCredentials({ username, password }) {
-    const systemUser = getSystemUserByUsername(username);
-    if (!systemUser) {
-        showLoginError('El usuario o la contraseña no son correctos.');
-        return null;
-    }
-    if (password !== systemUser.password) {
-        showLoginError('El usuario o la contraseña no son correctos.');
-        return null;
-    }
-    return systemUser;
-}
-
-function signInWithSystemPassword() {
-    const credentials = getLoginCredentials();
-    const systemUser = validateSystemCredentials(credentials);
-    if (!systemUser) return;
-
+// Login via JWT contra PostgreSQL en Render
+async function signInWithSystemPassword() {
+    const { username, password } = getLoginCredentials();
+    if (!username || !password) { showLoginError('Ingresa tu usuario y contraseña.'); return; }
+    setLoginBusy(true, 'Ingresando…');
     hideLoginError();
-    
-    // Instantaneous 0ms UI Authentication Login
-    activateAuthenticatedSession({ 
-        uid: 'usr_' + credentials.username, 
-        email: systemUser.email 
-    });
-
-    showToast(`Bienvenido(a) ${systemUser.name} (${systemUser.role}).`, 'success');
-
-    // Background Firebase Cloud Sync
-    initFirebaseSync();
-    if (firebaseAuth && credentials.password) {
-        firebaseAuth.signInWithEmailAndPassword(systemUser.email, credentials.password)
-            .catch(() => {
-                return firebaseAuth.createUserWithEmailAndPassword(systemUser.email, credentials.password);
-            })
-            .catch(err => console.info('Sesión sincronizada en Firebase Cloud.', err.message));
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            showLoginError(data.error || 'El usuario o la contraseña no son correctos.');
+            return;
+        }
+        setJwtToken(data.token);
+        activateAuthenticatedSession(data.user);
+        showToast(`Bienvenido(a) ${data.user.nombre} (${data.user.rol}).`, 'success');
+    } catch (err) {
+        showLoginError('No fue posible conectar con el servidor. Verifica tu conexión.');
+    } finally {
+        setLoginBusy(false);
     }
 }
 
 async function handleLogout() {
     if (inactivityTimer) clearTimeout(inactivityTimer);
-    try {
-        await firebaseAuth?.signOut();
-        showToast('Sesión cerrada correctamente.', 'info');
-    } catch (error) {
-        console.error('No se pudo cerrar la sesión:', error);
-        showToast('No fue posible cerrar la sesión segura.', 'error');
-    }
+    try { await apiFetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+    clearJwtToken();
+    state.currentUser = null;
+    resetCloudCollections();
+    showToast('Sesión cerrada correctamente.', 'info');
+    showLoginUi();
 }
 
 function showLoginUi() {
@@ -290,15 +244,14 @@ function updateUserHeaderUi() {
 function initInactivityTimer() {
     if (!inactivityListenersAttached) {
         inactivityResetHandler = () => {
-            if (!firebaseAuth?.currentUser) return;
+            if (!getJwtToken()) return;
             if (inactivityTimer) clearTimeout(inactivityTimer);
-            // Auto logout after 15 minutes of inactivity (900,000 ms)
             inactivityTimer = setTimeout(() => {
-                if (firebaseAuth?.currentUser) {
+                if (getJwtToken()) {
                     showToast('Su sesión ha expirado por inactividad.', 'warning');
                     handleLogout();
                 }
-            }, 900000);
+            }, 900000); // 15 minutos
         };
         ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => {
             window.addEventListener(evt, inactivityResetHandler, { passive: true });

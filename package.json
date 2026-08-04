@@ -1,28 +1,33 @@
 {
   "name": "coepriss-billing-system",
-  "version": "2.0.0",
-  "description": "COEPRISS Sinaloa - Billing & Stamping System with Multi-Shard Zero-Delay Engine",
+  "version": "3.0.0",
+  "description": "COEPRISS Sinaloa - Sistema de Facturación Electrónica - Render PostgreSQL Edition",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test"
+    "db:migrate": "npx prisma migrate deploy",
+    "db:generate": "npx prisma generate",
+    "db:studio": "npx prisma studio",
+    "db:seed": "node prisma/seed.js"
   },
-  "keywords": [
-    "coepriss",
-    "sat",
-    "cfdi",
-    "firebase",
-    "sharding",
-    "billing"
-  ],
-  "author": "COEPRISS Sinaloa / Antigravity AI",
+  "keywords": ["coepriss", "sat", "cfdi", "postgresql", "render", "billing"],
+  "author": "COEPRISS Sinaloa",
   "license": "ISC",
   "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "argon2": "^0.40.3",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "firebase-admin": "^12.1.0",
-    "helmet": "^7.1.0"
+    "express-rate-limit": "^7.3.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "prisma": "^5.14.0"
   }
 }

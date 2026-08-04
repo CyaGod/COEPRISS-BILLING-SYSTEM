@@ -1,0 +1,299 @@
+// COEPRISS Sinaloa - Prisma Schema
+// PostgreSQL administrado en Render
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// GESTIÓN DE USUARIOS Y CONTROL DE ACCESO
+// ─────────────────────────────────────────────
+
+model Usuario {
+  id            Int               @id @default(autoincrement())
+  username      String            @unique @db.VarChar(50)
+  nombreCompleto String           @db.VarChar(150)
+  email         String?           @unique @db.VarChar(200)
+  passwordHash  String            @db.VarChar(255)
+  rolId         Int
+  activo        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  ultimoAcceso  DateTime?
+
+  rol           Rol               @relation(fields: [rolId], references: [id])
+  expedientes   Expediente[]
+  facturas      Factura[]
+  sesiones      Sesion[]
+  bitacoras     BitacoraSeguridad[]
+  correosEnviados HistorialCorreo[]
+
+  @@map("usuarios")
+}
+
+model Rol {
+  id          Int         @id @default(autoincrement())
+  nombre      String      @unique @db.VarChar(50)
+  descripcion String?     @db.VarChar(200)
+  createdAt   DateTime    @default(now())
+
+  usuarios    Usuario[]
+  permisos    Permiso[]
+
+  @@map("roles")
+}
+
+model Permiso {
+  id          Int         @id @default(autoincrement())
+  rolId       Int
+  modulo      String      @db.VarChar(100)
+  accion      String      @db.VarChar(100)
+
+  rol         Rol         @relation(fields: [rolId], references: [id])
+
+  @@unique([rolId, modulo, accion])
+  @@map("permisos")
+}
+
+model Sesion {
+  id          Int         @id @default(autoincrement())
+  usuarioId   Int
+  token       String      @unique @db.VarChar(512)
+  ipAddress   String?     @db.VarChar(45)
+  userAgent   String?     @db.VarChar(500)
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+  revocado    Boolean     @default(false)
+
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id])
+
+  @@map("sesiones")
+}
+
+// ─────────────────────────────────────────────
+// EMPRESAS Y CLIENTES
+// ─────────────────────────────────────────────
+
+model Empresa {
+  id              Int             @id @default(autoincrement())
+  rfc             String          @unique @db.VarChar(20)
+  razonSocial     String          @db.VarChar(250)
+  regimenFiscal   String?         @db.VarChar(100)
+  codigoPostal    String?         @db.VarChar(10)
+  email           String?         @db.VarChar(200)
+  telefono        String?         @db.VarChar(20)
+  activa          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  expedientes     Expediente[]
+
+  @@map("empresas")
+}
+
+// ─────────────────────────────────────────────
+// EXPEDIENTES (REGISTRO CENTRAL DE TRÁMITES)
+// ─────────────────────────────────────────────
+
+model Expediente {
+  id                  Int                 @id @default(autoincrement())
+  folio               String              @unique @db.VarChar(50)
+  usuarioId           Int
+  empresaId           Int?
+  estatus             EstatusExpediente   @default(PENDIENTE)
+
+  // Datos fiscales del receptor
+  receptorRfc         String?             @db.VarChar(20)
+  receptorNombre      String?             @db.VarChar(250)
+  receptorEmail       String?             @db.VarChar(200)
+  receptorUsoCfdi     String?             @db.VarChar(10)
+  receptorRegimenFiscal String?           @db.VarChar(100)
+  receptorCodigoPostal String?            @db.VarChar(10)
+  receptorDomicilio   String?             @db.VarChar(500)
+
+  // Datos del CFDI detectado
+  cfdiUuid            String?             @db.VarChar(50)
+  cfdiTotal           Decimal?            @db.Decimal(15, 2)
+  cfdiSubtotal        Decimal?            @db.Decimal(15, 2)
+  cfdiIva             Decimal?            @db.Decimal(15, 2)
+  cfdiConcepto        String?             @db.VarChar(500)
+  cfdiMetodoPago      String?             @db.VarChar(50)
+  cfdiFormaPago       String?             @db.VarChar(50)
+  cfdiMoneda          String?             @db.VarChar(10) @default("MXN")
+  cfdiTipoCambio      Decimal?            @db.Decimal(10, 6)
+  cfdiSerie           String?             @db.VarChar(10)
+  cfdiFolio           String?             @db.VarChar(20)
+  cfdiVersion         String?             @db.VarChar(5)
+  cfdiCertificado     String?             @db.VarChar(30)
+  cfdiNoCertificado   String?             @db.VarChar(30)
+
+  // Datos del pago
+  pagoMonto           Decimal?            @db.Decimal(15, 2)
+  pagoFecha           String?             @db.VarChar(30)
+  pagoBanco           String?             @db.VarChar(100)
+  pagoReferencia      String?             @db.VarChar(100)
+  pagoCuenta          String?             @db.VarChar(30)
+  pagoTipo            String?             @db.VarChar(50)
+
+  // Datos de transferencia
+  transferenciaClabe  String?             @db.VarChar(30)
+  transferenciaMonto  Decimal?            @db.Decimal(15, 2)
+  transferenciaFecha  String?             @db.VarChar(30)
+  transferenciaBanco  String?             @db.VarChar(100)
+  transferenciaReferencia String?         @db.VarChar(100)
+
+  observaciones       String?             @db.Text
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  usuario             Usuario             @relation(fields: [usuarioId], references: [id])
+  empresa             Empresa?            @relation(fields: [empresaId], references: [id])
+  facturas            Factura[]
+  archivos            Archivo[]
+  correosEnviados     HistorialCorreo[]
+
+  @@index([receptorRfc])
+  @@index([estatus])
+  @@index([createdAt])
+  @@map("expedientes")
+}
+
+enum EstatusExpediente {
+  PENDIENTE
+  EN_PROCESO
+  TIMBRADO
+  ENVIADO
+  CANCELADO
+  ERROR
+}
+
+// ─────────────────────────────────────────────
+// FACTURAS / CFDIs TIMBRADOS
+// ─────────────────────────────────────────────
+
+model Factura {
+  id              Int             @id @default(autoincrement())
+  expedienteId    Int
+  usuarioId       Int
+  folio           String          @db.VarChar(50)
+  uuid            String?         @unique @db.VarChar(50)
+  xmlContent      String?         @db.Text
+  pdfPath         String?         @db.VarChar(500)
+  estatus         EstatusFactura  @default(GENERADA)
+  fechaTimbrado   DateTime?
+  selloSat        String?         @db.Text
+  selloCsd        String?         @db.Text
+  noCertificadoSat String?        @db.VarChar(30)
+  cadenaOriginal  String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  expediente      Expediente      @relation(fields: [expedienteId], references: [id])
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
+
+  @@index([expedienteId])
+  @@index([uuid])
+  @@map("facturas")
+}
+
+enum EstatusFactura {
+  GENERADA
+  TIMBRADA
+  CANCELADA
+  ERROR
+}
+
+// ─────────────────────────────────────────────
+// ARCHIVOS (COMPROBANTES, XML, PDF)
+// ─────────────────────────────────────────────
+
+model Archivo {
+  id              Int             @id @default(autoincrement())
+  expedienteId    Int
+  tipo            TipoArchivo
+  nombreOriginal  String          @db.VarChar(255)
+  ruta            String          @db.VarChar(500)
+  mimeType        String?         @db.VarChar(100)
+  tamanoBytes     Int?
+  createdAt       DateTime        @default(now())
+
+  expediente      Expediente      @relation(fields: [expedienteId], references: [id])
+
+  @@index([expedienteId])
+  @@map("archivos")
+}
+
+enum TipoArchivo {
+  COMPROBANTE_PAGO
+  XML_CFDI
+  PDF_CFDI
+  EXCEL
+  IMAGEN
+  OTRO
+}
+
+// ─────────────────────────────────────────────
+// HISTORIAL DE CORREOS ENVIADOS
+// ─────────────────────────────────────────────
+
+model HistorialCorreo {
+  id              Int             @id @default(autoincrement())
+  expedienteId    Int?
+  usuarioId       Int
+  destinatario    String          @db.VarChar(200)
+  asunto          String          @db.VarChar(250)
+  cuerpo          String?         @db.Text
+  estatus         EstatusCorreo   @default(ENVIADO)
+  errorDetalle    String?         @db.VarChar(500)
+  createdAt       DateTime        @default(now())
+
+  expediente      Expediente?     @relation(fields: [expedienteId], references: [id])
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
+
+  @@index([expedienteId])
+  @@map("historial_correos")
+}
+
+enum EstatusCorreo {
+  ENVIADO
+  FALLIDO
+  PENDIENTE
+}
+
+// ─────────────────────────────────────────────
+// BITÁCORA DE SEGURIDAD
+// ─────────────────────────────────────────────
+
+model BitacoraSeguridad {
+  id          Int       @id @default(autoincrement())
+  usuarioId   Int?
+  accion      String    @db.VarChar(200)
+  detalles    String?   @db.Text
+  ipAddress   String?   @db.VarChar(45)
+  resultado   String?   @db.VarChar(50)
+  createdAt   DateTime  @default(now())
+
+  usuario     Usuario?  @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId])
+  @@index([createdAt])
+  @@map("bitacora_seguridad")
+}
+
+// ─────────────────────────────────────────────
+// CONFIGURACIÓN DEL SISTEMA
+// ─────────────────────────────────────────────
+
+model Configuracion {
+  id      Int     @id @default(autoincrement())
+  clave   String  @unique @db.VarChar(100)
+  valor   String? @db.Text
+  tipo    String? @db.VarChar(20)
+
+  @@map("configuracion")
+}
