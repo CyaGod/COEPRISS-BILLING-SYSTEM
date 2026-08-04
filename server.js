@@ -5,6 +5,12 @@
  */
 
 require('dotenv').config();
+
+// Ensure DATABASE_URL is never empty for Prisma Client instantiation
+if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === '') {
+    process.env.DATABASE_URL = 'postgresql://coepriss_db_user:FnaT53yRYH4sn4T0ySn1AwJg4LseyjRK@dpg-d9onri0ae00c73b005k0-a/coepriss_db';
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
