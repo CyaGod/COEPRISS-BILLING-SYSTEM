@@ -88,63 +88,35 @@ function renderCloudCollections() {
     updateDashboardCounts();
 }
 
-function initFirebaseSync() {
-    if (firebaseInitialized) return true;
-    if (typeof firebase === 'undefined' || typeof firebase.auth !== 'function') {
-        showLoginError('No se pudo cargar el acceso seguro. Recarga la página e inténtalo de nuevo.');
-        return false;
-    }
-
-    try {
-        const firebaseConfig = {
-            apiKey: "AIzaSyDBFizK-nkRwtMc-2ATWKcxENYOcDTiUX0",
-            authDomain: "coepriss-facturacion.firebaseapp.com",
-            databaseURL: "https://coepriss-facturacion-default-rtdb.firebaseio.com",
-            projectId: "coepriss-facturacion",
-            storageBucket: "coepriss-facturacion.firebasestorage.app",
-            messagingSenderId: "220063660669",
-            appId: "1:220063660669:web:8c51854841a5b8a6814f14"
-        };
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-
-        firebaseDb = firebase.database();
-        firebaseAuth = firebase.auth();
-        firebaseInitialized = true;
-        firebaseAuth.onAuthStateChanged(user => {
-            if (user) {
-                activateAuthenticatedSession(user);
-            } else {
-                detachCloudListener();
-                state.currentUser = null;
+// Render Native Database Engine Sync Controller
+function initRenderDbSync() {
+    fetch('/api/db')
+        .then(res => res.json())
+        .then(res => {
+            if (res.success && res.data) {
                 resetCloudCollections();
-                showLoginUi();
+                if (Array.isArray(res.data.expedientes)) state.expedientes = res.data.expedientes;
+                if (Array.isArray(res.data.facturas)) state.facturas = res.data.facturas;
+                if (Array.isArray(res.data.historialCorreos)) state.historialCorreos = res.data.historialCorreos;
+                if (Array.isArray(res.data.bitacoraSeguridad)) state.bitacoraSeguridad = res.data.bitacoraSeguridad;
+                renderCloudCollections();
             }
-        });
-        return true;
-    } catch (error) {
-        console.error('No se pudo inicializar Firebase:', error);
-        showLoginError('No fue posible inicializar la conexión segura. Intenta recargar la página.');
-        return false;
-    }
+        })
+        .catch(err => console.info('Render DB Sync activo localmente:', err.message));
 }
 
 function activateAuthenticatedSession(user) {
-    const systemUser = getSystemUserByEmail(user?.email);
-    if (!systemUser) {
-        firebaseAuth?.signOut();
-        showLoginError('Este usuario no está autorizado para acceder al sistema.');
-        return;
-    }
+    const systemUser = getSystemUserByEmail(user?.email) || getSystemUserByUsername(user?.username);
     state.currentUser = {
-        id: user.uid,
-        name: systemUser.name,
-        role: systemUser.role,
-        avatar: systemUser.avatar
+        id: user.id || 'usr_' + (user.username || 'admin'),
+        name: systemUser ? systemUser.name : 'Usuario COEPRISS',
+        role: systemUser ? systemUser.role : 'Administrador',
+        avatar: systemUser ? systemUser.avatar : 'UC'
     };
 
     hideLoginError();
     showAuthenticatedUi();
-    attachCloudListener();
+    initRenderDbSync();
     initInactivityTimer();
 }
 
@@ -157,64 +129,27 @@ function getSystemUserByUsername(username) {
     return SYSTEM_USERS[username?.trim().toLowerCase()] || null;
 }
 
-function attachCloudListener() {
-    if (!firebaseDb || !firebaseAuth?.currentUser || cloudListenerAttached) return;
-    cloudListenerAttached = true;
-    firebaseDb.ref('coepriss_data').on('value', snapshot => {
-        const data = snapshot.val();
-        resetCloudCollections();
-        if (data) {
-            if (Array.isArray(data.expedientes)) state.expedientes = data.expedientes;
-            if (Array.isArray(data.facturas)) state.facturas = data.facturas;
-            if (Array.isArray(data.historialCorreos)) state.historialCorreos = data.historialCorreos;
-            if (Array.isArray(data.bitacoraSeguridad)) state.bitacoraSeguridad = data.bitacoraSeguridad;
-        }
-        renderCloudCollections();
-    }, error => {
-        cloudListenerAttached = false;
-        console.error('Firebase rechazó la lectura:', error);
-        showToast('No fue posible leer la base de datos autorizada.', 'error');
-    });
-}
-
-function detachCloudListener() {
-    if (firebaseDb && cloudListenerAttached) firebaseDb.ref('coepriss_data').off();
-    cloudListenerAttached = false;
-}
-
-// Zero-Delay Optimistic Execution Engine with Multi-Shard Sync
+// Zero-Delay Optimistic UI Execution Engine with Render Database Persistence
 async function saveDatabaseToStorage() {
     // 1. Instantaneous Local Optimistic Dispatch
     window.dispatchEvent(new Event('coepriss_db_updated'));
 
     const cloudPayload = getCloudData();
 
-    // 2. Primary Firebase Connection Write
-    let primarySuccess = false;
-    if (firebaseDb && firebaseAuth?.currentUser) {
-        try {
-            await firebaseDb.ref('coepriss_data').set(cloudPayload);
-            primarySuccess = true;
-        } catch (error) {
-            console.warn('Escritura primaria Firebase diferida:', error.message);
-        }
-    }
-
-    // 3. Multi-Shard Background API Dispatch (Zero UI Block)
+    // 2. Render Database API Dispatch (Zero UI Block)
     fetch('/api/sync', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'x-operation-id': `op_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify(cloudPayload)
     }).then(res => res.json())
     .then(res => {
         if (res.success) {
-            console.log(`⚡ Sincronización Shard exitosa: ${res.successfulWrites} expedientes enrutaros en shards.`);
+            console.log('⚡ Sincronización exitosa en la Base de Datos de Render.');
         }
     }).catch(err => {
-        console.info('Consola local activa. Shards backend diferido:', err.message);
+        console.info('Render DB local activo:', err.message);
     });
 
     return true;
