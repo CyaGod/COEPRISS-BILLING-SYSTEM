@@ -1,15 +1,8 @@
-/**
- * COEPRISS Sinaloa - Backend API
- * Node.js + Express + Prisma ORM + PostgreSQL (Render)
- * Fase 3.0 - Sin Firebase, 100% Render
- */
-
-require('dotenv').config();
-
-// Ensure DATABASE_URL is never empty for Prisma Client instantiation
+// Set default PostgreSQL connection string at line 1 before any module loading
 if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === '') {
     process.env.DATABASE_URL = 'postgresql://coepriss_db_user:FnaT53yRYH4sn4T0ySn1AwJg4LseyjRK@dpg-d9onri0ae00c73b005k0-a/coepriss_db';
 }
+require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
