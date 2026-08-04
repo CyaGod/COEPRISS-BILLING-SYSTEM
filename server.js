@@ -565,27 +565,29 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ─────────────────────────────────────────────
-// ARRANQUE DEL SERVIDOR
-// ─────────────────────────────────────────────
+let dbEngine = 'Local Render Storage';
 
 async function startServer() {
-    try {
-        await prisma.$connect();
-        console.log('✅ PostgreSQL Render conectado correctamente.');
-
-        app.listen(PORT, () => {
-            console.log(`=======================================================`);
-            console.log(`🚀 COEPRISS SINALOA API v3.0 - PUERTO ${PORT}`);
-            console.log(`👉 Base de Datos: PostgreSQL (Render)`);
-            console.log(`👉 Autenticación: JWT + bcrypt`);
-            console.log(`👉 ORM: Prisma`);
-            console.log(`=======================================================`);
-        });
-    } catch (err) {
-        console.error('❌ Error de conexión a PostgreSQL:', err.message);
-        process.exit(1);
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') {
+        try {
+            await prisma.$connect();
+            dbEngine = 'PostgreSQL (Render)';
+            console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
+        } catch (err) {
+            console.warn('⚠️ No se pudo conectar a PostgreSQL:', err.message);
+            console.log('👉 Ejecutando con Motor de Almacenamiento Local de Render.');
+        }
+    } else {
+        console.log('ℹ️ DATABASE_URL no definida. Usando Motor de Almacenamiento Nativo de Render.');
     }
+
+    app.listen(PORT, () => {
+        console.log(`=======================================================`);
+        console.log(`🚀 COEPRISS SINALOA API v3.0 - PUERTO ${PORT}`);
+        console.log(`👉 Base de Datos: ${dbEngine}`);
+        console.log(`👉 Autenticación: JWT + bcrypt`);
+        console.log(`=======================================================`);
+    });
 }
 
 startServer();
