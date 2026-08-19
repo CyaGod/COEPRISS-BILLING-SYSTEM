@@ -817,12 +817,78 @@ app.get('*', (req, res) => {
 
 let dbEngine = 'Local Render Storage';
 
+async function autoSeedDatabase() {
+    try {
+        const count = await prisma.usuario.count().catch(() => 0);
+        if (count === 0) {
+            console.log('🌱 Base de datos sin usuarios. Creando roles y cuentas iniciales...');
+            const rolAdmin = await prisma.rol.upsert({
+                where: { nombre: 'Administrador' },
+                update: {},
+                create: { nombre: 'Administrador', descripcion: 'Acceso completo al sistema' }
+            });
+            const rolAuditor = await prisma.rol.upsert({
+                where: { nombre: 'Auditor' },
+                update: {},
+                create: { nombre: 'Auditor', descripcion: 'Acceso de consulta' }
+            });
+
+            const hashAdmin = await bcrypt.hash('SinaloaFacturas2026', 12);
+            const hashAuditor = await bcrypt.hash('SinaloaAuditor2026', 12);
+
+            // Usuario admin
+            await prisma.usuario.upsert({
+                where: { username: 'admin' },
+                update: { passwordHash: hashAdmin },
+                create: {
+                    username: 'admin',
+                    nombreCompleto: 'Administrador del Sistema',
+                    email: 'admin@coepriss.gob.mx',
+                    passwordHash: hashAdmin,
+                    rolId: rolAdmin.id
+                }
+            });
+
+            // Usuario Brenda González
+            await prisma.usuario.upsert({
+                where: { username: 'brenda.gonzalez' },
+                update: { passwordHash: hashAdmin },
+                create: {
+                    username: 'brenda.gonzalez',
+                    nombreCompleto: 'Brenda González',
+                    email: 'brenda.gonzalez@coepriss.gob.mx',
+                    passwordHash: hashAdmin,
+                    rolId: rolAdmin.id
+                }
+            });
+
+            // Usuario José Pérez
+            await prisma.usuario.upsert({
+                where: { username: 'jose.perez' },
+                update: { passwordHash: hashAuditor },
+                create: {
+                    username: 'jose.perez',
+                    nombreCompleto: 'José Pérez',
+                    email: 'jose.perez@coepriss.gob.mx',
+                    passwordHash: hashAuditor,
+                    rolId: rolAuditor.id
+                }
+            });
+
+            console.log('✅ Cuentas creadas exitosamente: admin, brenda.gonzalez, jose.perez');
+        }
+    } catch (err) {
+        console.warn('⚠️ Nota sobre auto-seed:', err.message);
+    }
+}
+
 async function startServer() {
     if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') {
         try {
             await prisma.$connect();
             dbEngine = 'PostgreSQL (Render)';
             console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
+            await autoSeedDatabase();
         } catch (err) {
             console.warn('⚠️ No se pudo conectar a PostgreSQL:', err.message);
             console.log('👉 Ejecutando con Motor de Almacenamiento Local de Render.');

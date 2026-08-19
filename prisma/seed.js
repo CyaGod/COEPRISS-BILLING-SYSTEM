@@ -74,6 +74,18 @@ async function main() {
     const hashAuditor = await bcrypt.hash('SinaloaAuditor2026', 12);
 
     // Crear usuarios
+    const usuarioSuperAdmin = await prisma.usuario.upsert({
+        where: { username: 'admin' },
+        update: { passwordHash: hashAdmin },
+        create: {
+            username: 'admin',
+            nombreCompleto: 'Administrador del Sistema',
+            email: 'admin@coepriss.gob.mx',
+            passwordHash: hashAdmin,
+            rolId: rolAdmin.id
+        }
+    });
+
     const usuarioAdmin = await prisma.usuario.upsert({
         where: { username: 'brenda.gonzalez' },
         update: { passwordHash: hashAdmin },
