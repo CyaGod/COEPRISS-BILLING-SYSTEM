@@ -15,6 +15,7 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
+const facturama = require('./facturama');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -552,6 +553,256 @@ app.post('/api/sync', autenticarToken, async (req, res) => {
     }
 
     res.json({ success: true, ...results, timestamp: new Date().toISOString() });
+});
+
+// ─────────────────────────────────────────────
+// FACTURAMA — INTEGRACIÓN PAC
+// ─────────────────────────────────────────────
+
+/**
+ * GET /api/facturama/estado
+ * Retorna el ambiente activo (sandbox/producción) y datos del emisor.
+ * Verifica conexión con Facturama.
+ */
+app.get('/api/facturama/estado', autenticarToken, async (req, res) => {
+    try {
+        const config = facturama.getConfig();
+        let cuenta = null;
+        try {
+            cuenta = await facturama.verificarConexion();
+        } catch (e) {
+            cuenta = { error: e.message };
+        }
+        res.json({
+            success: true,
+            sandbox:      config.sandbox,
+            ambiente:     config.sandbox ? 'SANDBOX (Pruebas)' : 'PRODUCCION (Real)',
+            baseUrl:      config.baseUrl,
+            emisorRfc:    config.emisorRfc,
+            emisorNombre: config.emisorNombre,
+            conectado:    Array.isArray(cuenta) || (!cuenta?.error),
+        });
+    } catch (err) {
+        console.error('[FACTURAMA/ESTADO]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/facturama/test
+ * Valida los datos del expediente para timbrado SIN emitir ninguna factura.
+ * Body: { expedienteId } o { expediente: { ... } }
+ */
+app.post('/api/facturama/test', autenticarToken, async (req, res) => {
+    try {
+        let expediente = req.body.expediente;
+
+        // Si viene solo el id, buscarlo en BD
+        if (!expediente && req.body.expedienteId) {
+            expediente = await prisma.expediente.findUnique({
+                where: { folio: req.body.expedienteId }
+            });
+            if (!expediente) return res.status(404).json({ error: 'Expediente no encontrado.' });
+        }
+
+        if (!expediente) return res.status(400).json({ error: 'Se requiere expediente o expedienteId.' });
+
+        const resultado = await facturama.validarExpediente(expediente);
+        res.json({ success: true, ...resultado });
+    } catch (err) {
+        console.error('[FACTURAMA/TEST]', err);
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * POST /api/facturama/timbrar
+ * Timbra el CFDI y guarda el resultado en la base de datos.
+ * Body: { expedienteId: string, confirmarProduccion?: boolean }
+ *
+ * ⚠️ En modo PRODUCCIÓN requiere confirmarProduccion: true
+ */
+app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
+    const { expedienteId, confirmarProduccion } = req.body || {};
+
+    // Protección anti-accidente: en producción exigir confirmación explícita
+    if (!facturama.SANDBOX && !confirmarProduccion) {
+        return res.status(403).json({
+            error: 'En modo PRODUCCIÓN se requiere confirmarProduccion: true en el body.',
+            sandbox: false,
+        });
+    }
+
+    if (!expedienteId) return res.status(400).json({ error: 'Se requiere expedienteId.' });
+
+    try {
+        // Buscar expediente en BD
+        const expediente = await prisma.expediente.findUnique({
+            where: { folio: expedienteId }
+        });
+        if (!expediente) return res.status(404).json({ error: `Expediente ${expedienteId} no encontrado.` });
+
+        // Verificar que no tenga ya una factura timbrada
+        const facturaExistente = await prisma.factura.findFirst({
+            where: { expedienteId: expediente.id, estatus: 'TIMBRADA' }
+        });
+        if (facturaExistente) {
+            return res.status(409).json({
+                error: `Este expediente ya tiene una factura timbrada: UUID ${facturaExistente.uuid}`,
+                uuid: facturaExistente.uuid,
+            });
+        }
+
+        console.log(`[FACTURAMA/TIMBRAR] Iniciando timbrado para expediente ${expedienteId} (sandbox=${facturama.SANDBOX})`);
+
+        // Timbrar vía Facturama
+        const resultado = await facturama.timbrarCFDI(expediente);
+
+        // Guardar en base de datos
+        const factura = await prisma.factura.create({
+            data: {
+                expedienteId:    expediente.id,
+                usuarioId:       req.user.id,
+                folio:           resultado.folio || expedienteId,
+                uuid:            resultado.uuid,
+                xmlContent:      resultado.xmlBase64
+                    ? Buffer.from(resultado.xmlBase64, 'base64').toString('utf-8')
+                    : null,
+                estatus:         'TIMBRADA',
+                fechaTimbrado:   new Date(),
+                cadenaOriginal:  resultado.datos?.OriginalString || null,
+                noCertificadoSat: resultado.datos?.NoCertificadoSAT || null,
+            }
+        });
+
+        // Actualizar estatus del expediente
+        await prisma.expediente.update({
+            where: { folio: expedienteId },
+            data: {
+                estatus:   'TIMBRADO',
+                cfdiUuid:  resultado.uuid,
+                cfdiTotal: parseFloat(expediente.cfdiTotal || 0),
+            }
+        });
+
+        // Registrar en bitácora
+        await registrarBitacora(
+            req.user.id,
+            'CFDI_TIMBRADO',
+            `Expediente: ${expedienteId} | UUID: ${resultado.uuid} | Sandbox: ${facturama.SANDBOX} | Folio Facturama: ${resultado.id}`,
+            req.ip,
+            'EXITOSO'
+        );
+
+        res.json({
+            success:    true,
+            sandbox:    resultado.sandbox,
+            facturaId:  factura.id,
+            facturamaId: resultado.id,
+            uuid:       resultado.uuid,
+            folio:      resultado.folio,
+            serie:      resultado.serie,
+            fecha:      resultado.fecha,
+            subtotal:   resultado.subtotal,
+            total:      resultado.total,
+            xmlBase64:  resultado.xmlBase64,
+            pdfBase64:  resultado.pdfBase64,
+        });
+
+    } catch (err) {
+        console.error('[FACTURAMA/TIMBRAR ERROR]', err);
+
+        await registrarBitacora(
+            req.user.id,
+            'CFDI_ERROR',
+            `Expediente: ${expedienteId} | Error: ${err.message} | Sandbox: ${facturama.SANDBOX}`,
+            req.ip,
+            'FALLIDO'
+        ).catch(() => {});
+
+        const status = err.status || 500;
+        res.status(status).json({
+            success: false,
+            error:   err.message,
+            detalles: err.data || null,
+        });
+    }
+});
+
+/**
+ * GET /api/facturama/descargar/:facturamaId/:formato
+ * Descarga el XML o PDF de una factura directamente desde Facturama.
+ * :formato = 'xml' | 'pdf'
+ */
+app.get('/api/facturama/descargar/:facturamaId/:formato', autenticarToken, async (req, res) => {
+    const { facturamaId, formato } = req.params;
+    if (!['xml', 'pdf'].includes(formato)) {
+        return res.status(400).json({ error: 'Formato debe ser xml o pdf.' });
+    }
+    try {
+        const base64 = await facturama.descargarArchivo(facturamaId, formato);
+        const buffer = Buffer.from(base64, 'base64');
+
+        const contentType = formato === 'pdf' ? 'application/pdf' : 'application/xml';
+        const filename    = `COEPRISS_${facturamaId}.${formato}`;
+
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
+    } catch (err) {
+        console.error('[FACTURAMA/DESCARGAR]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/facturama/cancelar/:facturamaId
+ * Cancela un CFDI. Solo Administrador.
+ * Body: { motivo: '01'|'02'|'03'|'04', uuid: string }
+ */
+app.delete('/api/facturama/cancelar/:facturamaId', autenticarToken, requiereRol('Administrador'), async (req, res) => {
+    const { facturamaId } = req.params;
+    const { motivo = '02', uuid } = req.body || {};
+
+    try {
+        const resultado = await facturama.cancelarCFDI(facturamaId, motivo);
+
+        // Actualizar estatus en BD si viene uuid
+        if (uuid) {
+            await prisma.factura.updateMany({
+                where: { uuid },
+                data:  { estatus: 'CANCELADA' }
+            }).catch(() => {});
+        }
+
+        await registrarBitacora(
+            req.user.id,
+            'CFDI_CANCELADO',
+            `FacturamaId: ${facturamaId} | UUID: ${uuid || 'N/A'} | Motivo: ${motivo}`,
+            req.ip,
+            'EXITOSO'
+        );
+
+        res.json({ success: true, resultado });
+    } catch (err) {
+        console.error('[FACTURAMA/CANCELAR]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/facturama/listar
+ * Lista las facturas emitidas en Facturama.
+ */
+app.get('/api/facturama/listar', autenticarToken, async (req, res) => {
+    try {
+        const { pagina = 0, tamanio = 50 } = req.query;
+        const resultado = await facturama.listarFacturas(parseInt(pagina), parseInt(tamanio));
+        res.json({ success: true, data: resultado, sandbox: facturama.SANDBOX });
+    } catch (err) {
+        console.error('[FACTURAMA/LISTAR]', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ─────────────────────────────────────────────

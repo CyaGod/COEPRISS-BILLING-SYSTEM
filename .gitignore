@@ -1,4 +1,5 @@
 eng.traineddata
+node_modules/
 
 # Credenciales fiscales y secretos: nunca se versionan ni se sirven al navegador.
 *.cer

@@ -618,6 +618,11 @@ function goToStep(stepNumber) {
         const navSolicitud = document.getElementById('nav-solicitud');
         if (navSolicitud) navSolicitud.classList.add('active-pulse');
     }
+
+    // 5. Al navegar al Step 4, verificar el ambiente de Facturama
+    if (stepNumber === 4) {
+        initStep4FacturamaBadge();
+    }
 }
 
 // 2. Step 1: Laser Scan Animation
@@ -2298,21 +2303,314 @@ function updatePreviewFields() {
     }
 }
 
-// 5. Step 4: PAC Automatic Timbrado
-function stampInvoiceViaPAC() {
-    if (!state.activeExpediente) return;
-    showToast('Timbrado PAC no configurado. No se generó UUID, XML ni factura fiscal.', 'warning');
+// 5. Step 4: PAC Automatic Timbrado — Integración Facturama
+// Estado del último timbrado exitoso
+let _lastStampResult = null;
+
+/**
+ * Inicializa el Step 4 verificando el ambiente de Facturama
+ * y mostrando el badge correspondiente (sandbox/producción).
+ */
+async function initStep4FacturamaBadge() {
+    const badgeEl = document.getElementById('facturama-ambiente-badge');
+    if (!badgeEl) return;
+
+    badgeEl.textContent = 'Verificando conexión con Facturama...';
+    badgeEl.style.background = '#f0f0f0';
+    badgeEl.style.color = '#666';
+
+    try {
+        const res = await apiFetch('/api/facturama/estado');
+        const data = await res.json();
+
+        if (data.sandbox) {
+            badgeEl.innerHTML = '🧪 <strong>MODO SANDBOX</strong> — Las facturas son de prueba, NO van al SAT ni consumen folios reales';
+            badgeEl.style.background = '#d4edda';
+            badgeEl.style.color = '#155724';
+            badgeEl.style.borderColor = '#c3e6cb';
+        } else {
+            badgeEl.innerHTML = '⚡ <strong>MODO PRODUCCIÓN</strong> — Las facturas son REALES y serán reportadas al SAT';
+            badgeEl.style.background = '#fff3cd';
+            badgeEl.style.color = '#856404';
+            badgeEl.style.borderColor = '#ffc107';
+        }
+        badgeEl.dataset.sandbox = data.sandbox;
+        badgeEl.dataset.ambiente = data.ambiente;
+    } catch (e) {
+        badgeEl.textContent = '⚠️ No se pudo conectar con Facturama. Verifica la configuración.';
+        badgeEl.style.background = '#f8d7da';
+        badgeEl.style.color = '#721c24';
+    }
+}
+
+/**
+ * Timbrado automático vía Facturama PAC.
+ * Valida datos → (confirma en producción) → timbra → guarda → descarga.
+ */
+async function stampInvoiceViaPAC() {
+    if (!state.activeExpediente) {
+        showToast('Primero carga y procesa un documento para obtener el expediente.', 'warning');
+        return;
+    }
+
+    const folio = state.activeExpediente.folio;
+    if (!folio) {
+        showToast('El expediente no tiene folio asignado.', 'error');
+        return;
+    }
+
+    const btn       = document.getElementById('btn-pac-stamp');
+    const loadingEl = document.getElementById('pac-loading-box');
+    const titleEl   = document.getElementById('pac-loading-title');
+    const descEl    = document.getElementById('pac-loading-desc');
+
+    function setLoading(msg, sub) {
+        if (loadingEl) loadingEl.style.display = 'flex';
+        if (titleEl)   titleEl.textContent = msg;
+        if (descEl)    descEl.textContent   = sub;
+        if (btn)       btn.disabled = true;
+    }
+    function clearLoading() {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (btn)       btn.disabled = false;
+    }
+
+    try {
+        // ── PASO 1: Validar datos SIN timbrar ───────────────────────────────
+        setLoading('Validando datos fiscales...', 'Verificando RFC, importes y campos requeridos.');
+        const testRes  = await apiFetch('/api/facturama/test', {
+            method: 'POST',
+            body:   JSON.stringify({ expedienteId: folio }),
+        });
+        const testData = await testRes.json();
+
+        if (!testRes.ok || !testData.success) {
+            clearLoading();
+            showToast(`❌ Datos inválidos: ${testData.error}`, 'error');
+            return;
+        }
+
+        const resumen  = testData.resumen;
+        const isSandbox = testData.sandbox;
+
+        // ── PASO 2: Confirmación en producción ──────────────────────────────
+        if (!isSandbox) {
+            const confirmado = await _mostrarModalConfirmacionProduccion(resumen);
+            if (!confirmado) {
+                clearLoading();
+                showToast('Timbrado cancelado por el usuario.', 'info');
+                return;
+            }
+        }
+
+        // ── PASO 3: Timbrar ─────────────────────────────────────────────────
+        setLoading('Firmando y timbrando CFDI 4.0...', 'Enviando al PAC autorizado por el SAT. Por favor espera.');
+        const body = { expedienteId: folio };
+        if (!isSandbox) body.confirmarProduccion = true;
+
+        const stampRes  = await apiFetch('/api/facturama/timbrar', {
+            method: 'POST',
+            body:   JSON.stringify(body),
+        });
+        const stampData = await stampRes.json();
+
+        if (!stampRes.ok || !stampData.success) {
+            clearLoading();
+            const errMsg = stampData.error || 'Error desconocido del PAC.';
+            showToast(`❌ Error al timbrar: ${errMsg}`, 'error');
+            console.error('[STAMP ERROR]', stampData);
+            return;
+        }
+
+        // ── PASO 4: Guardar resultado en estado local ────────────────────────
+        _lastStampResult = stampData;
+        state.activeExpediente.uuid      = stampData.uuid;
+        state.activeExpediente.facturamaId = stampData.facturamaId;
+        state.activeExpediente.estatus   = 'TIMBRADO';
+
+        // Actualizar en la lista local de expedientes
+        const idx = state.expedientes.findIndex(e => e.folio === folio);
+        if (idx !== -1) {
+            state.expedientes[idx].estatus  = 'TIMBRADO';
+            state.expedientes[idx].cfdiUuid = stampData.uuid;
+        }
+
+        clearLoading();
+
+        // ── PASO 5: Mostrar resultado exitoso ────────────────────────────────
+        _mostrarResultadoTimbrado(stampData, isSandbox);
+        renderProcesoTable();
+        updateDashboardCounts();
+        saveDatabaseToStorage();
+
+        const modoStr = isSandbox ? '🧪 (SANDBOX)' : '✅ (PRODUCCIÓN)';
+        showToast(`${modoStr} CFDI timbrado exitosamente. UUID: ${stampData.uuid}`, 'success');
+        addSecurityLog('CFDI Timbrado', `UUID: ${stampData.uuid} | Sandbox: ${isSandbox}`);
+
+    } catch (err) {
+        clearLoading();
+        console.error('[STAMP EXCEPTION]', err);
+        showToast(`❌ Error de conexión: ${err.message}`, 'error');
+    }
+}
+
+/**
+ * Modal de confirmación para timbrado en PRODUCCIÓN.
+ * Devuelve true si el usuario confirma, false si cancela.
+ */
+function _mostrarModalConfirmacionProduccion(resumen) {
+    return new Promise((resolve) => {
+        const fmt = n => n != null ? `$${parseFloat(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—';
+
+        const modal = document.createElement('div');
+        modal.id = 'modal-produccion-confirm';
+        modal.style.cssText = `
+            position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);
+            display:flex;align-items:center;justify-content:center;padding:20px;
+        `;
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:12px;padding:32px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                    <div style="width:44px;height:44px;border-radius:50%;background:#fff3cd;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">⚡</div>
+                    <div>
+                        <h3 style="margin:0;font-size:1.1rem;color:#212529;font-weight:700;">Confirmar Timbrado en PRODUCCIÓN</h3>
+                        <p style="margin:4px 0 0;font-size:0.8rem;color:#856404;font-weight:600;">Esta factura será REAL y reportada al SAT</p>
+                    </div>
+                </div>
+                <div style="background:#f8f9fa;border-radius:8px;padding:16px;margin-bottom:20px;font-size:0.82rem;">
+                    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:6px 12px;">
+                        <span style="color:#6c757d;">Emisor:</span><strong>${resumen?.emisor || '—'}</strong>
+                        <span style="color:#6c757d;">Receptor:</span><strong>${resumen?.receptor || '—'}</strong>
+                        <span style="color:#6c757d;">Concepto:</span><strong>${resumen?.concepto || '—'}</strong>
+                        <span style="color:#6c757d;">Subtotal:</span><strong>${fmt(resumen?.subtotal)}</strong>
+                        <span style="color:#6c757d;">IVA (16%):</span><strong>${fmt(resumen?.iva)}</strong>
+                        <span style="color:#6c757d;border-top:1px solid #dee2e6;padding-top:6px;">Total:</span>
+                        <strong style="border-top:1px solid #dee2e6;padding-top:6px;color:#0d6efd;font-size:1rem;">${fmt(resumen?.total)}</strong>
+                    </div>
+                </div>
+                <p style="font-size:0.78rem;color:#dc3545;margin-bottom:20px;padding:10px;background:#f8d7da;border-radius:6px;">
+                    ⚠️ Una vez timbrada, esta factura queda ante el SAT. Solo podrá cancelarse con motivo justificado y dentro de los plazos del SAT.
+                </p>
+                <div style="display:flex;gap:12px;justify-content:flex-end;">
+                    <button id="btn-cancel-prod" style="padding:10px 24px;border-radius:6px;border:1.5px solid #dee2e6;background:#fff;cursor:pointer;font-weight:500;">Cancelar</button>
+                    <button id="btn-confirm-prod" style="padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;cursor:pointer;font-weight:700;">
+                        Sí, timbrar factura REAL
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('btn-cancel-prod').onclick  = () => { modal.remove(); resolve(false); };
+        document.getElementById('btn-confirm-prod').onclick = () => { modal.remove(); resolve(true);  };
+        modal.addEventListener('click', (e) => { if (e.target === modal) { modal.remove(); resolve(false); } });
+    });
+}
+
+/**
+ * Muestra el panel de resultado exitoso tras el timbrado.
+ */
+function _mostrarResultadoTimbrado(data, isSandbox) {
+    const box = document.getElementById('pac-resultado-timbrado');
+    if (!box) return;
+
+    const fmt = n => n != null ? `$${parseFloat(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—';
+    const sandboxBadge = isSandbox
+        ? '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">🧪 SANDBOX</span>'
+        : '<span style="background:#d1ecf1;color:#0c5460;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">✅ PRODUCCIÓN</span>';
+
+    box.style.display = 'block';
+    box.innerHTML = `
+        <div style="padding:20px;background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;border-left:4px solid #28a745;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <svg fill="none" stroke="#28a745" viewBox="0 0 24 24" style="width:24px;height:24px;flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <strong style="color:#155724;font-size:1rem;">CFDI Timbrado Exitosamente ${sandboxBadge}</strong>
+            </div>
+            <div style="background:#fff;border-radius:6px;padding:14px;font-size:0.82rem;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin-bottom:14px;">
+                <span style="color:#6c757d;">UUID SAT:</span>
+                <strong style="font-family:monospace;color:#212529;word-break:break-all;">${data.uuid || '—'}</strong>
+                <span style="color:#6c757d;">Folio:</span><strong>${data.serie || ''}${data.folio || '—'}</strong>
+                <span style="color:#6c757d;">Fecha:</span><strong>${data.fecha ? new Date(data.fecha).toLocaleString('es-MX') : '—'}</strong>
+                <span style="color:#6c757d;">Subtotal:</span><strong>${fmt(data.subtotal)}</strong>
+                <span style="color:#6c757d;">Total:</span><strong style="color:#0d6efd;font-size:1rem;">${fmt(data.total)}</strong>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button onclick="downloadFromFacturama('${data.facturamaId}', 'xml')" style="padding:8px 16px;background:#28a745;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                    📄 Descargar XML
+                </button>
+                <button onclick="downloadFromFacturama('${data.facturamaId}', 'pdf')" style="padding:8px 16px;background:#0d6efd;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                    📑 Descargar PDF
+                </button>
+                <button onclick="copyToClipboard('${data.uuid}')" style="padding:8px 16px;background:#6c757d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">
+                    📋 Copiar UUID
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Descarga XML o PDF directamente desde Facturama vía el backend.
+ */
+async function downloadFromFacturama(facturamaId, formato) {
+    if (!facturamaId) { showToast('No hay ID de Facturama disponible.', 'error'); return; }
+    try {
+        const token = getJwtToken();
+        const res = await fetch(`/api/facturama/descargar/${facturamaId}/${formato}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `COEPRISS_${facturamaId}.${formato}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`✅ ${formato.toUpperCase()} descargado correctamente.`, 'success');
+    } catch (e) {
+        showToast(`Error al descargar ${formato}: ${e.message}`, 'error');
+    }
+}
+
+/**
+ * Copia texto al portapapeles.
+ */
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('UUID copiado al portapapeles.', 'success');
+    }).catch(() => {
+        showToast('No se pudo copiar el UUID.', 'error');
+    });
 }
 
 function downloadXML() {
-    if (!state.activeExpediente) return;
-    showToast('XML no disponible: primero debe configurarse un PAC real o cargarse un XML timbrado.', 'warning');
+    // Si ya hay un resultado de timbrado con ID, descargar desde Facturama
+    if (_lastStampResult?.facturamaId) {
+        downloadFromFacturama(_lastStampResult.facturamaId, 'xml');
+        return;
+    }
+    // Fallback: XML desde BD local si existe
+    if (state.activeExpediente?.xmlContent) {
+        const blob = new Blob([state.activeExpediente.xmlContent], { type: 'application/xml' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `CFDI_${state.activeExpediente.folio}.xml`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+    }
+    showToast('No hay XML disponible. Primero timbra el CFDI vía PAC.', 'warning');
 }
 
 function openSatPortal() {
     const opened = window.open('https://www.sat.gob.mx/', '_blank', 'noopener,noreferrer');
     if (!opened) {
-        showToast('El navegador bloqueo la pestaña del SAT. Permite ventanas emergentes para este sitio.', 'error');
+        showToast('El navegador bloqueó la pestaña del SAT. Permite ventanas emergentes para este sitio.', 'error');
         return;
     }
     showToast('Portal oficial del SAT abierto en una pestaña nueva.', 'info');
