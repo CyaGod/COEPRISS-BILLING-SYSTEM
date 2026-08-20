@@ -847,24 +847,29 @@ async function startScanAnimation() {
         state.lastOcrFields = fields;
         applyExtractedFields(fields);
         const needsReview = !state.scanQuality || state.scanQuality.level !== 'alta' || countReliableOcrFields(fields) < 5;
-        state.uploadedFiles.forEach(file => {
-            file.status = needsReview ? 'OCR completado - requiere revision' : 'Leido correctamente (OCR local)';
-        });
+        // Sync individual file statuses back to the expediente archivos list
         if (state.activeExpediente) {
-            state.activeExpediente.archivos.forEach(file => {
-                file.status = needsReview ? 'OCR completado - requiere revision' : 'Leido correctamente (OCR local)';
+            state.activeExpediente.archivos.forEach(archivoEntry => {
+                const uploadedMatch = state.uploadedFiles.find(u => u.name === archivoEntry.name);
+                if (uploadedMatch) {
+                    archivoEntry.status = uploadedMatch.status || (needsReview ? 'OCR completado - requiere revision' : 'Leido correctamente (OCR local)');
+                } else {
+                    archivoEntry.status = needsReview ? 'OCR completado - requiere revision' : 'Leido correctamente (OCR local)';
+                }
             });
             state.activeExpediente.estatus = 'Pago pendiente';
             addAuditLogToActive('Documentos procesados mediante OCR local. Datos pendientes de confirmacion.');
             addSecurityLog('OCR local', `Lectura del expediente ${state.activeExpediente.folio} finalizada en el navegador.`);
         }
+        const readCount = state.uploadedFiles.filter(f => f.status && f.status.includes('Leído')).length;
+        const totalCount = state.uploadedFiles.length;
         renderDocumentList();
         updateStep2Fields();
         updateOcrResultAlert(fields);
         updatePreviewFields();
         renderTimeline();
         updatePaymentValidationUI();
-        showToast('Lectura terminada. Revisa o corrige los datos extraídos antes de continuar.', 'info');
+        showToast(`✅ Lectura terminada: ${readCount} de ${totalCount} archivo(s) procesado(s). Revisa o corrige los datos antes de continuar.`, 'info');
         goToStep(2);
     } catch (error) {
         console.error('OCR error:', error);
@@ -901,33 +906,49 @@ async function extractUploadedDocuments() {
 
     let allText = '';
     let pageCount = 0;
-    for (const uploaded of state.uploadedFiles) {
-        const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
-        if (!isPdf) {
-            allText += `\n${await recognizeImageWithFallback(uploaded.file, uploaded)}`;
-            pageCount += 1;
-            continue;
-        }
+    const totalFiles = state.uploadedFiles.length;
+    let fileIndex = 0;
 
-        const pdf = await window.pdfjsLib.getDocument({ data: await uploaded.file.arrayBuffer() }).promise;
-        const pageLimit = Math.min(pdf.numPages, 3);
-        for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
-            const page = await pdf.getPage(pageNumber);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str || '').join(' ').trim();
-            if (pageText.replace(/\s/g, '').length >= 30) {
-                allText += `\n${pageText}`;
-            } else {
-                const canvas = await renderPdfPageForOcr(page);
-                // PSM 4 works better for scanned PDF pages with a full-page
-                // document layout; image receipts keep the banded PSM 6 path.
-                allText += `\n${await recognizeCanvasWithFallback(canvas, '4')}`;
-                canvas.width = 1;
-                canvas.height = 1;
+    for (const uploaded of state.uploadedFiles) {
+        fileIndex += 1;
+        const scanBtn = document.getElementById('btn-scan');
+        if (scanBtn) scanBtn.textContent = `Procesando archivo ${fileIndex} de ${totalFiles}: ${uploaded.name.slice(0, 30)}...`;
+
+        try {
+            const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
+            if (!isPdf) {
+                const imgText = await recognizeImageWithFallback(uploaded.file, uploaded);
+                allText += `\n${imgText}`;
+                pageCount += 1;
+                uploaded.status = 'Leído correctamente (OCR local)';
+                continue;
             }
-            pageCount += 1;
+
+            const pdf = await window.pdfjsLib.getDocument({ data: await uploaded.file.arrayBuffer() }).promise;
+            const pageLimit = Math.min(pdf.numPages, 3);
+            for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+                if (scanBtn) scanBtn.textContent = `Archivo ${fileIndex}/${totalFiles} — Página ${pageNumber}/${pageLimit}: ${uploaded.name.slice(0, 25)}...`;
+                const page = await pdf.getPage(pageNumber);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str || '').join(' ').trim();
+                if (pageText.replace(/\s/g, '').length >= 30) {
+                    allText += `\n${pageText}`;
+                } else {
+                    const canvas = await renderPdfPageForOcr(page);
+                    allText += `\n${await recognizeCanvasWithFallback(canvas, '4')}`;
+                    canvas.width = 1;
+                    canvas.height = 1;
+                }
+                pageCount += 1;
+            }
+            if (pdf.numPages > pageLimit) allText += '\n[Advertencia: el PDF supera el limite de 3 paginas.]';
+            uploaded.status = 'Leído correctamente (OCR local)';
+        } catch (fileError) {
+            console.warn(`[OCR] Error leyendo "${uploaded.name}":`, fileError);
+            uploaded.status = `Error al leer: ${fileError.message || 'error desconocido'}`;
+            showToast(`No se pudo leer "${uploaded.name}": ${fileError.message || 'error'}`, 'warning');
+            // Continue with remaining files
         }
-        if (pdf.numPages > pageLimit) allText += '\n[Advertencia: el PDF supera el limite de 3 paginas.]';
     }
 
     if (!pageCount || allText.replace(/\s/g, '').length < 10) {
