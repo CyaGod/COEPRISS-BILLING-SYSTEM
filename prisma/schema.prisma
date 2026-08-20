@@ -96,6 +96,26 @@ model Empresa {
   @@map("empresas")
 }
 
+model Cliente {
+  id              Int             @id @default(autoincrement())
+  rfc             String          @unique @db.VarChar(20)
+  razonSocial     String          @db.VarChar(250)
+  regimenFiscal   String?         @db.VarChar(20)
+  codigoPostal    String?         @db.VarChar(10)
+  usoCfdi         String?         @db.VarChar(10)
+  formaPago       String?         @db.VarChar(10)
+  email           String?         @db.VarChar(200)
+  telefono        String?         @db.VarChar(30)
+  domicilio       String?         @db.VarChar(500)
+  activo          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([rfc])
+  @@index([razonSocial])
+  @@map("clientes")
+}
+
 // ─────────────────────────────────────────────
 // EXPEDIENTES (REGISTRO CENTRAL DE TRÁMITES)
 // ─────────────────────────────────────────────
@@ -182,6 +202,7 @@ model Factura {
   usuarioId       Int
   folio           String          @db.VarChar(50)
   uuid            String?         @unique @db.VarChar(50)
+  facturamaId     String?         @db.VarChar(100)
   xmlContent      String?         @db.Text
   pdfPath         String?         @db.VarChar(500)
   estatus         EstatusFactura  @default(GENERADA)

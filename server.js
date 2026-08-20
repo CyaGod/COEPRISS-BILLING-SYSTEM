@@ -309,13 +309,67 @@ function sanitizeExpediente(data) {
 // FACTURAS
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// FACTURAS
+// ─────────────────────────────────────────────
+
 app.get('/api/facturas', autenticarToken, apiLimiter, async (req, res) => {
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 100, estatus, desde, hasta, busqueda } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     try {
+        const where = {};
+        if (estatus && estatus.trim() && estatus.toUpperCase() !== 'TODOS') {
+            where.estatus = estatus.toUpperCase().trim();
+        }
+        if (desde || hasta) {
+            where.createdAt = {};
+            if (desde) {
+                const d = new Date(desde);
+                d.setHours(0, 0, 0, 0);
+                where.createdAt.gte = d;
+            }
+            if (hasta) {
+                const h = new Date(hasta);
+                h.setHours(23, 59, 59, 999);
+                where.createdAt.lte = h;
+            }
+        }
+        if (busqueda && busqueda.trim()) {
+            const b = busqueda.trim();
+            where.OR = [
+                { folio: { contains: b, mode: 'insensitive' } },
+                { uuid: { contains: b, mode: 'insensitive' } },
+                { expediente: { receptorNombre: { contains: b, mode: 'insensitive' } } },
+                { expediente: { receptorRfc: { contains: b, mode: 'insensitive' } } },
+                { expediente: { folio: { contains: b, mode: 'insensitive' } } }
+            ];
+        }
+
         const [total, facturas] = await Promise.all([
-            prisma.factura.count(),
-            prisma.factura.findMany({ skip, take: parseInt(limit), orderBy: { createdAt: 'desc' }, include: { expediente: { select: { folio: true, receptorNombre: true } } } })
+            prisma.factura.count({ where }),
+            prisma.factura.findMany({
+                where,
+                skip,
+                take: parseInt(limit),
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    expediente: {
+                        select: {
+                            folio: true,
+                            receptorNombre: true,
+                            receptorRfc: true,
+                            receptorEmail: true,
+                            cfdiTotal: true,
+                            cfdiSubtotal: true,
+                            cfdiIva: true,
+                            cfdiConcepto: true,
+                            cfdiMetodoPago: true,
+                            cfdiFormaPago: true
+                        }
+                    },
+                    usuario: { select: { nombreCompleto: true } }
+                }
+            })
         ]);
         res.json({ success: true, total, data: facturas });
     } catch (err) {
@@ -325,12 +379,120 @@ app.get('/api/facturas', autenticarToken, apiLimiter, async (req, res) => {
 
 app.post('/api/facturas', autenticarToken, async (req, res) => {
     try {
-        const { expedienteId, folio, xmlContent, uuid, estatus } = req.body;
+        const { expedienteId, folio, xmlContent, uuid, estatus, facturamaId } = req.body;
         const factura = await prisma.factura.create({
-            data: { expedienteId, folio, xmlContent, uuid, estatus: estatus || 'GENERADA', usuarioId: req.user.id }
+            data: { expedienteId, folio, xmlContent, uuid, facturamaId, estatus: estatus || 'GENERADA', usuarioId: req.user.id }
         });
         await registrarBitacora(req.user.id, 'FACTURA_CREADA', `Folio: ${folio}`, req.ip);
         res.json({ success: true, data: factura });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// DIRECTORIO DE CLIENTES
+// ─────────────────────────────────────────────
+
+app.get('/api/clientes', autenticarToken, async (req, res) => {
+    try {
+        const { q, page = 1, limit = 100 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const where = { activo: true };
+        if (q && q.trim()) {
+            const b = q.trim();
+            where.OR = [
+                { rfc: { contains: b, mode: 'insensitive' } },
+                { razonSocial: { contains: b, mode: 'insensitive' } },
+                { email: { contains: b, mode: 'insensitive' } },
+                { codigoPostal: { contains: b, mode: 'insensitive' } }
+            ];
+        }
+        const [total, clientes] = await Promise.all([
+            prisma.cliente.count({ where }),
+            prisma.cliente.findMany({
+                where,
+                skip,
+                take: parseInt(limit),
+                orderBy: { updatedAt: 'desc' }
+            })
+        ]);
+        res.json({ success: true, total, data: clientes });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/clientes/:rfc', autenticarToken, async (req, res) => {
+    try {
+        const rfc = req.params.rfc.toUpperCase().trim();
+        const cliente = await prisma.cliente.findUnique({
+            where: { rfc }
+        });
+        if (!cliente) return res.status(404).json({ success: false, error: 'Cliente no registrado en el directorio.' });
+        res.json({ success: true, data: cliente });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/clientes', autenticarToken, async (req, res) => {
+    try {
+        const {
+            rfc,
+            razonSocial,
+            regimenFiscal,
+            codigoPostal,
+            usoCfdi,
+            formaPago,
+            email,
+            telefono,
+            domicilio
+        } = req.body || {};
+
+        if (!rfc || !rfc.trim()) {
+            return res.status(400).json({ error: 'El RFC es obligatorio.' });
+        }
+        if (!razonSocial || !razonSocial.trim()) {
+            return res.status(400).json({ error: 'La Razón Social / Nombre es obligatoria.' });
+        }
+
+        const rfcNorm = rfc.toUpperCase().trim();
+        const data = {
+            rfc:           rfcNorm,
+            razonSocial:   razonSocial.trim(),
+            regimenFiscal: regimenFiscal ? String(regimenFiscal).trim() : null,
+            codigoPostal:  codigoPostal ? String(codigoPostal).trim() : null,
+            usoCfdi:       usoCfdi ? String(usoCfdi).trim() : null,
+            formaPago:     formaPago ? String(formaPago).trim() : null,
+            email:         email ? String(email).trim() : null,
+            telefono:      telefono ? String(telefono).trim() : null,
+            domicilio:     domicilio ? String(domicilio).trim() : null,
+            activo:        true
+        };
+
+        const cliente = await prisma.cliente.upsert({
+            where: { rfc: rfcNorm },
+            update: data,
+            create: data
+        });
+
+        await registrarBitacora(req.user.id, 'CLIENTE_GUARDADO', `RFC: ${rfcNorm} - ${razonSocial}`, req.ip);
+        res.json({ success: true, data: cliente });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/clientes/:id', autenticarToken, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        await prisma.cliente.update({
+            where: { id },
+            data: { activo: false }
+        });
+        await registrarBitacora(req.user.id, 'CLIENTE_ELIMINADO', `ID: ${id}`, req.ip);
+        res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -391,8 +553,50 @@ app.post('/api/excel/importar', autenticarToken, upload.single('archivo'), async
 });
 
 // ─────────────────────────────────────────────
-// HISTORIAL DE CORREOS
+// CORREOS ELECTRÓNICOS Y BREVO API
 // ─────────────────────────────────────────────
+
+/**
+ * Helper para enviar correo transaccional con la API REST de Brevo.
+ */
+async function enviarCorreoBrevo({ destinatario, nombreDestinatario, asunto, cuerpoHtml, adjuntos = [] }) {
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+        throw new Error('BREVO_API_KEY no configurada en las variables de entorno.');
+    }
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'coepriss1@gmail.com';
+    const senderName  = process.env.BREVO_SENDER_NAME  || 'COEPRISS Sinaloa - Facturación';
+
+    const payload = {
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: destinatario, name: nombreDestinatario || destinatario }],
+        subject: asunto,
+        htmlContent: cuerpoHtml,
+    };
+
+    if (adjuntos && adjuntos.length > 0) {
+        payload.attachment = adjuntos.map(a => ({
+            name: a.name,
+            content: String(a.content || '').replace(/^data:[^;]+;base64,/, '').trim()
+        }));
+    }
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            'api-key': apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.message || data.error || `Error en Brevo API (HTTP ${res.status})`);
+    }
+    return data;
+}
 
 app.get('/api/correos', autenticarToken, async (req, res) => {
     const { page = 1, limit = 50 } = req.query;
@@ -408,15 +612,158 @@ app.get('/api/correos', autenticarToken, async (req, res) => {
     }
 });
 
-app.post('/api/correos', autenticarToken, async (req, res) => {
-    const { expedienteId, destinatario, asunto, cuerpo, estatus } = req.body;
+app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
+    const {
+        expedienteId,
+        destinatario,
+        nombreDestinatario,
+        asunto,
+        mensaje,
+        facturamaId,
+        uuid,
+        incluirXml = true,
+        incluirPdf = true,
+        xmlBase64,
+        pdfBase64
+    } = req.body || {};
+
+    if (!destinatario || !destinatario.includes('@')) {
+        return res.status(400).json({ error: 'Dirección de correo electrónico inválida.' });
+    }
+
     try {
-        const correo = await prisma.historialCorreo.create({
-            data: { expedienteId, destinatario, asunto, cuerpo, estatus: estatus || 'ENVIADO', usuarioId: req.user.id }
+        let expediente = null;
+        let factura = null;
+        if (expedienteId) {
+            expediente = await prisma.expediente.findFirst({
+                where: { OR: [{ folio: String(expedienteId) }, { id: parseInt(expedienteId) || 0 }] },
+                include: { facturas: { orderBy: { createdAt: 'desc' }, take: 1 } }
+            });
+            if (expediente && expediente.facturas.length > 0) {
+                factura = expediente.facturas[0];
+            }
+        }
+
+        const effectiveFacturamaId = facturamaId || factura?.facturamaId || null;
+        const effectiveUuid = uuid || factura?.uuid || expediente?.cfdiUuid || 'N/A';
+        const clientName = nombreDestinatario || expediente?.receptorNombre || 'Contribuyente';
+
+        const adjuntos = [];
+
+        // Obtener XML
+        if (incluirXml) {
+            let xmlData = xmlBase64;
+            if (!xmlData && effectiveFacturamaId) {
+                xmlData = await facturama.descargarArchivo(effectiveFacturamaId, 'xml').catch(() => null);
+            }
+            if (!xmlData && factura?.xmlContent) {
+                xmlData = Buffer.from(factura.xmlContent, 'utf-8').toString('base64');
+            }
+            if (xmlData) {
+                adjuntos.push({
+                    name: `COEPRISS_${expedienteId || 'Factura'}.xml`,
+                    content: xmlData
+                });
+            }
+        }
+
+        // Obtener PDF
+        if (incluirPdf) {
+            let pdfData = pdfBase64;
+            if (!pdfData && effectiveFacturamaId) {
+                pdfData = await facturama.descargarArchivo(effectiveFacturamaId, 'pdf').catch(() => null);
+            }
+            if (pdfData) {
+                adjuntos.push({
+                    name: `COEPRISS_${expedienteId || 'Factura'}.pdf`,
+                    content: pdfData
+                });
+            }
+        }
+
+        const emailSubject = asunto || `Comprobante Fiscal Digital (CFDI) - COEPRISS Sinaloa - Folio ${expedienteId || ''}`;
+        const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 650px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #ffffff;">
+                <div style="background: #1B365D; color: #ffffff; padding: 24px; text-align: center;">
+                    <h2 style="margin: 0; font-size: 1.4rem; color: #ffffff; letter-spacing: 1px;">COEPRISS SINALOA</h2>
+                    <p style="margin: 6px 0 0; font-size: 0.85rem; color: #D4AF37; font-weight: bold;">Comisión Estatal para la Protección contra Riesgos Sanitarios</p>
+                </div>
+                <div style="padding: 24px; color: #333333; line-height: 1.6;">
+                    <h3 style="color: #1B365D; margin-top: 0;">Estimado(a) ${clientName},</h3>
+                    <p>Le hacemos llegar adjunto su Comprobante Fiscal Digital por Internet (CFDI 4.0) correspondiente a los trámites realizados ante esta Comisión.</p>
+                    
+                    ${mensaje ? `<div style="background: #f8f9fa; border-left: 4px solid #D4AF37; padding: 12px; margin: 16px 0; font-size: 0.9rem;">${mensaje}</div>` : ''}
+
+                    <div style="background: #f1f5f9; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                        <table style="width: 100%; font-size: 0.88rem; border-collapse: collapse;">
+                            <tr><td style="color: #64748b; padding: 4px 0; width: 140px;">Folio / Trámite:</td><td style="font-weight: bold;">${expediente?.folio || expedienteId || '—'}</td></tr>
+                            <tr><td style="color: #64748b; padding: 4px 0;">RFC Receptor:</td><td style="font-weight: bold;">${expediente?.receptorRfc || '—'}</td></tr>
+                            <tr><td style="color: #64748b; padding: 4px 0;">Folio Fiscal (UUID):</td><td style="font-family: monospace; font-size: 0.82rem; word-break: break-all;">${effectiveUuid}</td></tr>
+                            ${expediente?.cfdiTotal ? `<tr><td style="color: #64748b; padding: 4px 0;">Importe Total:</td><td style="font-weight: bold; color: #1B365D; font-size: 1rem;">$${parseFloat(expediente.cfdiTotal).toFixed(2)} MXN</td></tr>` : ''}
+                        </table>
+                    </div>
+
+                    <p style="font-size: 0.85rem; color: #64748b;">En los archivos adjuntos a este correo encontrará las versiones oficiales <strong>XML</strong> y <strong>PDF</strong> con sello digital del SAT.</p>
+                    <p style="font-size: 0.85rem; color: #64748b;">Si tiene dudas o requiere aclaraciones, favor de comunicarse a las oficinas de COEPRISS Sinaloa.</p>
+                </div>
+                <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; text-align: center; font-size: 0.75rem; color: #94a3b8;">
+                    COEPRISS Sinaloa — Blvd. Alfonso G. Calderón #2193, C.P. 80020, Culiacán, Sinaloa, México.<br>
+                    Este es un mensaje institucional automático generado por el Sistema de Facturación Electrónica.
+                </div>
+            </div>
+        `;
+
+        const brevoResult = await enviarCorreoBrevo({
+            destinatario,
+            nombreDestinatario: clientName,
+            asunto: emailSubject,
+            cuerpoHtml: emailHtml,
+            adjuntos
         });
-        res.json({ success: true, data: correo });
+
+        // Registrar en historial de correos de la BD
+        const registroCorreo = await prisma.historialCorreo.create({
+            data: {
+                expedienteId: expediente?.id || null,
+                usuarioId:    req.user.id,
+                destinatario,
+                asunto:       emailSubject,
+                cuerpo:       mensaje || `Envío CFDI (${adjuntos.length} adjuntos)`,
+                estatus:      'ENVIADO'
+            }
+        });
+
+        await registrarBitacora(
+            req.user.id,
+            'CORREO_ENVIADO',
+            `Destinatario: ${destinatario} | Folio: ${expedienteId || 'N/A'} | Adjuntos: ${adjuntos.length} | BrevoId: ${brevoResult.messageId || 'OK'}`,
+            req.ip,
+            'EXITOSO'
+        );
+
+        res.json({
+            success: true,
+            message: 'Correo enviado exitosamente vía Brevo.',
+            messageId: brevoResult.messageId || null,
+            registroId: registroCorreo.id,
+            adjuntosEnviados: adjuntos.map(a => a.name)
+        });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('[CORREO ENVIAR ERROR]', err);
+        if (req.user?.id) {
+            await prisma.historialCorreo.create({
+                data: {
+                    usuarioId:    req.user.id,
+                    destinatario: destinatario || 'desconocido',
+                    asunto:       asunto || 'Error en envío',
+                    cuerpo:       err.message,
+                    estatus:      'FALLIDO',
+                    errorDetalle: err.message
+                }
+            }).catch(() => {});
+        }
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -439,18 +786,19 @@ app.get('/api/bitacora', autenticarToken, requiereRol('Administrador'), async (r
 });
 
 // ─────────────────────────────────────────────
-// REPORTES
+// REPORTES Y EXPORTACIÓN EXCEL
 // ─────────────────────────────────────────────
 
 app.get('/api/reportes/dashboard', autenticarToken, async (req, res) => {
     try {
-        const [totalExpedientes, timbrados, pendientes, facturas] = await Promise.all([
+        const [totalExpedientes, timbrados, pendientes, facturas, totalClientes] = await Promise.all([
             prisma.expediente.count(),
             prisma.expediente.count({ where: { estatus: 'TIMBRADO' } }),
             prisma.expediente.count({ where: { estatus: 'PENDIENTE' } }),
-            prisma.factura.count()
+            prisma.factura.count(),
+            prisma.cliente.count({ where: { activo: true } })
         ]);
-        res.json({ success: true, data: { totalExpedientes, timbrados, pendientes, facturas } });
+        res.json({ success: true, data: { totalExpedientes, timbrados, pendientes, facturas, totalClientes } });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -458,27 +806,63 @@ app.get('/api/reportes/dashboard', autenticarToken, async (req, res) => {
 
 app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
     try {
+        const { estatus, desde, hasta, busqueda } = req.query;
+        const where = {};
+        if (estatus && estatus.trim() && estatus.toUpperCase() !== 'TODOS') {
+            where.estatus = estatus.toUpperCase().trim();
+        }
+        if (desde || hasta) {
+            where.createdAt = {};
+            if (desde) {
+                const d = new Date(desde);
+                d.setHours(0, 0, 0, 0);
+                where.createdAt.gte = d;
+            }
+            if (hasta) {
+                const h = new Date(hasta);
+                h.setHours(23, 59, 59, 999);
+                where.createdAt.lte = h;
+            }
+        }
+        if (busqueda && busqueda.trim()) {
+            const b = busqueda.trim();
+            where.OR = [
+                { folio: { contains: b, mode: 'insensitive' } },
+                { receptorNombre: { contains: b, mode: 'insensitive' } },
+                { receptorRfc: { contains: b, mode: 'insensitive' } }
+            ];
+        }
+
         const expedientes = await prisma.expediente.findMany({
+            where,
             orderBy: { createdAt: 'desc' },
-            include: { usuario: { select: { nombreCompleto: true } } }
+            include: {
+                usuario: { select: { nombreCompleto: true } },
+                facturas: { select: { uuid: true, estatus: true, fechaTimbrado: true, folio: true }, take: 1 }
+            }
         });
 
         const rows = expedientes.map(e => ({
-            'Folio': e.folio,
+            'Folio Interno': e.folio,
             'RFC Receptor': e.receptorRfc || '',
-            'Nombre': e.receptorNombre || '',
-            'Total': e.cfdiTotal?.toString() || '0',
+            'Nombre / Razón Social': e.receptorNombre || '',
+            'Régimen Fiscal': e.receptorRegimenFiscal || '',
+            'Código Postal': e.receptorCodigoPostal || '',
+            'Uso CFDI': e.receptorUsoCfdi || '',
+            'Concepto': e.cfdiConcepto || '',
+            'Total': parseFloat(e.cfdiTotal || 0).toFixed(2),
             'Estatus': e.estatus,
-            'Usuario': e.usuario?.nombreCompleto || '',
-            'Fecha': e.createdAt.toLocaleDateString('es-MX')
+            'UUID Fiscal': e.facturas[0]?.uuid || e.cfdiUuid || '',
+            'Fecha Registro': e.createdAt.toLocaleDateString('es-MX'),
+            'Usuario': e.usuario?.nombreCompleto || ''
         }));
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(rows);
-        XLSX.utils.book_append_sheet(wb, ws, 'Expedientes');
+        XLSX.utils.book_append_sheet(wb, ws, 'Reporte COEPRISS');
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-        res.setHeader('Content-Disposition', 'attachment; filename=COEPRISS_Reporte.xlsx');
+        res.setHeader('Content-Disposition', 'attachment; filename=COEPRISS_Reporte_Facturacion.xlsx');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
     } catch (err) {
@@ -665,6 +1049,7 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
                 usuarioId:       req.user.id,
                 folio:           resultado.folio || expedienteId,
                 uuid:            resultado.uuid,
+                facturamaId:     resultado.id ? String(resultado.id) : null,
                 xmlContent:      resultado.xmlBase64
                     ? Buffer.from(resultado.xmlBase64, 'base64').toString('utf-8')
                     : null,
@@ -684,6 +1069,33 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
                 cfdiTotal: parseFloat(expediente.cfdiTotal || 0),
             }
         });
+
+        // Auto-guardar / actualizar en el Directorio de Clientes
+        if (expediente.receptorRfc && expediente.receptorNombre) {
+            const rfcNorm = expediente.receptorRfc.toUpperCase().trim();
+            await prisma.cliente.upsert({
+                where: { rfc: rfcNorm },
+                update: {
+                    razonSocial:   expediente.receptorNombre.trim(),
+                    regimenFiscal: expediente.receptorRegimenFiscal || undefined,
+                    codigoPostal:  expediente.receptorCodigoPostal || undefined,
+                    usoCfdi:       expediente.receptorUsoCfdi || undefined,
+                    formaPago:     expediente.cfdiFormaPago || undefined,
+                    email:         expediente.receptorEmail || undefined,
+                    activo:        true
+                },
+                create: {
+                    rfc:           rfcNorm,
+                    razonSocial:   expediente.receptorNombre.trim(),
+                    regimenFiscal: expediente.receptorRegimenFiscal || null,
+                    codigoPostal:  expediente.receptorCodigoPostal || null,
+                    usoCfdi:       expediente.receptorUsoCfdi || null,
+                    formaPago:     expediente.cfdiFormaPago || null,
+                    email:         expediente.receptorEmail || null,
+                    activo:        true
+                }
+            }).catch(e => console.warn('[CLIENTE AUTO-SAVE ERROR]', e.message));
+        }
 
         // Registrar en bitácora
         await registrarBitacora(

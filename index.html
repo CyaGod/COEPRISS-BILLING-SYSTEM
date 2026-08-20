@@ -403,20 +403,35 @@
                     <div class="step-header-banner">
                         <div class="step-header-badge" style="background-color: var(--primary-color);">D</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Directorio de Clientes</h2>
-                            <p class="step-header-desc">Base de datos de contribuyentes registrados para facturación rápida.</p>
+                            <h2 class="step-header-title">Directorio de Clientes y Contribuyentes</h2>
+                            <p class="step-header-desc">Base de datos de contribuyentes registrados para emisión rápida de CFDI sin tener que volver a capturar datos.</p>
                         </div>
                     </div>
 
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div class="search-filter-container" style="flex: 1; max-width: 450px;">
+                            <div class="search-box-wrapper" style="width: 100%;">
+                                <svg class="search-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; left: 10px; color: #868e96;"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                                <input type="text" class="form-control search-input" id="search-clientes" placeholder="Buscar por RFC, Nombre o Razón Social..." oninput="filterClientesTable()" style="border-radius: 4px; padding: 8px 10px 8px 34px; font-size: 0.82rem; background-color: #ffffff; border: 1px solid #ced4da;">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="openClienteModal()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 8px 18px; background-color: var(--primary-color);">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                            Registrar Nuevo Cliente
+                        </button>
+                    </div>
+
                     <div class="report-table-wrapper">
-                        <table class="report-table">
+                        <table class="report-table" id="table-clientes">
                             <thead>
                                 <tr>
                                     <th>RFC</th>
-                                    <th>Razón Social</th>
+                                    <th>Razón Social / Nombre</th>
                                     <th>Régimen Fiscal</th>
-                                    <th>Código Postal</th>
+                                    <th>C.P.</th>
+                                    <th>Uso CFDI</th>
                                     <th>Correo de Envío</th>
+                                    <th style="text-align: center;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-clientes">
@@ -711,93 +726,150 @@
                     <div class="step-header-banner">
                         <div class="step-header-badge">3</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Vista previa de datos</h2>
-                            <p class="step-header-desc">Se muestra la información que se llevará al SAT.</p>
+                            <h2 class="step-header-title">Revisión y Datos del CFDI 4.0</h2>
+                            <p class="step-header-desc">Verifica y completa los 7 datos fiscales obligatorios exigidos por el SAT para el timbrado oficial.</p>
                         </div>
                     </div>
 
-                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
-                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Vista previa de la factura</h3>
+                    <!-- Banner Informativo SAT 4.0 -->
+                    <div class="app-alert app-alert-info" style="background-color: #E8F0FE; border: 1px solid #d2e3fc; border-left: 4px solid var(--info-color); color: #1a73e8; padding: 12px 16px; border-radius: 6px; margin-bottom: 18px; font-size: 0.82rem; display: flex; align-items: center; gap: 10px;">
+                        <svg class="app-alert-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 20px; height: 20px; color: var(--info-color); flex-shrink: 0;"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                        <span>Los datos extraídos por OCR se han precargado. Puedes editarlos directamente abajo. Si el RFC ya está registrado en el Directorio de Clientes, se autocompletará.</span>
                     </div>
 
-                    <div class="app-card" style="padding: 24px;">
-                        <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Datos del comprobante</h3>
-                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-bottom: 24px; align-items: center;">
-                            <div style="color: #6c757d; font-weight: 500;">Tipo de CFDI 4.0:</div>
-                            <div>
-                                <select class="form-control" id="select-cfdi-tipo" onchange="changeCfdiTipo(this.value)" style="max-width: 350px;">
-                                    <option value="ingreso">Ingreso (Factura por Derechos de Trámite)</option>
-                                    <option value="pago">Pago (Complemento para Recibos Parciales)</option>
-                                </select>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                        <!-- COLUMNA 1: DATOS FISCALES DEL RECEPTOR -->
+                        <div class="app-card" style="padding: 22px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #eaeaea; padding-bottom: 8px; margin-bottom: 16px;">
+                                <h3 class="form-label" style="font-size: 0.85rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; margin: 0;">
+                                    1. Receptor (Contribuyente)
+                                </h3>
+                                <span id="badge-cliente-encontrado" style="display:none; font-size: 0.72rem; background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 10px; font-weight: 600;">✓ Cliente en Directorio</span>
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="form-group">
+                                    <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">RFC del Receptor *</label>
+                                    <div style="display: flex; gap: 6px;">
+                                        <input type="text" class="form-control" id="step3-rfc" placeholder="Ej. CEP130206LC4" maxlength="13" style="text-transform: uppercase; font-family: monospace; font-weight: 700;" oninput="onStep3RfcChange(this.value)">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="buscarClientePorRfc(document.getElementById('step3-rfc').value)" title="Buscar en Directorio" style="padding: 6px 12px;">
+                                            🔍
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Nombre / Razón Social * (Sin S.A. de C.V.)</label>
+                                    <input type="text" class="form-control" id="step3-razon" placeholder="Nombre completo o razón social tal cual en Constancia SAT" oninput="syncStep3Field('cliente', this.value)">
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Código Postal *</label>
+                                        <input type="text" class="form-control" id="step3-cp" placeholder="80020" maxlength="5" inputmode="numeric" oninput="syncStep3Field('codigoPostal', this.value)">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Uso CFDI *</label>
+                                        <select class="form-control" id="step3-uso-cfdi" onchange="syncStep3Field('usoCfdi', this.value)">
+                                            <option value="G03">G03 - Gastos en general</option>
+                                            <option value="G01">G01 - Adquisición de mercancías</option>
+                                            <option value="G02">G02 - Devoluciones o descuentos</option>
+                                            <option value="I01">I01 - Construcciones</option>
+                                            <option value="I04">I04 - Equipo de cómputo</option>
+                                            <option value="I08">I08 - Maquinaria y equipo</option>
+                                            <option value="D01">D01 - Honorarios médicos</option>
+                                            <option value="D02">D02 - Gastos médicos incapacidad</option>
+                                            <option value="D04">D04 - Donativos</option>
+                                            <option value="S01">S01 - Sin efectos fiscales</option>
+                                            <option value="CP01">CP01 - Pagos</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Régimen Fiscal del Receptor *</label>
+                                    <select class="form-control" id="step3-regimen" onchange="syncStep3Field('regimenFiscal', this.value)">
+                                        <option value="601">601 - General de Ley Personas Morales</option>
+                                        <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                                        <option value="605">605 - Sueldos y Salarios e Ingresos Asimilados</option>
+                                        <option value="606">606 - Arrendamiento</option>
+                                        <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+                                        <option value="616">616 - Sin obligaciones fiscales</option>
+                                        <option value="621">621 - Incorporación Fiscal (RIF)</option>
+                                        <option value="625">625 - Régimen Actividades Plataformas Tecnológicas</option>
+                                        <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Correo Electrónico (Para envío de XML y PDF)</label>
+                                    <input type="email" class="form-control" id="step3-correo" placeholder="cliente@correo.com" oninput="syncStep3Field('correo', this.value)">
+                                </div>
                             </div>
                         </div>
 
-                        <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Datos del receptor</h3>
-                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px 20px; font-size: 0.84rem; margin-bottom: 24px;">
-                            <div style="color: #6c757d; font-weight: 500;">RFC:</div>
-                            <div class="preview-rfc" style="font-weight: 600; color: #212529;">Pendiente de lectura</div>
-
-                            <div style="color: #6c757d; font-weight: 500;">Razón social:</div>
-                            <div class="preview-razon" style="font-weight: 600; color: #212529;">Pendiente de lectura</div>
-
-                            <div style="color: #6c757d; font-weight: 500;">Régimen fiscal:</div>
-                            <div class="preview-regimen" style="font-weight: 600; color: #212529;">Pendiente de lectura</div>
-
-                            <div style="color: #6c757d; font-weight: 500;">Código postal:</div>
-                            <div class="preview-cp" style="font-weight: 600; color: #212529;">Pendiente de lectura</div>
-
-                            <div style="color: #6c757d; font-weight: 500;">Uso CFDI:</div>
-                            <div class="preview-cfdi" style="font-weight: 600; color: #212529;">Pendiente de lectura</div>
-
-                            <div style="color: #6c757d; font-weight: 500;">Correo:</div>
-                            <div class="preview-correo" style="font-weight: 600; color: #212529; text-decoration: underline;">Pendiente de lectura</div>
-                        </div>
-
-                        <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Concepto a facturar</h3>
-                        <div class="preview-table-container" style="border: 1px solid #eaeaea; border-radius: 4px; overflow: hidden; margin-top: 0;">
-                            <table class="preview-table">
-                                <thead style="background-color: #fcfcfc;">
-                                    <tr>
-                                        <th style="font-size: 0.72rem; text-transform: uppercase; padding: 10px 16px;">Clave Prod/Serv</th>
-                                        <th style="font-size: 0.72rem; text-transform: uppercase; padding: 10px 16px;">Descripción</th>
-                                        <th style="font-size: 0.72rem; text-transform: uppercase; text-align: center; padding: 10px 16px;">Cantidad</th>
-                                        <th style="font-size: 0.72rem; text-transform: uppercase; padding: 10px 16px;">Unidad</th>
-                                        <th style="font-size: 0.72rem; text-transform: uppercase; text-align: right; padding: 10px 16px;">Valor unitario</th>
-                                        <th style="font-size: 0.72rem; text-transform: uppercase; text-align: right; padding: 10px 16px;">Importe</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td style="font-size: 0.8rem; padding: 12px 16px;">Pendiente</td>
-                                        <td style="font-size: 0.8rem; padding: 12px 16px;">Pendiente de extracción</td>
-                                        <td style="font-size: 0.8rem; text-align: center; padding: 12px 16px;">—</td>
-                                        <td style="font-size: 0.8rem; padding: 12px 16px;">—</td>
-                                        <td style="font-size: 0.8rem; text-align: right; padding: 12px 16px;">—</td>
-                                        <td style="font-size: 0.8rem; text-align: right; padding: 12px 16px;">—</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="totals-panel" style="margin-top: 20px;">
-                            <div class="total-row" style="grid-template-columns: 80px 100px; font-size: 0.84rem;">
-                                <span style="color: #6c757d;">Subtotal:</span>
-                                <strong style="color: #212529;">—</strong>
+                        <!-- COLUMNA 2: DATOS DEL COMPROBANTE Y DESGLOSE -->
+                        <div class="app-card" style="padding: 22px;">
+                            <div style="border-bottom: 1.5px solid #eaeaea; padding-bottom: 8px; margin-bottom: 16px;">
+                                <h3 class="form-label" style="font-size: 0.85rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; margin: 0;">
+                                    2. Comprobante, Pago y Montos
+                                </h3>
                             </div>
-                            <div class="total-row" style="grid-template-columns: 80px 100px; font-size: 0.84rem; margin-top: 4px;">
-                                <span style="color: #6c757d;">IVA (16%):</span>
-                                <strong style="color: #212529;">—</strong>
-                            </div>
-                            <div class="total-row grand-total" style="grid-template-columns: 80px 100px; border-top: 1px solid #dee2e6; padding-top: 10px; margin-top: 8px; font-size: 0.95rem;">
-                                <span style="color: #212529; font-weight: 600;">Total:</span>
-                                <span style="font-weight: 700; color: var(--primary-color);">—</span>
+
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Forma de Pago *</label>
+                                        <select class="form-control" id="step3-forma-pago" onchange="syncStep3Field('formaPago', this.value)">
+                                            <option value="03">03 - Transferencia electrónica</option>
+                                            <option value="01">01 - Efectivo</option>
+                                            <option value="02">02 - Cheque nominativo</option>
+                                            <option value="04">04 - Tarjeta de crédito</option>
+                                            <option value="28">28 - Tarjeta de débito</option>
+                                            <option value="99">99 - Por definir</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Método de Pago *</label>
+                                        <select class="form-control" id="step3-metodo-pago" onchange="syncStep3Field('metodoPago', this.value)">
+                                            <option value="PUE">PUE - Pago en una sola exhibición</option>
+                                            <option value="PPD">PPD - Pago en parcialidades</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Concepto de la Factura *</label>
+                                    <input type="text" class="form-control" id="step3-concepto" value="Derechos de Trámite Sanitario COEPRISS" oninput="syncStep3Field('concepto', this.value)">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Importe Total a Facturar ($ MXN) *</label>
+                                    <input type="number" step="0.01" min="1" class="form-control" id="step3-total" placeholder="0.00" style="font-size: 1.1rem; font-weight: 700; color: var(--primary-color);" oninput="onStep3TotalChange(this.value)">
+                                </div>
+
+                                <!-- Panel de Desglose Fiscal en Vivo -->
+                                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 14px; margin-top: 6px;">
+                                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 6px; font-size: 0.85rem;">
+                                        <span style="color: #6c757d;">Subtotal (Base Gravable):</span>
+                                        <strong id="step3-resumen-subtotal" style="color: #212529;">$0.00</strong>
+
+                                        <span style="color: #6c757d;">IVA Trasladado (16%):</span>
+                                        <strong id="step3-resumen-iva" style="color: #212529;">$0.00</strong>
+
+                                        <span style="border-top: 1px solid #dee2e6; padding-top: 6px; font-weight: 700; color: #1B365D;">Total del CFDI:</span>
+                                        <strong id="step3-resumen-total" style="border-top: 1px solid #dee2e6; padding-top: 6px; font-size: 1.05rem; font-weight: 800; color: #1B365D;">$0.00</strong>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
-                        <button class="btn btn-secondary" onclick="goToStep(2)" style="padding: 10px 24px; border-radius: 4px; font-weight: 500;">Regresar</button>
-                        <button class="btn btn-primary" onclick="goToStep(4)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px; font-weight: 500;">Continuar</button>
+                        <button class="btn btn-secondary" onclick="goToStep(2)" style="padding: 10px 24px; border-radius: 4px; font-weight: 500;">&larr; Regresar a Extracción</button>
+                        <button class="btn btn-primary" onclick="proceedToStep4()" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                            Continuar al Timbrado PAC &rarr;
+                        </button>
                     </div>
                 </section>
 
@@ -807,7 +879,7 @@
                         <div class="step-header-badge">4</div>
                         <div class="step-header-text">
                             <h2 class="step-header-title">Timbrado CFDI 4.0 vía Facturama</h2>
-                            <p class="step-header-desc">El sistema envía automáticamente el comprobante al PAC Facturama para timbrado ante el SAT.</p>
+                            <p class="step-header-desc">Emisión oficial directa ante el SAT a través del PAC autorizado Facturama.</p>
                         </div>
                     </div>
 
@@ -828,15 +900,14 @@
                         🔄 Verificando conexión con Facturama...
                     </div>
 
-                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
-                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Timbrado Automático vía PAC (Facturama)</h3>
-                    </div>
-
                     <!-- PAC Automated Timbrado Card -->
-                    <div class="app-card" style="padding: 24px; border-left: 3px solid var(--secondary-color);">
-                        <h3 class="panel-title" style="font-size: 1rem; font-weight: 700; margin-bottom: 6px; color: var(--primary-color);">Timbrado Automático vía Facturama PAC ✅</h3>
-                        <p class="panel-subtitle" style="font-size: 0.8rem; color: #6c757d; margin-bottom: 16px;">
-                            El sistema construye el CFDI 4.0 con los datos del expediente y lo envía directamente al PAC Facturama (autorizado por el SAT). No se requiere CSD manual — Facturama gestiona el sello digital.</p>
+                    <div class="app-card" style="padding: 24px; border-left: 4px solid var(--secondary-color);">
+                        <h3 class="panel-title" style="font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; color: var(--primary-color);">
+                            Timbrado Oficial en Línea (Facturama PAC)
+                        </h3>
+                        <p class="panel-subtitle" style="font-size: 0.82rem; color: #6c757d; margin-bottom: 18px;">
+                            El sistema generará el archivo XML CFDI 4.0 con el sello digital oficial del SAT y la representación impresa en PDF.
+                        </p>
 
                         <div style="background: #f8f9fa; border-radius: 6px; padding: 14px 18px; margin-bottom: 20px; border: 1px solid #e9ecef;">
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 16px; font-size: 0.8rem;">
@@ -853,7 +924,7 @@
                                     <strong style="color: #212529;">C.P. 80020 (Sinaloa)</strong>
                                 </div>
                                 <div>
-                                    <span style="color: #6c757d; display: block; font-size: 0.72rem; text-transform: uppercase;">PAC Integrado</span>
+                                    <span style="color: #6c757d; display: block; font-size: 0.72rem; text-transform: uppercase;">PAC Autorizado</span>
                                     <strong style="color: #0d6efd;">Facturama (CFDI 4.0)</strong>
                                 </div>
                             </div>
@@ -867,44 +938,18 @@
                             </div>
                         </div>
 
-                        <button class="btn btn-primary" id="btn-pac-stamp" onclick="stampInvoiceViaPAC()" style="font-size: 0.8rem; padding: 10px 20px; display: inline-flex; align-items: center; gap: 6px;">
+                        <button class="btn btn-primary" id="btn-pac-stamp" onclick="stampInvoiceViaPAC()" style="font-size: 0.85rem; padding: 11px 24px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700;">
                             <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M2.166 2.22a.75.75 0 00-.804.885 55.302 55.302 0 002.597 11.3c.78 2.22 3.1 3.595 5.516 3.595a11.956 11.956 0 007.059-2.302c.264-.2.264-.607 0-.807A11.956 11.956 0 019.477 12a11.956 11.956 0 01-5.11-7.059c-.2-.264-.607-.264-.807 0A11.956 11.956 0 001.258 11.96c.78 2.22 3.1 3.595 5.516 3.595.347 0 .692-.02 1.033-.06a.75.75 0 00.65-.63L9 12.06c.038-.344-.12-.686-.414-.88a55.302 55.302 0 00-6.42-3.96zm15.42 1.15a.75.75 0 00-.63.65L16.9 7.06c-.038.344.12.686.414.88a55.302 55.302 0 006.42 3.96c.328.2.736-.08.68-.456l-1.033-6.837a.75.75 0 00-.804-.685z" clip-rule="evenodd"/></svg>
-                            Firmar y Timbrar vía PAC
+                            Firmar y Timbrar Factura Oficial
                         </button>
 
-                        <!-- Panel de resultado del timbrado (se muestra tras el timbrado exitoso) -->
-                        <div id="pac-resultado-timbrado" style="display:none; margin-top: 16px;"></div>
-                    </div>
-
-                    <!-- SAT Manual Stamping Card -->
-                    <div class="app-card" style="margin-top: 15px;">
-                        <h3 class="panel-title" style="font-size: 1rem; font-weight: 700; margin-bottom: 6px; color: #212529;">Opción B: Carga Manual de XML Timbrado</h3>
-                        <p class="panel-subtitle" style="font-size: 0.8rem; color: #6c757d; margin-bottom: 16px;">
-                            Si ya tienes un XML timbrado desde otro PAC o el SAT, puedes descargarlo o registrarlo manualmente aquí.
-                        </p>
-
-                        <div class="xml-info-box" style="margin: 0 0 20px 0; border: 1px solid #eaeaea; border-radius: 6px; padding: 14px; background-color: #fafafa;">
-                            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 10px; font-size: 0.78rem;">
-                                <div style="color: #6c757d;">Nombre Archivo:</div>
-                                <div style="font-weight: 600; color: #212529; font-family: monospace;" id="pac-xml-filename">Sin XML timbrado</div>
-                                <div style="color: #6c757d;">Tamaño:</div>
-                                <div style="font-weight: 600; color: #212529;">—</div>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-secondary" onclick="downloadXML()" style="font-size: 0.78rem; padding: 8px 16px; border: 1.5px solid var(--primary-color); color: var(--primary-color); background: none;">
-                                Descargar XML
-                            </button>
-                            <button class="btn btn-secondary" onclick="openSatPortal()" style="font-size: 0.78rem; padding: 8px 16px;">
-                                Abrir Portal del SAT
-                            </button>
-                        </div>
+                        <!-- Panel de resultado del timbrado -->
+                        <div id="pac-resultado-timbrado" style="display:none; margin-top: 18px;"></div>
                     </div>
 
                     <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px; margin-top: 15px;">
-                        <button class="btn btn-secondary" onclick="goToStep(3)" style="padding: 10px 24px;">Regresar</button>
-                        <button class="btn btn-primary" onclick="goToStep(5)" style="padding: 10px 24px;">Siguiente: Cargar Manualmente &rarr;</button>
+                        <button class="btn btn-secondary" onclick="goToStep(3)" style="padding: 10px 24px;">&larr; Regresar al Formulario</button>
+                        <button class="btn btn-secondary" onclick="goToStep(7)" style="padding: 10px 24px;">Ver Reporte General &rarr;</button>
                     </div>
                 </section>
 
@@ -913,71 +958,42 @@
                     <div class="step-header-banner">
                         <div class="step-header-badge">5</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Carga de archivos timbrados</h2>
-                            <p class="step-header-desc">Se suben el XML y PDF que descargaste del SAT.</p>
-                        </div>
-                    </div>
-
-                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
-                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Cargar archivos timbrados</h3>
-                    </div>
-
-                    <div class="app-alert app-alert-info" style="background-color: #E8F0FE; border: 1px solid #d2e3fc; border-left: 4px solid var(--info-color); color: #1a73e8; padding: 14px 18px; border-radius: 6px; margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <svg class="app-alert-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 20px; height: 20px; color: var(--info-color); flex-shrink: 0;"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
-                                <span style="font-size: 0.82rem; font-weight: 500;">Genera tu comprobante sin costo en el portal del SAT con tu e.firma / CSD y sube aquí los archivos XML y PDF.</span>
-                            </div>
-                            <a href="https://www.sat.gob.mx/portal/public/tramites/factura-electronica" target="_blank" class="btn btn-secondary btn-sm" style="background: #ffffff; color: var(--info-color); border: 1.5px solid var(--info-color); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                                <span>Ir al Portal del SAT (Servicio Gratuito)</span>
-                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            </a>
+                            <h2 class="step-header-title">Carga de archivos y comprobantes</h2>
+                            <p class="step-header-desc">Adjuntar archivos externos o comprobantes de respaldo al expediente digital.</p>
                         </div>
                     </div>
 
                     <div class="app-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
                         <div>
-                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">XML timbrado *</label>
+                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">XML timbrado</label>
                             <div class="file-upload-card" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 12px 16px;">
                                 <div class="file-upload-info">
                                     <div class="file-icon file-icon-xml" style="background-color: #e8f5e9; color: #2e7d32; font-size: 0.7rem; font-weight: 700; border-radius: 4px; width: 36px; height: 36px;">XML</div>
                                     <div class="file-details">
-                                        <span class="file-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">No se ha cargado XML timbrado</span>
-                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">—</span>
+                                        <span class="file-name" id="step5-xml-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">Generado automáticamente por Facturama</span>
+                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">Oficial SAT</span>
                                     </div>
-                                </div>
-                                <div class="file-upload-actions" style="gap: 16px;">
-                                    <span style="font-size: 0.72rem; color: #6c757d;">Pendiente</span>
-                                    <button class="file-delete-btn" onclick="removeUpload('xml')" style="color: #d93025;">
-                                        <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-                                    </button>
                                 </div>
                             </div>
                         </div>
 
                         <div>
-                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">PDF timbrado *</label>
+                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">PDF timbrado</label>
                             <div class="file-upload-card" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 12px 16px;">
                                 <div class="file-upload-info">
                                     <div class="file-icon file-icon-pdf" style="background-color: #fce8e6; color: #d93025; font-size: 0.7rem; font-weight: 700; border-radius: 4px; width: 36px; height: 36px;">PDF</div>
                                     <div class="file-details">
-                                        <span class="file-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">No se ha cargado PDF timbrado</span>
-                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">—</span>
+                                        <span class="file-name" id="step5-pdf-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">Generado automáticamente por Facturama</span>
+                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">Oficial SAT</span>
                                     </div>
-                                </div>
-                                <div class="file-upload-actions" style="gap: 16px;">
-                                    <span style="font-size: 0.72rem; color: #6c757d;">Pendiente</span>
-                                    <button class="file-delete-btn" onclick="removeUpload('pdf')" style="color: #d93025;">
-                                        <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
-                        <button class="btn btn-secondary" onclick="goToStep(4)" style="padding: 10px 24px; border-radius: 4px;">Cancelar</button>
-                        <button class="btn btn-primary" onclick="goToStep(6)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">Cargar y continuar</button>
+                        <button class="btn btn-secondary" onclick="goToStep(4)" style="padding: 10px 24px; border-radius: 4px;">&larr; Regresar al Timbrado</button>
+                        <button class="btn btn-primary" onclick="goToStep(6)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">Continuar &rarr;</button>
                     </div>
                 </section>
 
@@ -987,45 +1003,31 @@
                         <div class="step-header-badge">6</div>
                         <div class="step-header-text">
                             <h2 class="step-header-title">Comprobante fiscal</h2>
-                            <p class="step-header-desc">Se mostrarán los datos únicamente cuando exista un XML timbrado real.</p>
+                            <p class="step-header-desc">Resumen del CFDI 4.0 timbrado y opciones de descarga y envío por correo.</p>
                         </div>
                     </div>
 
-                    <div class="app-card" style="padding: 0px; border: none; background: transparent; box-shadow: none;">
-                        <h3 class="panel-title" style="font-size: 1.15rem; margin-bottom: 12px; font-weight: 500;">Sin factura timbrada cargada</h3>
-                    </div>
-
-                    <div class="app-alert" style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-left: 4px solid #6c757d; color: #495057; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px;">
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <svg class="app-alert-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: #6c757d;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M10.29 3.86l-7.2 12.48A2 2 0 004.82 19h14.36a2 2 0 001.73-2.66l-7.2-12.48a2 2 0 00-3.42 0z"/></svg>
-                            <span style="font-weight: 700; font-size: 0.78rem;">No existe timbrado ni UUID fiscal confirmado.</span>
-                        </div>
-                    </div>
-
-                    <div class="stamp-grid" style="gap: 30px;">
+                    <div class="stamp-grid" style="gap: 24px;">
                         <div class="app-card" style="padding: 24px;">
                             <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Información del timbrado</h3>
                             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px 20px; font-size: 0.84rem;">
                                 <div style="color: #6c757d;">Folio fiscal (UUID):</div>
-                                <div style="font-family: monospace; font-weight: 600; color: #212529; word-break: break-all;">Sin UUID real</div>
+                                <div id="step6-uuid" style="font-family: monospace; font-weight: 600; color: #212529; word-break: break-all;">Sin UUID real</div>
 
                                 <div style="color: #6c757d;">Fecha de timbrado:</div>
-                                <div style="font-weight: 600; color: #212529;">Sin fecha de timbrado</div>
+                                <div id="step6-fecha" style="font-weight: 600; color: #212529;">Sin fecha de timbrado</div>
 
-                                <div style="color: #6c757d;">No. de serie CSD del SAT:</div>
-                                <div style="font-family: monospace; font-weight: 600; color: #212529;">Sin certificado confirmado</div>
-
-                                <div style="color: #6c757d; align-self: center;">Estatus:</div>
+                                <div style="color: #6c757d;">Estatus SAT:</div>
                                 <div>
-                                    <span class="badge badge-warning">
-                                        Pendiente de timbrado real
+                                    <span id="step6-badge-estatus" class="badge badge-success">
+                                        Timbrado Oficial PAC
                                     </span>
                                 </div>
 
-                                <div style="color: #6c757d; align-self: center;">Verificación:</div>
+                                <div style="color: #6c757d;">Verificación SAT:</div>
                                 <div>
                                     <a href="https://verificacfdi.facturaelectronica.sat.gob.mx/" target="_blank" class="upload-link" style="font-size: 0.82rem; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
-                                        Verificar CFDI en SAT
+                                        Verificar en Portal Oficial del SAT
                                         <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--secondary-color);"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
                                     </a>
                                 </div>
@@ -1033,40 +1035,28 @@
                         </div>
 
                         <div class="app-card" style="padding: 24px;">
-                            <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Archivos disponibles</h3>
-                            <div class="download-list" style="margin-top: 5px;">
-                                <a href="#" class="download-item" onclick="triggerDownload('PDF timbrado'); return false;" style="border-radius: 4px; padding: 10px 14px;">
-                                    <div class="download-item-left">
-                                        <div class="file-icon file-icon-pdf" style="background-color: #fce8e6; color: #d93025; font-size: 0.65rem; font-weight: 700; width: 30px; height: 30px; border-radius: 4px;">PDF</div>
-                                        <div class="file-details">
-                                            <span class="file-name" style="font-size: 0.78rem; font-weight: 600;">PDF timbrado no disponible</span>
-                                            <span class="file-size" style="font-size: 0.68rem; color: #868e96;">—</span>
-                                        </div>
-                                    </div>
-                                    <svg class="download-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: #868e96;"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                </a>
-                                <a href="#" class="download-item" onclick="triggerDownload('XML timbrado'); return false;" style="border-radius: 4px; padding: 10px 14px;">
-                                    <div class="download-item-left">
-                                        <div class="file-icon file-icon-xml" style="background-color: #e8f5e9; color: #2e7d32; font-size: 0.65rem; font-weight: 700; width: 30px; height: 30px; border-radius: 4px;">XML</div>
-                                        <div class="file-details">
-                                            <span class="file-name" style="font-size: 0.78rem; font-weight: 600;">XML timbrado no disponible</span>
-                                            <span class="file-size" style="font-size: 0.68rem; color: #868e96;">—</span>
-                                        </div>
-                                    </div>
-                                    <svg class="download-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 18px; height: 18px; color: #868e96;"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                </a>
+                            <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Descarga y Envío</h3>
+                            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                                <button class="btn btn-secondary" onclick="openCurrentInvoicePdfViewer()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px;">
+                                    👁️ <strong>Ver Vista Previa del PDF</strong>
+                                </button>
+                                <button class="btn btn-secondary" onclick="downloadCurrentXml()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px; border-color: #28a745; color: #28a745;">
+                                    📄 <strong>Descargar Archivo XML</strong>
+                                </button>
+                                <button class="btn btn-secondary" onclick="downloadCurrentPdf()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px; border-color: #dc3545; color: #dc3545;">
+                                    📑 <strong>Descargar Archivo PDF</strong>
+                                </button>
+                                <button class="btn btn-primary" onclick="openEmailModalForActive()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px; background-color: var(--primary-color);">
+                                    ✉️ <strong>Enviar Factura por Correo (Brevo)</strong>
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
-                        <button class="btn btn-secondary" onclick="openInvoicePreviewModal()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--primary-color); color: var(--primary-color);">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                            Ver factura (Vista previa)
-                        </button>
-                        <button class="btn btn-primary" onclick="sendInvoiceByEmail()" style="background-color: var(--primary-color); border-radius: 4px; display: inline-flex; align-items: center; gap: 6px;">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                            Enviar por correo al cliente
+                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 15px;">
+                        <button class="btn btn-secondary" onclick="goToStep(4)" style="padding: 10px 24px;">&larr; Regresar</button>
+                        <button class="btn btn-primary" onclick="goToStep(7)" style="padding: 10px 24px; background-color: var(--secondary-color); color: #fff; font-weight: 700;">
+                            Ver Reporte General &rarr;
                         </button>
                     </div>
                 </section>
@@ -1076,33 +1066,60 @@
                     <div class="step-header-banner">
                         <div class="step-header-badge">7</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Registro en el reporte</h2>
-                            <p class="step-header-desc">La factura queda registrada en el sistema.</p>
+                            <h2 class="step-header-title">Reporte General de Facturas Timbradas</h2>
+                            <p class="step-header-desc">Consulta, filtra por estatus o rango de fechas, y exporta el historial de comprobantes a Excel.</p>
                         </div>
                     </div>
 
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 class="panel-title" style="font-size: 1.25rem; font-weight: 500; margin-bottom: 0;">Facturas timbradas</h3>
-                        <button class="btn btn-primary" onclick="restartProcess()" style="background-color: var(--primary-color); border-radius: 4px; padding: 8px 18px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem;">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-                            Nueva solicitud
-                        </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                        <h3 class="panel-title" style="font-size: 1.15rem; font-weight: 700; margin: 0; color: #1B365D;">Historial de Facturación</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="exportReportToExcel()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 8px 16px; background-color: #28a745; border: none; color: #ffffff; font-weight: 600;">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                Exportar a Excel
+                            </button>
+                            <button class="btn btn-primary" onclick="restartProcess()" style="background-color: var(--primary-color); border-radius: 4px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600;">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                                Nueva Factura
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="table-actions-header" style="margin-bottom: 12px;">
-                        <div class="search-filter-container" style="max-width: 550px; gap: 10px;">
-                            <div class="search-box-wrapper" style="flex: 1;">
-                                <svg class="search-icon" fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px; left: 10px; color: #868e96;"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
-                                <input type="text" class="form-control search-input" id="search-report" placeholder="Buscar por cliente, folio, RFC..." oninput="filterReportTable()" style="border-radius: 4px; padding: 8px 10px 8px 34px; font-size: 0.82rem; background-color: #ffffff; border: 1px solid #ced4da;">
+                    <!-- BARRA DE FILTROS AVANZADOS -->
+                    <div class="app-card" style="padding: 16px; margin-bottom: 16px; background: #f8f9fa;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: flex-end;">
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; font-weight: 700; color: #495057;">Búsqueda</label>
+                                <input type="text" class="form-control" id="search-report" placeholder="RFC, Cliente, Folio, UUID..." oninput="filterReportTable()" style="padding: 6px 10px; font-size: 0.8rem;">
                             </div>
-                            <button class="btn btn-secondary" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 8px 16px; border: 1px solid #ced4da; background-color: #ffffff; color: #495057;">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                                Filtros
-                            </button>
-                            <button class="btn btn-primary" onclick="exportReportToExcel()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 8px 16px; background-color: var(--secondary-color); border: none; color: #ffffff;">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                                Exportar Excel
-                            </button>
+
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; font-weight: 700; color: #495057;">Estatus</label>
+                                <select class="form-control" id="report-status-filter" onchange="filterReportTable()" style="padding: 6px 10px; font-size: 0.8rem;">
+                                    <option value="TODOS">Todos los estatus</option>
+                                    <option value="TIMBRADA" selected>Timbradas (Oficiales)</option>
+                                    <option value="PENDIENTE">En Proceso / Pendientes</option>
+                                    <option value="CANCELADA">Canceladas</option>
+                                    <option value="ERROR">Con Error</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; font-weight: 700; color: #495057;">Fecha Desde</label>
+                                <input type="date" class="form-control" id="report-date-from" onchange="filterReportTable()" style="padding: 6px 10px; font-size: 0.8rem;">
+                            </div>
+
+                            <div class="form-group" style="margin: 0;">
+                                <label class="form-label" style="font-size: 0.72rem; font-weight: 700; color: #495057;">Fecha Hasta</label>
+                                <input type="date" class="form-control" id="report-date-to" onchange="filterReportTable()" style="padding: 6px 10px; font-size: 0.8rem;">
+                            </div>
+
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setReportDatePreset('hoy')" style="font-size: 0.72rem; padding: 6px 10px;">Hoy</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setReportDatePreset('mes')" style="font-size: 0.72rem; padding: 6px 10px;">Este Mes</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setReportDatePreset('anio')" style="font-size: 0.72rem; padding: 6px 10px;">Año Actual</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setReportDatePreset('todos')" style="font-size: 0.72rem; padding: 6px 10px;">Todos</button>
+                            </div>
                         </div>
                     </div>
 
@@ -1110,12 +1127,13 @@
                         <table class="report-table" id="table-invoices">
                             <thead>
                                 <tr>
-                                    <th>Folio Interno <span class="sort-icon">▲▼</span></th>
-                                    <th>Folio Recibo <span class="sort-icon">▲▼</span></th>
-                                    <th>Cliente <span class="sort-icon">▲▼</span></th>
-                                    <th>Fecha Solicitud <span class="sort-icon">▲▼</span></th>
-                                    <th style="text-align: right;">Importe <span class="sort-icon">▲▼</span></th>
-                                    <th style="text-align: center;">Estatus <span class="sort-icon">▲▼</span></th>
+                                    <th>Folio</th>
+                                    <th>UUID Fiscal SAT</th>
+                                    <th>Cliente / Contribuyente</th>
+                                    <th>RFC Receptor</th>
+                                    <th>Fecha</th>
+                                    <th style="text-align: right;">Total ($ MXN)</th>
+                                    <th style="text-align: center;">Estatus</th>
                                     <th style="text-align: center;">Acciones</th>
                                 </tr>
                             </thead>
@@ -1124,16 +1142,10 @@
                             </tbody>
                         </table>
 
-                        <div class="table-footer" style="padding: 16px; font-size: 0.78rem;">
-                            <span id="showing-results-text">Mostrando 1 a 4 de 42 resultados</span>
+                        <div class="table-footer" style="padding: 14px 16px; font-size: 0.78rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span id="showing-results-text">Mostrando 0 resultados</span>
                             <ul class="pagination" style="gap: 2px;">
-                                <li class="page-item disabled"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg></a></li>
-                                <li class="page-item active"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem; background-color: var(--primary-color); border-color: var(--primary-color);">1</a></li>
-                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">2</a></li>
-                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">3</a></li>
-                                <li class="page-item dots"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">...</a></li>
-                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;">11</a></li>
-                                <li class="page-item"><a href="#" style="width: 24px; height: 24px; font-size: 0.75rem;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg></a></li>
+                                <li class="page-item active"><a href="#" onclick="return false;">1</a></li>
                             </ul>
                         </div>
                     </div>
@@ -1344,9 +1356,177 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('modal-invoice-preview')">Cerrar</button>
-                <button class="btn btn-primary" onclick="triggerDownload('PDF timbrado')">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: VISOR DE PDF OFICIAL (IFRAME) -->
+    <div class="modal-overlay" id="modal-pdf-viewer">
+        <div class="modal-container" style="max-width: 900px; height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="padding: 12px 20px;">
+                <h3 class="modal-title" id="pdf-viewer-title">Vista Previa de Factura CFDI 4.0 (PDF)</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-pdf-viewer')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; flex: 1; overflow: hidden; background: #525659;">
+                <iframe id="pdf-viewer-frame" style="width: 100%; height: 100%; border: none;" title="Visor PDF de Factura COEPRISS"></iframe>
+            </div>
+            <div class="modal-footer" style="padding: 10px 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('modal-pdf-viewer')">Cerrar</button>
+                <button class="btn btn-primary" id="btn-pdf-viewer-download" onclick="downloadPdfFromViewer()" style="display: inline-flex; align-items: center; gap: 6px;">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                     Descargar PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ENVIAR FACTURA POR CORREO ELECTRÓNICO (BREVO API) -->
+    <div class="modal-overlay" id="modal-enviar-correo">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Enviar Factura por Correo Electrónico</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-enviar-correo')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="app-alert app-alert-info" style="background-color: #E8F0FE; border: 1px solid #d2e3fc; border-left: 4px solid var(--info-color); color: #1a73e8; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px;">
+                    <span>⚡ Envío automático y seguro a través de la infraestructura transaccional de Brevo.</span>
+                </div>
+
+                <form id="form-enviar-correo" onsubmit="handleSendInvoiceEmail(event)">
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Correo Electrónico del Destinatario *</label>
+                        <input type="email" class="form-control" id="modal-correo-destinatario" required placeholder="cliente@correo.com">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Nombre del Destinatario / Razón Social</label>
+                        <input type="text" class="form-control" id="modal-correo-nombre" placeholder="Nombre completo o razón social">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Asunto del Mensaje</label>
+                        <input type="text" class="form-control" id="modal-correo-asunto" value="Factura Electrónica CFDI 4.0 - COEPRISS Sinaloa">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Mensaje Adicional</label>
+                        <textarea class="form-control" id="modal-correo-mensaje" rows="3" placeholder="Estimado contribuyente, se adjuntan los archivos digitales oficiales de su factura..."></textarea>
+                    </div>
+
+                    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; font-size: 0.8rem;">
+                        <div style="font-weight: 700; color: #495057; margin-bottom: 6px;">Archivos adjuntos:</div>
+                        <div style="display: flex; gap: 16px;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="modal-correo-adjuntar-xml" checked> 📄 Archivo XML (CFDI 4.0)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="modal-correo-adjuntar-pdf" checked> 📑 Archivo PDF
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-enviar-correo')">Cancelar</button>
+                <button class="btn btn-primary" type="submit" form="form-enviar-correo" id="btn-submit-correo" style="background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    Enviar Correo Ahora
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTRO / EDICIÓN DE CLIENTE EN DIRECTORIO -->
+    <div class="modal-overlay" id="modal-cliente">
+        <div class="modal-container" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-cliente-title">Registrar Nuevo Cliente</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-cliente')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <form id="form-cliente-directorio" onsubmit="handleSaveClient(event)">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">RFC *</label>
+                            <input type="text" class="form-control" id="cliente-rfc" required maxlength="13" placeholder="Ej. CEP130206LC4" style="text-transform: uppercase; font-family: monospace; font-weight: 700;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Código Postal *</label>
+                            <input type="text" class="form-control" id="cliente-cp" required maxlength="5" placeholder="80020" inputmode="numeric">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Razón Social / Nombre Completo *</label>
+                        <input type="text" class="form-control" id="cliente-razon" required placeholder="Nombre fiscal tal como aparece en la Constancia SAT">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Régimen Fiscal *</label>
+                        <select class="form-control" id="cliente-regimen" required>
+                            <option value="601">601 - General de Ley Personas Morales</option>
+                            <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                            <option value="605">605 - Sueldos y Salarios e Ingresos Asimilados</option>
+                            <option value="606">606 - Arrendamiento</option>
+                            <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+                            <option value="616">616 - Sin obligaciones fiscales</option>
+                            <option value="621">621 - Incorporación Fiscal (RIF)</option>
+                            <option value="625">625 - Régimen Actividades Plataformas Tecnológicas</option>
+                            <option value="626" selected>626 - Régimen Simplificado de Confianza (RESICO)</option>
+                        </select>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Uso CFDI Habitual</label>
+                            <select class="form-control" id="cliente-uso-cfdi">
+                                <option value="G03" selected>G03 - Gastos en general</option>
+                                <option value="G01">G01 - Adquisición de mercancías</option>
+                                <option value="G02">G02 - Devoluciones o descuentos</option>
+                                <option value="I01">I01 - Construcciones</option>
+                                <option value="I04">I04 - Equipo de cómputo</option>
+                                <option value="I08">I08 - Maquinaria y equipo</option>
+                                <option value="D01">D01 - Honorarios médicos</option>
+                                <option value="D02">D02 - Gastos médicos incapacidad</option>
+                                <option value="D04">D04 - Donativos</option>
+                                <option value="S01">S01 - Sin efectos fiscales</option>
+                                <option value="CP01">CP01 - Pagos</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Forma de Pago Habitual</label>
+                            <select class="form-control" id="cliente-forma-pago">
+                                <option value="03" selected>03 - Transferencia electrónica</option>
+                                <option value="01">01 - Efectivo</option>
+                                <option value="02">02 - Cheque nominativo</option>
+                                <option value="04">04 - Tarjeta de crédito</option>
+                                <option value="28">28 - Tarjeta de débito</option>
+                                <option value="99">99 - Por definir</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="cliente-email" placeholder="facturacion@empresa.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Teléfono de Contacto</label>
+                            <input type="tel" class="form-control" id="cliente-telefono" placeholder="667-123-4567">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" style="font-size: 0.78rem; font-weight: 700; color: #333;">Domicilio Fiscal (Opcional)</label>
+                        <input type="text" class="form-control" id="cliente-domicilio" placeholder="Calle, Número, Colonia, Municipio, Estado">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-cliente')">Cancelar</button>
+                <button class="btn btn-primary" type="submit" form="form-cliente-directorio" style="background-color: var(--primary-color); font-weight: 600;">
+                    Guardar Cliente en Directorio
                 </button>
             </div>
         </div>

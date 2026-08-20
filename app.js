@@ -17,9 +17,10 @@ const state = {
         password: ''
     },
 
-    // Datos reales: se cargan desde Firebase después de autenticar al usuario.
+    // Datos reales: se cargan desde el backend después de autenticar al usuario.
     expedientes: [],
     facturas: [],
+    clientes: [],
     historialCorreos: [],
     bitacoraSeguridad: [],
 
@@ -64,6 +65,7 @@ function getCloudData() {
 function resetCloudCollections() {
     state.expedientes = [];
     state.facturas = [];
+    state.clientes = [];
     state.historialCorreos = [];
     state.bitacoraSeguridad = [];
 }
@@ -78,20 +80,24 @@ function renderCloudCollections() {
 }
 
 // Render PostgreSQL Sync Controller (authenticated with JWT)
-function initRenderDbSync() {
-    apiFetch('/api/db')
-        .then(res => res.json())
-        .then(res => {
-            if (res.success && res.data) {
-                resetCloudCollections();
-                if (Array.isArray(res.data.expedientes)) state.expedientes = res.data.expedientes;
-                if (Array.isArray(res.data.facturas)) state.facturas = res.data.facturas;
-                if (Array.isArray(res.data.historialCorreos)) state.historialCorreos = res.data.historialCorreos;
-                if (Array.isArray(res.data.bitacoraSeguridad)) state.bitacoraSeguridad = res.data.bitacoraSeguridad;
-                renderCloudCollections();
-            }
-        })
-        .catch(err => console.info('[PostgreSQL Render] Datos en espera:', err.message));
+async function initRenderDbSync() {
+    try {
+        const res = await apiFetch('/api/db');
+        const data = await res.json();
+        if (data.success && data.data) {
+            resetCloudCollections();
+            if (Array.isArray(data.data.expedientes)) state.expedientes = data.data.expedientes;
+            if (Array.isArray(data.data.facturas)) state.facturas = data.data.facturas;
+            if (Array.isArray(data.data.historialCorreos)) state.historialCorreos = data.data.historialCorreos;
+            if (Array.isArray(data.data.bitacoraSeguridad)) state.bitacoraSeguridad = data.data.bitacoraSeguridad;
+        }
+
+        // Cargar directorio de clientes
+        await loadClientes();
+        renderCloudCollections();
+    } catch (err) {
+        console.info('[PostgreSQL Render] Datos en espera:', err.message);
+    }
 }
 
 function activateAuthenticatedSession(user) {
@@ -619,9 +625,15 @@ function goToStep(stepNumber) {
         if (navSolicitud) navSolicitud.classList.add('active-pulse');
     }
 
-    // 5. Al navegar al Step 4, verificar el ambiente de Facturama
-    if (stepNumber === 4) {
+    // 5. Al navegar a los pasos correspondientes:
+    if (stepNumber === 3) {
+        updateStep3UIFromActiveExpediente();
+    } else if (stepNumber === 4) {
         initStep4FacturamaBadge();
+    } else if (stepNumber === 6) {
+        updateStep6ComprobanteUI();
+    } else if (stepNumber === 7) {
+        renderReportTable();
     }
 }
 
@@ -846,17 +858,17 @@ async function extractUploadedDocuments() {
     if (!window.pdfjsLib) throw new Error('No se cargo el lector PDF.');
 
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    // English traineddata is intentionally used for Mexican fiscal documents:
-    // RFCs, amounts and references are alphanumeric, and it is more reliable
-    // than the Spanish model on compressed/table-style bank receipts.
-    state.ocrWorker = await Tesseract.createWorker('eng', 1, {
-        logger: message => {
-            if (message.status === 'recognizing text' && Number.isFinite(message.progress)) {
-                const scanBtn = document.getElementById('btn-scan');
-                if (scanBtn) scanBtn.textContent = `Leyendo OCR ${Math.round(message.progress * 100)}%...`;
-            }
+    const ocrLogger = message => {
+        if (message.status === 'recognizing text' && Number.isFinite(message.progress)) {
+            const scanBtn = document.getElementById('btn-scan');
+            if (scanBtn) scanBtn.textContent = `Leyendo OCR ${Math.round(message.progress * 100)}%...`;
         }
-    });
+    };
+    try {
+        state.ocrWorker = await Tesseract.createWorker(['spa', 'eng'], 1, { logger: ocrLogger });
+    } catch (e) {
+        state.ocrWorker = await Tesseract.createWorker('eng', 1, { logger: ocrLogger });
+    }
     await state.ocrWorker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
 
     let allText = '';
@@ -2272,45 +2284,206 @@ function addAuditLogToActive(message) {
     }
 }
 
-// 4. Step 3: CFDI Selection & Preview
-function changeCfdiTipo(val) {
+// ─────────────────────────────────────────────
+// 4. STEP 3: EDICIÓN RÁPIDA Y DATOS DEL CFDI 4.0
+// ─────────────────────────────────────────────
+
+function updateStep3UIFromActiveExpediente() {
     if (!state.activeExpediente) return;
-    
-    state.activeExpediente.tipoCfdi = val;
-    
-    // Update preview labels
-    if (val === 'pago') {
-        showToast('Tipo de CFDI seleccionado: Complemento de Pago.', 'info');
+    const d = state.activeExpediente;
+
+    const rfcInput = document.getElementById('step3-rfc');
+    const razonInput = document.getElementById('step3-razon');
+    const cpInput = document.getElementById('step3-cp');
+    const regimenSelect = document.getElementById('step3-regimen');
+    const usoCfdiSelect = document.getElementById('step3-uso-cfdi');
+    const correoInput = document.getElementById('step3-correo');
+    const formaPagoSelect = document.getElementById('step3-forma-pago');
+    const metodoPagoSelect = document.getElementById('step3-metodo-pago');
+    const conceptoInput = document.getElementById('step3-concepto');
+    const totalInput = document.getElementById('step3-total');
+
+    if (rfcInput && d.rfc) rfcInput.value = d.rfc;
+    if (razonInput && d.cliente) razonInput.value = d.cliente;
+    if (cpInput && d.codigoPostal) cpInput.value = d.codigoPostal;
+    if (regimenSelect && d.regimenFiscal) regimenSelect.value = d.regimenFiscal;
+    if (usoCfdiSelect && d.usoCfdi) usoCfdiSelect.value = d.usoCfdi;
+    if (correoInput && d.correo) correoInput.value = d.correo;
+    if (formaPagoSelect && d.formaPago) formaPagoSelect.value = d.formaPago;
+    if (metodoPagoSelect && d.metodoPago) metodoPagoSelect.value = d.metodoPago;
+    if (conceptoInput && d.concepto) conceptoInput.value = d.concepto;
+
+    const totalVal = parseFloat(d.importe || d.total || d.cfdiTotal || d.importePago || 0);
+    if (totalInput && totalVal > 0) {
+        totalInput.value = totalVal.toFixed(2);
+    }
+    updateStep3Summary(totalVal);
+
+    // Verificar si ya existe en clientes
+    if (d.rfc) buscarClientePorRfc(d.rfc, false);
+}
+
+function onStep3RfcChange(val) {
+    if (!state.activeExpediente) return;
+    const rfcClean = (val || '').toUpperCase().trim();
+    state.activeExpediente.rfc = rfcClean;
+    const rfcInput = document.getElementById('step3-rfc');
+    if (rfcInput && rfcInput.value !== rfcClean) rfcInput.value = rfcClean;
+
+    if (rfcClean.length >= 12) {
+        buscarClientePorRfc(rfcClean, false);
+    }
+}
+
+async function buscarClientePorRfc(rfc, notifyIfNotFound = true) {
+    if (!rfc || rfc.trim().length < 10) {
+        if (notifyIfNotFound) showToast('Ingresa un RFC válido de al menos 10 caracteres.', 'warning');
+        return;
+    }
+    const rfcNorm = rfc.toUpperCase().trim();
+    const badge = document.getElementById('badge-cliente-encontrado');
+
+    // 1. Buscar en memoria local
+    let cliente = (state.clientes || []).find(c => c.rfc?.toUpperCase() === rfcNorm);
+
+    // 2. Si no está en memoria, buscar en backend
+    if (!cliente) {
+        try {
+            const res = await apiFetch(`/api/clientes/${rfcNorm}`);
+            const data = await res.json();
+            if (data.success && data.data) cliente = data.data;
+        } catch (e) {}
+    }
+
+    if (cliente) {
+        if (badge) badge.style.display = 'inline-block';
+        const razonInput = document.getElementById('step3-razon');
+        const cpInput = document.getElementById('step3-cp');
+        const regimenSelect = document.getElementById('step3-regimen');
+        const usoCfdiSelect = document.getElementById('step3-uso-cfdi');
+        const correoInput = document.getElementById('step3-correo');
+        const formaPagoSelect = document.getElementById('step3-forma-pago');
+
+        if (razonInput && cliente.razonSocial) { razonInput.value = cliente.razonSocial; syncStep3Field('cliente', cliente.razonSocial); }
+        if (cpInput && cliente.codigoPostal) { cpInput.value = cliente.codigoPostal; syncStep3Field('codigoPostal', cliente.codigoPostal); }
+        if (regimenSelect && cliente.regimenFiscal) { regimenSelect.value = cliente.regimenFiscal; syncStep3Field('regimenFiscal', cliente.regimenFiscal); }
+        if (usoCfdiSelect && cliente.usoCfdi) { usoCfdiSelect.value = cliente.usoCfdi; syncStep3Field('usoCfdi', cliente.usoCfdi); }
+        if (correoInput && cliente.email) { correoInput.value = cliente.email; syncStep3Field('correo', cliente.email); }
+        if (formaPagoSelect && cliente.formaPago) { formaPagoSelect.value = cliente.formaPago; syncStep3Field('formaPago', cliente.formaPago); }
+
+        if (notifyIfNotFound) showToast(`✓ Datos del cliente ${cliente.razonSocial} autocompletados desde el Directorio.`, 'success');
     } else {
-        showToast('Tipo de CFDI seleccionado: Ingreso (Factura por Derechos).', 'info');
+        if (badge) badge.style.display = 'none';
+        if (notifyIfNotFound) showToast(`RFC ${rfcNorm} no encontrado en el Directorio de Clientes. Se registrará automáticamente al timbrar.`, 'info');
     }
 }
 
-function updatePreviewFields() {
+function syncStep3Field(field, val) {
     if (!state.activeExpediente) return;
-    
-    document.querySelectorAll('.preview-rfc').forEach(el => el.textContent = state.activeExpediente.rfc);
-    document.querySelectorAll('.preview-razon').forEach(el => el.textContent = state.activeExpediente.cliente);
-    document.querySelectorAll('.preview-regimen').forEach(el => el.textContent = state.activeExpediente.regimenFiscal);
-    document.querySelectorAll('.preview-cp').forEach(el => el.textContent = state.activeExpediente.codigoPostal);
-    document.querySelectorAll('.preview-cfdi').forEach(el => el.textContent = state.activeExpediente.usoCfdi);
-    document.querySelectorAll('.preview-correo').forEach(el => el.textContent = state.activeExpediente.correo);
-    
-    // Update XML details
-    const xmlFilename = document.getElementById('pac-xml-filename');
-    if (xmlFilename) {
-        xmlFilename.textContent = `FACTURA_${state.activeExpediente.folio.replace('-', '')}.xml`;
+    state.activeExpediente[field] = val;
+}
+
+function onStep3TotalChange(val) {
+    const num = parseFloat(val) || 0;
+    if (state.activeExpediente) {
+        state.activeExpediente.importe = num;
+        state.activeExpediente.total = num;
+        state.activeExpediente.cfdiTotal = num;
+    }
+    updateStep3Summary(num);
+}
+
+function updateStep3Summary(total) {
+    const totalNum = parseFloat(total) || 0;
+    const subtotal = totalNum / 1.16;
+    const iva = totalNum - subtotal;
+
+    const subtotalEl = document.getElementById('step3-resumen-subtotal');
+    const ivaEl = document.getElementById('step3-resumen-iva');
+    const totalEl = document.getElementById('step3-resumen-total');
+
+    if (subtotalEl) subtotalEl.textContent = `$${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (ivaEl) ivaEl.textContent = `$${iva.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (totalEl) totalEl.textContent = `$${totalNum.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    if (state.activeExpediente) {
+        state.activeExpediente.subtotal = subtotal;
     }
 }
 
-// 5. Step 4: PAC Automatic Timbrado — Integración Facturama
-// Estado del último timbrado exitoso
+async function proceedToStep4() {
+    if (!state.activeExpediente) {
+        showToast('Primero carga y procesa un documento para iniciar el trámite.', 'warning');
+        return;
+    }
+    const d = state.activeExpediente;
+
+    // Obtener valores actuales de los inputs
+    d.rfc = (document.getElementById('step3-rfc')?.value || d.rfc || '').toUpperCase().trim();
+    d.cliente = (document.getElementById('step3-razon')?.value || d.cliente || '').trim();
+    d.codigoPostal = (document.getElementById('step3-cp')?.value || d.codigoPostal || '').trim();
+    d.regimenFiscal = document.getElementById('step3-regimen')?.value || d.regimenFiscal || '626';
+    d.usoCfdi = document.getElementById('step3-uso-cfdi')?.value || d.usoCfdi || 'G03';
+    d.correo = (document.getElementById('step3-correo')?.value || d.correo || '').trim();
+    d.formaPago = document.getElementById('step3-forma-pago')?.value || d.formaPago || '03';
+    d.metodoPago = document.getElementById('step3-metodo-pago')?.value || d.metodoPago || 'PUE';
+    d.concepto = (document.getElementById('step3-concepto')?.value || d.concepto || 'Derechos de Trámite Sanitario COEPRISS').trim();
+    d.importe = parseFloat(document.getElementById('step3-total')?.value || d.importe || 0);
+
+    // Validaciones de negocio SAT 4.0
+    if (!d.rfc || d.rfc.length < 12 || d.rfc.length > 13) {
+        showToast('Captura un RFC válido (12 caracteres para Personas Morales o 13 para Físicas).', 'error');
+        document.getElementById('step3-rfc')?.focus();
+        return;
+    }
+    if (!d.cliente) {
+        showToast('Captura el Nombre o Razón Social del receptor.', 'error');
+        document.getElementById('step3-razon')?.focus();
+        return;
+    }
+    if (!d.codigoPostal || !/^\d{5}$/.test(d.codigoPostal)) {
+        showToast('El Código Postal fiscal debe contener exactamente 5 dígitos.', 'error');
+        document.getElementById('step3-cp')?.focus();
+        return;
+    }
+    if (!d.importe || d.importe <= 0) {
+        showToast('El importe total a facturar debe ser mayor a $0.00.', 'error');
+        document.getElementById('step3-total')?.focus();
+        return;
+    }
+
+    // Persistir cambios en BD antes de timbrar
+    try {
+        await apiFetch('/api/expedientes', {
+            method: 'POST',
+            body: JSON.stringify({
+                folio: d.folio,
+                receptorRfc: d.rfc,
+                receptorNombre: d.cliente,
+                receptorRegimenFiscal: d.regimenFiscal,
+                receptorCodigoPostal: d.codigoPostal,
+                receptorUsoCfdi: d.usoCfdi,
+                cfdiTotal: d.importe,
+                cfdiSubtotal: d.subtotal || (d.importe / 1.16),
+                cfdiConcepto: d.concepto,
+                cfdiFormaPago: d.formaPago,
+                cfdiMetodoPago: d.metodoPago,
+                receptorEmail: d.correo
+            })
+        });
+    } catch (e) {
+        console.warn('[EXPEDIENTE PRE-SAVE ERROR]', e.message);
+    }
+
+    goToStep(4);
+}
+
+// ─────────────────────────────────────────────
+// 5. STEP 4: TIMBRADO PAC FACTURAMA & ACCIONES
+// ─────────────────────────────────────────────
+
 let _lastStampResult = null;
 
-/**
- * Inicializa el Step 4 verificando el ambiente de Facturama
- * y mostrando el badge correspondiente (sandbox/producción).
- */
 async function initStep4FacturamaBadge() {
     const badgeEl = document.getElementById('facturama-ambiente-badge');
     if (!badgeEl) return;
@@ -2324,29 +2497,24 @@ async function initStep4FacturamaBadge() {
         const data = await res.json();
 
         if (data.sandbox) {
-            badgeEl.innerHTML = '🧪 <strong>MODO SANDBOX</strong> — Las facturas son de prueba, NO van al SAT ni consumen folios reales';
+            badgeEl.innerHTML = '🧪 <strong>MODO SANDBOX</strong> — Las facturas son de prueba oficial (Facturama Test PAC).';
             badgeEl.style.background = '#d4edda';
             badgeEl.style.color = '#155724';
             badgeEl.style.borderColor = '#c3e6cb';
         } else {
-            badgeEl.innerHTML = '⚡ <strong>MODO PRODUCCIÓN</strong> — Las facturas son REALES y serán reportadas al SAT';
+            badgeEl.innerHTML = '⚡ <strong>MODO PRODUCCIÓN</strong> — Las facturas son REALES y reportadas al SAT.';
             badgeEl.style.background = '#fff3cd';
             badgeEl.style.color = '#856404';
             badgeEl.style.borderColor = '#ffc107';
         }
         badgeEl.dataset.sandbox = data.sandbox;
-        badgeEl.dataset.ambiente = data.ambiente;
     } catch (e) {
-        badgeEl.textContent = '⚠️ No se pudo conectar con Facturama. Verifica la configuración.';
+        badgeEl.textContent = '⚠️ No se pudo verificar la conexión con Facturama.';
         badgeEl.style.background = '#f8d7da';
         badgeEl.style.color = '#721c24';
     }
 }
 
-/**
- * Timbrado automático vía Facturama PAC.
- * Valida datos → (confirma en producción) → timbra → guarda → descarga.
- */
 async function stampInvoiceViaPAC() {
     if (!state.activeExpediente) {
         showToast('Primero carga y procesa un documento para obtener el expediente.', 'warning');
@@ -2359,28 +2527,27 @@ async function stampInvoiceViaPAC() {
         return;
     }
 
-    const btn       = document.getElementById('btn-pac-stamp');
+    const btn = document.getElementById('btn-pac-stamp');
     const loadingEl = document.getElementById('pac-loading-box');
-    const titleEl   = document.getElementById('pac-loading-title');
-    const descEl    = document.getElementById('pac-loading-desc');
+    const titleEl = document.getElementById('pac-loading-title');
+    const descEl = document.getElementById('pac-loading-desc');
 
     function setLoading(msg, sub) {
         if (loadingEl) loadingEl.style.display = 'flex';
-        if (titleEl)   titleEl.textContent = msg;
-        if (descEl)    descEl.textContent   = sub;
-        if (btn)       btn.disabled = true;
+        if (titleEl) titleEl.textContent = msg;
+        if (descEl) descEl.textContent = sub;
+        if (btn) btn.disabled = true;
     }
     function clearLoading() {
         if (loadingEl) loadingEl.style.display = 'none';
-        if (btn)       btn.disabled = false;
+        if (btn) btn.disabled = false;
     }
 
     try {
-        // ── PASO 1: Validar datos SIN timbrar ───────────────────────────────
-        setLoading('Validando datos fiscales...', 'Verificando RFC, importes y campos requeridos.');
-        const testRes  = await apiFetch('/api/facturama/test', {
+        setLoading('Validando datos fiscales con Facturama...', 'Verificando RFC, clave SAT e importes.');
+        const testRes = await apiFetch('/api/facturama/test', {
             method: 'POST',
-            body:   JSON.stringify({ expedienteId: folio }),
+            body: JSON.stringify({ expedienteId: folio }),
         });
         const testData = await testRes.json();
 
@@ -2390,12 +2557,11 @@ async function stampInvoiceViaPAC() {
             return;
         }
 
-        const resumen  = testData.resumen;
         const isSandbox = testData.sandbox;
 
-        // ── PASO 2: Confirmación en producción ──────────────────────────────
+        // Confirmación en producción
         if (!isSandbox) {
-            const confirmado = await _mostrarModalConfirmacionProduccion(resumen);
+            const confirmado = await _mostrarModalConfirmacionProduccion(testData.resumen);
             if (!confirmado) {
                 clearLoading();
                 showToast('Timbrado cancelado por el usuario.', 'info');
@@ -2403,14 +2569,13 @@ async function stampInvoiceViaPAC() {
             }
         }
 
-        // ── PASO 3: Timbrar ─────────────────────────────────────────────────
-        setLoading('Firmando y timbrando CFDI 4.0...', 'Enviando al PAC autorizado por el SAT. Por favor espera.');
+        setLoading('Generando Sello Digital y Timbrando...', 'PAC Facturama está sellando el CFDI 4.0 ante el SAT.');
         const body = { expedienteId: folio };
         if (!isSandbox) body.confirmarProduccion = true;
 
-        const stampRes  = await apiFetch('/api/facturama/timbrar', {
+        const stampRes = await apiFetch('/api/facturama/timbrar', {
             method: 'POST',
-            body:   JSON.stringify(body),
+            body: JSON.stringify(body),
         });
         const stampData = await stampRes.json();
 
@@ -2418,34 +2583,41 @@ async function stampInvoiceViaPAC() {
             clearLoading();
             const errMsg = stampData.error || 'Error desconocido del PAC.';
             showToast(`❌ Error al timbrar: ${errMsg}`, 'error');
-            console.error('[STAMP ERROR]', stampData);
             return;
         }
 
-        // ── PASO 4: Guardar resultado en estado local ────────────────────────
         _lastStampResult = stampData;
-        state.activeExpediente.uuid      = stampData.uuid;
+        state.activeExpediente.uuid = stampData.uuid;
         state.activeExpediente.facturamaId = stampData.facturamaId;
-        state.activeExpediente.estatus   = 'TIMBRADO';
+        state.activeExpediente.estatus = 'TIMBRADA';
 
-        // Actualizar en la lista local de expedientes
-        const idx = state.expedientes.findIndex(e => e.folio === folio);
-        if (idx !== -1) {
-            state.expedientes[idx].estatus  = 'TIMBRADO';
-            state.expedientes[idx].cfdiUuid = stampData.uuid;
-        }
+        // Agregar a la lista de facturas
+        const newFactura = {
+            id: stampData.facturaId,
+            folioInterno: folio,
+            folioRecibo: stampData.folio || folio,
+            cliente: state.activeExpediente.cliente,
+            rfc: state.activeExpediente.rfc,
+            fecha: new Date().toLocaleDateString('es-MX'),
+            importe: parseFloat(stampData.total || state.activeExpediente.importe || 0),
+            uuid: stampData.uuid,
+            estatus: 'TIMBRADA',
+            facturamaId: stampData.facturamaId,
+            correo: state.activeExpediente.correo
+        };
+        state.facturas.unshift(newFactura);
+
+        // Recargar directorio de clientes para incluir al nuevo
+        await loadClientes();
 
         clearLoading();
-
-        // ── PASO 5: Mostrar resultado exitoso ────────────────────────────────
         _mostrarResultadoTimbrado(stampData, isSandbox);
-        renderProcesoTable();
+        renderReportTable();
         updateDashboardCounts();
-        saveDatabaseToStorage();
 
         const modoStr = isSandbox ? '🧪 (SANDBOX)' : '✅ (PRODUCCIÓN)';
-        showToast(`${modoStr} CFDI timbrado exitosamente. UUID: ${stampData.uuid}`, 'success');
-        addSecurityLog('CFDI Timbrado', `UUID: ${stampData.uuid} | Sandbox: ${isSandbox}`);
+        showToast(`${modoStr} ¡CFDI 4.0 timbrado exitosamente! UUID: ${stampData.uuid}`, 'success');
+        addSecurityLog('CFDI Timbrado Oficial', `UUID: ${stampData.uuid} | Folio Facturama: ${stampData.facturamaId}`);
 
     } catch (err) {
         clearLoading();
@@ -2454,94 +2626,83 @@ async function stampInvoiceViaPAC() {
     }
 }
 
-/**
- * Modal de confirmación para timbrado en PRODUCCIÓN.
- * Devuelve true si el usuario confirma, false si cancela.
- */
 function _mostrarModalConfirmacionProduccion(resumen) {
     return new Promise((resolve) => {
         const fmt = n => n != null ? `$${parseFloat(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—';
 
         const modal = document.createElement('div');
         modal.id = 'modal-produccion-confirm';
-        modal.style.cssText = `
-            position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);
-            display:flex;align-items:center;justify-content:center;padding:20px;
-        `;
+        modal.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;`;
         modal.innerHTML = `
-            <div style="background:#fff;border-radius:12px;padding:32px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-                    <div style="width:44px;height:44px;border-radius:50%;background:#fff3cd;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">⚡</div>
+            <div style="background:#fff;border-radius:12px;padding:30px;max-width:500px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                    <div style="width:40px;height:40px;border-radius:50%;background:#fff3cd;display:flex;align-items:center;justify-content:center;font-size:20px;">⚡</div>
                     <div>
-                        <h3 style="margin:0;font-size:1.1rem;color:#212529;font-weight:700;">Confirmar Timbrado en PRODUCCIÓN</h3>
-                        <p style="margin:4px 0 0;font-size:0.8rem;color:#856404;font-weight:600;">Esta factura será REAL y reportada al SAT</p>
+                        <h3 style="margin:0;font-size:1.05rem;color:#212529;font-weight:700;">Confirmar Facturación en PRODUCCIÓN</h3>
+                        <p style="margin:2px 0 0;font-size:0.78rem;color:#856404;font-weight:600;">Esta factura será emitida de forma REAL ante el SAT</p>
                     </div>
                 </div>
-                <div style="background:#f8f9fa;border-radius:8px;padding:16px;margin-bottom:20px;font-size:0.82rem;">
-                    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:6px 12px;">
-                        <span style="color:#6c757d;">Emisor:</span><strong>${resumen?.emisor || '—'}</strong>
+                <div style="background:#f8f9fa;border-radius:8px;padding:14px;margin-bottom:16px;font-size:0.82rem;">
+                    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:6px 10px;">
                         <span style="color:#6c757d;">Receptor:</span><strong>${resumen?.receptor || '—'}</strong>
+                        <span style="color:#6c757d;">RFC:</span><strong>${resumen?.rfc || '—'}</strong>
                         <span style="color:#6c757d;">Concepto:</span><strong>${resumen?.concepto || '—'}</strong>
-                        <span style="color:#6c757d;">Subtotal:</span><strong>${fmt(resumen?.subtotal)}</strong>
-                        <span style="color:#6c757d;">IVA (16%):</span><strong>${fmt(resumen?.iva)}</strong>
-                        <span style="color:#6c757d;border-top:1px solid #dee2e6;padding-top:6px;">Total:</span>
-                        <strong style="border-top:1px solid #dee2e6;padding-top:6px;color:#0d6efd;font-size:1rem;">${fmt(resumen?.total)}</strong>
+                        <span style="color:#6c757d;">Total:</span><strong style="color:#1B365D;font-size:0.95rem;">${fmt(resumen?.total)}</strong>
                     </div>
                 </div>
-                <p style="font-size:0.78rem;color:#dc3545;margin-bottom:20px;padding:10px;background:#f8d7da;border-radius:6px;">
-                    ⚠️ Una vez timbrada, esta factura queda ante el SAT. Solo podrá cancelarse con motivo justificado y dentro de los plazos del SAT.
-                </p>
-                <div style="display:flex;gap:12px;justify-content:flex-end;">
-                    <button id="btn-cancel-prod" style="padding:10px 24px;border-radius:6px;border:1.5px solid #dee2e6;background:#fff;cursor:pointer;font-weight:500;">Cancelar</button>
-                    <button id="btn-confirm-prod" style="padding:10px 24px;border-radius:6px;border:none;background:#dc3545;color:#fff;cursor:pointer;font-weight:700;">
-                        Sí, timbrar factura REAL
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                    <button id="btn-cancel-prod" style="padding:8px 20px;border-radius:4px;border:1px solid #ced4da;background:#fff;cursor:pointer;">Cancelar</button>
+                    <button id="btn-confirm-prod" style="padding:8px 20px;border-radius:4px;border:none;background:#28a745;color:#fff;cursor:pointer;font-weight:700;">
+                        Sí, Emitir Factura Oficial
                     </button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
 
-        document.getElementById('btn-cancel-prod').onclick  = () => { modal.remove(); resolve(false); };
-        document.getElementById('btn-confirm-prod').onclick = () => { modal.remove(); resolve(true);  };
+        document.getElementById('btn-cancel-prod').onclick = () => { modal.remove(); resolve(false); };
+        document.getElementById('btn-confirm-prod').onclick = () => { modal.remove(); resolve(true); };
         modal.addEventListener('click', (e) => { if (e.target === modal) { modal.remove(); resolve(false); } });
     });
 }
 
-/**
- * Muestra el panel de resultado exitoso tras el timbrado.
- */
 function _mostrarResultadoTimbrado(data, isSandbox) {
     const box = document.getElementById('pac-resultado-timbrado');
     if (!box) return;
 
     const fmt = n => n != null ? `$${parseFloat(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—';
     const sandboxBadge = isSandbox
-        ? '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">🧪 SANDBOX</span>'
-        : '<span style="background:#d1ecf1;color:#0c5460;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">✅ PRODUCCIÓN</span>';
+        ? '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">🧪 PRUEBAS (SANDBOX)</span>'
+        : '<span style="background:#d1ecf1;color:#0c5460;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">✅ PRODUCCIÓN (SAT OFICIAL)</span>';
 
     box.style.display = 'block';
     box.innerHTML = `
-        <div style="padding:20px;background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;border-left:4px solid #28a745;">
+        <div style="padding:20px;background:#f0fff4;border:1.5px solid #38a169;border-radius:8px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
                 <svg fill="none" stroke="#28a745" viewBox="0 0 24 24" style="width:24px;height:24px;flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <strong style="color:#155724;font-size:1rem;">CFDI Timbrado Exitosamente ${sandboxBadge}</strong>
+                <strong style="color:#155724;font-size:1.02rem;">Factura Timbrada con Éxito ${sandboxBadge}</strong>
             </div>
-            <div style="background:#fff;border-radius:6px;padding:14px;font-size:0.82rem;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin-bottom:14px;">
+            <div style="background:#fff;border-radius:6px;padding:14px;font-size:0.82rem;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin-bottom:16px;border:1px solid #e2e8f0;">
                 <span style="color:#6c757d;">UUID SAT:</span>
                 <strong style="font-family:monospace;color:#212529;word-break:break-all;">${data.uuid || '—'}</strong>
                 <span style="color:#6c757d;">Folio:</span><strong>${data.serie || ''}${data.folio || '—'}</strong>
-                <span style="color:#6c757d;">Fecha:</span><strong>${data.fecha ? new Date(data.fecha).toLocaleString('es-MX') : '—'}</strong>
-                <span style="color:#6c757d;">Subtotal:</span><strong>${fmt(data.subtotal)}</strong>
-                <span style="color:#6c757d;">Total:</span><strong style="color:#0d6efd;font-size:1rem;">${fmt(data.total)}</strong>
+                <span style="color:#6c757d;">Fecha:</span><strong>${data.fecha ? new Date(data.fecha).toLocaleString('es-MX') : new Date().toLocaleString('es-MX')}</strong>
+                <span style="color:#6c757d;">Total:</span><strong style="color:#1B365D;font-size:1rem;">${fmt(data.total)}</strong>
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button onclick="downloadFromFacturama('${data.facturamaId}', 'xml')" style="padding:8px 16px;background:#28a745;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                <button onclick="openPdfViewer('${data.facturamaId}')" class="btn btn-secondary" style="font-size:0.8rem;padding:8px 16px;display:flex;align-items:center;gap:6px;">
+                    👁️ Ver PDF (Vista Previa)
+                </button>
+                <button onclick="downloadFromFacturama('${data.facturamaId}', 'pdf')" class="btn btn-secondary" style="font-size:0.8rem;padding:8px 16px;color:#dc3545;border-color:#dc3545;display:flex;align-items:center;gap:6px;">
+                    📥 Descargar PDF
+                </button>
+                <button onclick="downloadFromFacturama('${data.facturamaId}', 'xml')" class="btn btn-secondary" style="font-size:0.8rem;padding:8px 16px;color:#28a745;border-color:#28a745;display:flex;align-items:center;gap:6px;">
                     📄 Descargar XML
                 </button>
-                <button onclick="downloadFromFacturama('${data.facturamaId}', 'pdf')" style="padding:8px 16px;background:#0d6efd;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
-                    📑 Descargar PDF
+                <button onclick="openEmailModal('${state.activeExpediente?.folio}', '${state.activeExpediente?.correo || ''}', '${state.activeExpediente?.cliente || ''}')" class="btn btn-primary" style="font-size:0.8rem;padding:8px 16px;background:var(--primary-color);display:flex;align-items:center;gap:6px;">
+                    ✉️ Enviar por Correo
                 </button>
-                <button onclick="copyToClipboard('${data.uuid}')" style="padding:8px 16px;background:#6c757d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">
+                <button onclick="copyToClipboard('${data.uuid}')" class="btn btn-secondary" style="font-size:0.8rem;padding:8px 14px;">
                     📋 Copiar UUID
                 </button>
             </div>
@@ -2549,9 +2710,6 @@ function _mostrarResultadoTimbrado(data, isSandbox) {
     `;
 }
 
-/**
- * Descarga XML o PDF directamente desde Facturama vía el backend.
- */
 async function downloadFromFacturama(facturamaId, formato) {
     if (!facturamaId) { showToast('No hay ID de Facturama disponible.', 'error'); return; }
     try {
@@ -2562,9 +2720,9 @@ async function downloadFromFacturama(facturamaId, formato) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href     = url;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
         a.download = `COEPRISS_${facturamaId}.${formato}`;
         document.body.appendChild(a);
         a.click();
@@ -2576,9 +2734,6 @@ async function downloadFromFacturama(facturamaId, formato) {
     }
 }
 
-/**
- * Copia texto al portapapeles.
- */
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
         showToast('UUID copiado al portapapeles.', 'success');
@@ -2587,327 +2742,365 @@ function copyToClipboard(text) {
     });
 }
 
-function downloadXML() {
-    // Si ya hay un resultado de timbrado con ID, descargar desde Facturama
+// ─────────────────────────────────────────────
+// 6. VISOR DE PDF Y STEP 6
+// ─────────────────────────────────────────────
+
+let _currentPdfViewerBlobUrl = null;
+
+async function openPdfViewer(pdfBase64OrFacturamaId, title = 'Vista Previa de Factura CFDI 4.0 (PDF)') {
+    const modal = document.getElementById('modal-pdf-viewer');
+    const frame = document.getElementById('pdf-viewer-frame');
+    const titleEl = document.getElementById('pdf-viewer-title');
+    if (!modal || !frame) return;
+
+    if (titleEl) titleEl.textContent = title;
+
+    if (_currentPdfViewerBlobUrl) {
+        URL.revokeObjectURL(_currentPdfViewerBlobUrl);
+        _currentPdfViewerBlobUrl = null;
+    }
+
+    if (pdfBase64OrFacturamaId && pdfBase64OrFacturamaId.length > 50) {
+        // Base64 string
+        frame.src = `data:application/pdf;base64,${pdfBase64OrFacturamaId}`;
+    } else if (pdfBase64OrFacturamaId) {
+        // Facturama ID -> fetch as blob
+        frame.src = 'about:blank';
+        try {
+            const token = getJwtToken();
+            const res = await fetch(`/api/facturama/descargar/${pdfBase64OrFacturamaId}/pdf`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                _currentPdfViewerBlobUrl = URL.createObjectURL(blob);
+                frame.src = _currentPdfViewerBlobUrl;
+            } else {
+                showToast('No se pudo cargar el PDF desde Facturama.', 'error');
+                return;
+            }
+        } catch (e) {
+            showToast('Error al obtener el PDF: ' + e.message, 'error');
+            return;
+        }
+    } else if (_lastStampResult?.facturamaId) {
+        return openPdfViewer(_lastStampResult.facturamaId, title);
+    } else {
+        showToast('No hay PDF timbrado disponible para mostrar.', 'warning');
+        return;
+    }
+
+    modal.classList.add('open');
+}
+
+function downloadPdfFromViewer() {
+    if (_lastStampResult?.facturamaId) {
+        downloadFromFacturama(_lastStampResult.facturamaId, 'pdf');
+    } else if (_currentPdfViewerBlobUrl) {
+        const a = document.createElement('a');
+        a.href = _currentPdfViewerBlobUrl;
+        a.download = 'Factura_COEPRISS.pdf';
+        a.click();
+    } else {
+        showToast('Descargando archivo PDF...', 'info');
+    }
+}
+
+function updateStep6ComprobanteUI() {
+    if (!state.activeExpediente) return;
+    const d = state.activeExpediente;
+    const uuidEl = document.getElementById('step6-uuid');
+    const fechaEl = document.getElementById('step6-fecha');
+    if (uuidEl) uuidEl.textContent = d.uuid || 'Pendiente de timbrado';
+    if (fechaEl) fechaEl.textContent = new Date().toLocaleString('es-MX');
+}
+
+function openCurrentInvoicePdfViewer() {
+    if (_lastStampResult?.facturamaId) {
+        openPdfViewer(_lastStampResult.facturamaId);
+    } else if (state.activeExpediente?.facturamaId) {
+        openPdfViewer(state.activeExpediente.facturamaId);
+    } else {
+        showToast('Primero timbra la factura en el Paso 4 para generar el PDF oficial.', 'warning');
+    }
+}
+
+function downloadCurrentXml() {
     if (_lastStampResult?.facturamaId) {
         downloadFromFacturama(_lastStampResult.facturamaId, 'xml');
-        return;
-    }
-    // Fallback: XML desde BD local si existe
-    if (state.activeExpediente?.xmlContent) {
-        const blob = new Blob([state.activeExpediente.xmlContent], { type: 'application/xml' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href     = url;
-        a.download = `CFDI_${state.activeExpediente.folio}.xml`;
-        a.click();
-        URL.revokeObjectURL(url);
-        return;
-    }
-    showToast('No hay XML disponible. Primero timbra el CFDI vía PAC.', 'warning');
-}
-
-function openSatPortal() {
-    const opened = window.open('https://www.sat.gob.mx/', '_blank', 'noopener,noreferrer');
-    if (!opened) {
-        showToast('El navegador bloqueó la pestaña del SAT. Permite ventanas emergentes para este sitio.', 'error');
-        return;
-    }
-    showToast('Portal oficial del SAT abierto en una pestaña nueva.', 'info');
-    addSecurityLog('Redirección SAT', 'Apertura del portal de facturación del SAT.');
-}
-
-// 6. Step 5: Manual XML Stamping Upload
-function removeUpload(type) {
-    if (type === 'xml') {
-        state.xmlUploaded = false;
-        showToast('Archivo XML eliminado. Por favor, suba el archivo timbrado.', 'warning');
-    } else if (type === 'pdf') {
-        state.pdfUploaded = false;
-        showToast('Archivo PDF eliminado. Por favor, suba el archivo timbrado.', 'warning');
+    } else {
+        showToast('No hay archivo XML disponible aún.', 'warning');
     }
 }
 
-// Override the original demo drop handler with real File objects.
-function initDragAndDrop() {
-    const dropzone = document.getElementById('dropzone-step1');
-    if (!dropzone) return;
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropzone.addEventListener(eventName, event => {
-            event.preventDefault();
-            dropzone.classList.add('dragover');
-        });
-    });
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropzone.addEventListener(eventName, event => {
-            event.preventDefault();
-            dropzone.classList.remove('dragover');
-        });
-    });
-    dropzone.addEventListener('drop', event => handleSelectedFiles(event.dataTransfer.files));
+function downloadCurrentPdf() {
+    if (_lastStampResult?.facturamaId) {
+        downloadFromFacturama(_lastStampResult.facturamaId, 'pdf');
+    } else {
+        showToast('No hay archivo PDF disponible aún.', 'warning');
+    }
 }
 
-// 7. Step 6: Invoice Preview & Stamped Verification
-function openInvoicePreviewModal(folio = '', clientName = '', totalVal = '') {
-    if (!state.activeExpediente?.uuid) {
-        showToast('No existe un CFDI timbrado real para previsualizar.', 'warning');
-        return;
-    }
-
-    if (!clientName && state.activeExpediente) {
-        clientName = state.activeExpediente.cliente;
-    }
-    
-    // Solo se muestran datos devueltos por un PAC real o cargados como CFDI timbrado.
-    const matchedFac = state.facturas.find(f => f.folioInterno === folio);
-    const uuid = matchedFac ? matchedFac.uuid : state.activeExpediente.uuid;
-
-    document.getElementById('pdf-folio').textContent = folio;
-    document.getElementById('pdf-receptor-name').textContent = clientName;
-    document.getElementById('pdf-receptor-rfc').textContent = state.activeExpediente.rfc || 'Pendiente de confirmación';
-    document.getElementById('pdf-receptor-regimen').textContent = state.activeExpediente.regimenFiscal || 'Pendiente de confirmación';
-    document.getElementById('pdf-receptor-cfdi').textContent = state.activeExpediente.usoCfdi || 'Pendiente de confirmación';
-    
-    // Set UUID in box
-    const uuidBox = document.getElementById('pdf-uuid-val');
-    if (uuidBox) {
-        uuidBox.textContent = uuid;
-    }
-
-    const numericTotal = parseFloat(totalVal.replace('$', '').replace(',', ''));
-    const numericSubtotal = numericTotal / 1.16;
-    const numericIva = numericTotal - numericSubtotal;
-
-    document.getElementById('pdf-unit-price').textContent = `$${numericSubtotal.toFixed(2)}`;
-    document.getElementById('pdf-subtotal').textContent = `$${numericSubtotal.toFixed(2)}`;
-    document.getElementById('pdf-iva').textContent = `$${numericIva.toFixed(2)}`;
-    document.getElementById('pdf-total').textContent = totalVal;
-    const conceptoPreview = document.getElementById('pdf-concepto');
-    if (conceptoPreview) conceptoPreview.textContent = state.activeExpediente?.concepto || 'Servicio de trámite de COEPRISS Sinaloa';
-
-    document.getElementById('modal-invoice-preview').classList.add('open');
-}
-
-function closeModal(modalId) {
-    document.getElementById(modalId)?.classList.remove('open');
-}
-
-function sendInvoiceByEmail() {
+function openEmailModalForActive() {
     if (!state.activeExpediente) return;
-    showToast('Envío de correo no configurado: no se envió ningún archivo.', 'warning');
+    openEmailModal(
+        state.activeExpediente.folio,
+        state.activeExpediente.correo || '',
+        state.activeExpediente.cliente || ''
+    );
 }
 
-// Descargas de CFDI solo se habilitarán al recibir archivos reales del backend PAC.
-function triggerDownload(filename) {
-    showToast(`Archivo no disponible: ${filename}. Configure el PAC o cargue el documento real.`, 'warning');
+// ─────────────────────────────────────────────
+// 7. ENVÍO DE CORREO ELECTRÓNICO (BREVO API)
+// ─────────────────────────────────────────────
+
+let _currentEmailExpedienteId = null;
+
+function openEmailModal(expedienteId, destinatario = '', razonSocial = '') {
+    _currentEmailExpedienteId = expedienteId || state.activeExpediente?.folio;
+    const modal = document.getElementById('modal-enviar-correo');
+    if (!modal) return;
+
+    const emailInput = document.getElementById('modal-correo-destinatario');
+    const nombreInput = document.getElementById('modal-correo-nombre');
+    const asuntoInput = document.getElementById('modal-correo-asunto');
+    const mensajeInput = document.getElementById('modal-correo-mensaje');
+
+    if (emailInput) emailInput.value = destinatario;
+    if (nombreInput) nombreInput.value = razonSocial;
+    if (asuntoInput) asuntoInput.value = `Factura Electrónica CFDI 4.0 - COEPRISS Sinaloa (${_currentEmailExpedienteId || ''})`;
+    if (mensajeInput) {
+        mensajeInput.value = `Estimado contribuyente ${razonSocial || ''},\n\nLe hacemos entrega de los archivos oficiales (XML y PDF) correspondientes a su comprobante fiscal digital emitido por la Comisión Estatal para la Protección contra Riesgos Sanitarios de Sinaloa (COEPRISS).\n\nSaludos cordiales.`;
+    }
+
+    modal.classList.add('open');
 }
 
-// Browser downloader
-function triggerBrowserDownload(filename, text, mimeType) {
-    const element = document.createElement('a');
-    const file = new Blob([text], {type: mimeType});
-    const objectUrl = URL.createObjectURL(file);
-    element.href = objectUrl;
-    element.download = filename;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+async function handleSendInvoiceEmail(event) {
+    if (event) event.preventDefault();
+
+    const destinatario = document.getElementById('modal-correo-destinatario')?.value.trim();
+    const nombreDestinatario = document.getElementById('modal-correo-nombre')?.value.trim();
+    const asunto = document.getElementById('modal-correo-asunto')?.value.trim();
+    const mensaje = document.getElementById('modal-correo-mensaje')?.value.trim();
+    const adjuntarXml = document.getElementById('modal-correo-adjuntar-xml')?.checked !== false;
+    const adjuntarPdf = document.getElementById('modal-correo-adjuntar-pdf')?.checked !== false;
+
+    if (!destinatario) {
+        showToast('Por favor captura un correo destinatario válido.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-correo');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Enviando vía Brevo...';
+    }
+
+    try {
+        const res = await apiFetch('/api/correo/enviar', {
+            method: 'POST',
+            body: JSON.stringify({
+                expedienteId: _currentEmailExpedienteId,
+                destinatario,
+                nombreDestinatario,
+                asunto,
+                mensaje,
+                adjuntarXml,
+                adjuntarPdf
+            })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            showToast(`✅ Factura enviada con éxito a ${destinatario} (Brevo ID: ${data.messageId || 'OK'})`, 'success');
+            closeModal('modal-enviar-correo');
+
+            // Agregar al historial de correos
+            state.historialCorreos.unshift({
+                fecha: new Date().toLocaleString('es-MX'),
+                destinatario,
+                folio: _currentEmailExpedienteId,
+                adjuntos: `${adjuntarXml ? 'XML ' : ''}${adjuntarPdf ? 'PDF' : ''}`.trim() || 'Sin adjuntos',
+                estatus: 'Enviado'
+            });
+            renderCorreosTable();
+            updateDashboardCounts();
+        } else {
+            showToast(`❌ Error al enviar correo: ${data.error || 'Error desconocido'}`, 'error');
+        }
+    } catch (err) {
+        showToast(`❌ Error de conexión: ${err.message}`, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> Enviar Correo Ahora';
+        }
+    }
 }
 
-// 8. Step 7: Filter table and real CSV Excel Export
+function resendEmail(destinatario, folio) {
+    openEmailModal(folio, destinatario, '');
+}
+
+// ─────────────────────────────────────────────
+// 8. STEP 7: REPORTE GENERAL Y EXPORTACIÓN EXCEL
+// ─────────────────────────────────────────────
+
+function setReportDatePreset(preset) {
+    const fromInput = document.getElementById('report-date-from');
+    const toInput = document.getElementById('report-date-to');
+    if (!fromInput || !toInput) return;
+
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    if (preset === 'hoy') {
+        fromInput.value = todayStr;
+        toInput.value = todayStr;
+    } else if (preset === 'mes') {
+        fromInput.value = `${yyyy}-${mm}-01`;
+        toInput.value = todayStr;
+    } else if (preset === 'anio') {
+        fromInput.value = `${yyyy}-01-01`;
+        toInput.value = todayStr;
+    } else if (preset === 'todos') {
+        fromInput.value = '';
+        toInput.value = '';
+    }
+    filterReportTable();
+}
+
 function filterReportTable() {
-    const input = document.getElementById('search-report');
-    const filter = (input?.value || '').toLowerCase();
-    const statusFilter = (document.getElementById('report-status-filter')?.value || '').toLowerCase();
-    const table = document.getElementById('table-invoices');
-    const rows = table?.querySelectorAll('tbody tr[data-invoice-row="true"]') || [];
+    const busqueda = (document.getElementById('search-report')?.value || '').toLowerCase().trim();
+    const estatusFilter = (document.getElementById('report-status-filter')?.value || 'TODOS').toUpperCase().trim();
+    const dateFrom = document.getElementById('report-date-from')?.value;
+    const dateTo = document.getElementById('report-date-to')?.value;
+
+    const fromDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : null;
+    const toDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : null;
+
+    const tbody = document.getElementById('tbody-report-invoices');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
     let matchesCount = 0;
 
-    rows.forEach(row => {
-        const matchesText = !filter || row.textContent.toLowerCase().includes(filter);
-        const matchesStatus = !statusFilter || row.dataset.status === statusFilter;
-        if (matchesText && matchesStatus) {
-            row.style.display = '';
+    const list = state.facturas.length > 0 ? state.facturas : state.expedientes.filter(e => e.estatus === 'TIMBRADO');
+
+    list.forEach(f => {
+        const folio = f.folioInterno || f.folio || '';
+        const uuid = f.uuid || f.cfdiUuid || '';
+        const cliente = f.cliente || f.receptorNombre || '';
+        const rfc = f.rfc || f.receptorRfc || '';
+        const estatus = (f.estatus || 'TIMBRADA').toUpperCase();
+        const total = parseFloat(f.importe || f.cfdiTotal || 0);
+
+        // Filtro por texto
+        const matchText = !busqueda || [folio, uuid, cliente, rfc].some(val => val.toLowerCase().includes(busqueda));
+
+        // Filtro por estatus
+        const matchEstatus = (estatusFilter === 'TODOS') || (estatus === estatusFilter);
+
+        // Filtro por fecha
+        let matchFecha = true;
+        if (f.fecha || f.createdAt) {
+            const fDate = new Date(f.createdAt || f.fecha);
+            if (fromDateObj && fDate < fromDateObj) matchFecha = false;
+            if (toDateObj && fDate > toDateObj) matchFecha = false;
+        }
+
+        if (matchText && matchEstatus && matchFecha) {
             matchesCount++;
-        } else {
-            row.style.display = 'none';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight:700;color:#1B365D;">${folio}</td>
+                <td style="font-family:monospace;font-size:0.75rem;color:#495057;">${uuid ? uuid.substring(0, 18) + '...' : '—'}</td>
+                <td class="col-cliente">${cliente}</td>
+                <td style="font-family:monospace;font-weight:600;">${rfc}</td>
+                <td style="color:#6c757d;">${f.fecha || new Date(f.createdAt).toLocaleDateString('es-MX')}</td>
+                <td style="text-align:right;font-weight:700;color:#1B365D;">$${total.toFixed(2)}</td>
+                <td style="text-align:center;">
+                    <span class="badge badge-success">
+                        <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                        ${estatus}
+                    </span>
+                </td>
+                <td style="text-align:center;">
+                    <div class="action-icon-group">
+                        <button class="action-icon-btn btn-view" onclick="openPdfViewer('${f.facturamaId || ''}')" title="Ver PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                        <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${f.facturamaId}', 'pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                        <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${f.facturamaId}', 'xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                        <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
         }
     });
 
+    if (matchesCount === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-table-cell" style="text-align:center;padding:30px;color:#868e96;">No se encontraron facturas con los filtros seleccionados.</td></tr>';
+    }
+
     const showingText = document.getElementById('showing-results-text');
-    if (showingText) {
-        showingText.textContent = `Mostrando ${matchesCount} de ${state.facturas.length} resultados`;
-    }
+    if (showingText) showingText.textContent = `Mostrando ${matchesCount} de ${list.length} facturas`;
 }
 
-function exportReportToExcel() {
-    showToast('Generando reporte Excel/CSV...', 'info');
-
-    // Create a real CSV from table database
-    let csvContent = '\uFEFF'; // UTF-8 BOM
-    csvContent += 'Folio Interno,Folio Recibo,Cliente / Contribuyente,Fecha de Stamping,Importe,UUID Fiscal\n';
-
-    let totalSum = 0;
-    state.facturas.forEach(f => {
-        csvContent += `"${f.folioInterno}","${f.folioRecibo}","${f.cliente}","${f.fecha}","${f.importe.toFixed(2)}","${f.uuid}"\n`;
-        totalSum += f.importe;
-    });
-
-    csvContent += `\n,,TOTAL FACTURADO,,${totalSum.toFixed(2)},\n`;
-
-    triggerBrowserDownload('Reporte_Facturas_COEPRISS.csv', csvContent, 'text/csv;charset=utf-8;');
-    showToast('✓ Reporte Excel (CSV) descargado con éxito.', 'success');
-    addSecurityLog('Exportación Reporte', `Exportación de reporte de facturación (${state.facturas.length} registros).`);
+function renderReportTable() {
+    filterReportTable();
 }
 
-function restartProcess() {
-    state.activeExpediente = null;
-    state.uploadedFiles = [];
-    state.ocrBusy = false;
-    state.scanPreviewUrl = '';
-    state.scanQuality = null;
-    state.lastOcrFields = null;
-    const input = document.getElementById('document-file-input');
-    if (input) input.value = '';
-    document.getElementById('lbl-cliente-correo').textContent = 'Carga un documento real para iniciar...';
-    document.getElementById('lbl-cliente-fecha').textContent = '--/--/---- --:--';
-    
-    const btnScan = document.getElementById('btn-scan');
-    if (btnScan) btnScan.disabled = false;
-    
-    // Clear dynamic Step 1 doc lists
-    const listContainer = document.getElementById('doc-list-container');
-    if (listContainer) {
-        listContainer.innerHTML = `
-            <div style="grid-column: 1 / -1; text-align: center; color: #868e96; padding: 30px 0; font-size: 0.82rem;">
-                Arrastra o selecciona archivos reales para iniciar el expediente.
-            </div>
-        `;
-    }
+async function exportReportToExcel() {
+    const estatus = document.getElementById('report-status-filter')?.value || 'TODOS';
+    const desde = document.getElementById('report-date-from')?.value || '';
+    const hasta = document.getElementById('report-date-to')?.value || '';
+    const busqueda = document.getElementById('search-report')?.value || '';
 
-    goToStep(1);
-    showToast('Nueva solicitud de facturación iniciada.', 'info');
-}
-
-// Employee Role Switcher & Config Panel Management
-function changeUserRole(roleId) {
-    showToast('Autenticación y roles no configurados. No se cambió la sesión.', 'warning');
-    return;
-
-    if (roleId === 'brenda') {
-        state.currentUser = {
-            id: 'brenda',
-            name: 'Brenda González',
-            role: 'Administrador de Facturación',
-            avatar: 'BG'
-        };
-    } else if (roleId === 'jose') {
-        state.currentUser = {
-            id: 'jose',
-            name: 'José Pérez',
-            role: 'Auditor Contable',
-            avatar: 'JP'
-        };
-    }
-
-    // Update Topbar
-    document.querySelector('.user-avatar-gold').textContent = state.currentUser.avatar;
-    document.querySelector('.user-name-top').textContent = state.currentUser.name;
-    document.querySelector('.user-role-top').textContent = state.currentUser.role;
-
-    // Add security log
-    addSecurityLog('Cambio de Rol', `Sesión asumida por el usuario: ${state.currentUser.name}.`);
-    renderBitacoraTable();
-
-    showToast(`Rol cambiado: Bienvenido, ${state.currentUser.name}.`, 'success');
-}
-
-function saveConfiguration() {
-    const smtpHost = document.getElementById('smtp-host').value.trim();
-    const smtpPort = document.getElementById('smtp-port').value.trim();
-    if (!smtpHost || !/^\d{2,5}$/.test(smtpPort) || Number(smtpPort) > 65535) {
-        showToast('Captura un servidor SMTP y un puerto valido.', 'error');
-        return;
-    }
+    showToast('Generando archivo Excel oficial (.xlsx)...', 'info');
     try {
-        sessionStorage.setItem('coepriss-session-config', JSON.stringify({ smtpHost, smtpPort }));
-        addSecurityLog('Configuración local', `SMTP guardado para esta sesion: ${smtpHost}:${smtpPort}.`);
-        renderBitacoraTable();
-        showToast('Configuracion guardada en esta sesion. El envio requiere conectar el backend SMTP.', 'success');
-    } catch (error) {
-        showToast('El navegador no permitio guardar la configuracion de esta sesion.', 'error');
+        const token = getJwtToken();
+        const params = new URLSearchParams({ estatus, desde, hasta, busqueda });
+        const res = await fetch(`/api/reportes/excel?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Reporte_Facturacion_COEPRISS_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('✓ Reporte Excel descargado exitosamente.', 'success');
+        addSecurityLog('Exportación Excel', `Reporte exportado con filtros: Estatus=${estatus}, Desde=${desde}, Hasta=${hasta}`);
+    } catch (e) {
+        showToast('Error al exportar a Excel: ' + e.message, 'error');
     }
 }
 
-// 9. Tables Dynamic Rendering Core Functions
-function renderProcesoTable() {
-    const tbody = document.getElementById('tbody-proceso');
-    if (!tbody) return;
+// ─────────────────────────────────────────────
+// 9. DIRECTORIO DE CLIENTES Y CONTRIBUYENTES
+// ─────────────────────────────────────────────
 
-    tbody.innerHTML = '';
-    // Show only non-completed dossiers (not Timbrado / Entregado)
-    const inProcess = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado');
-    
-    if (inProcess.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#868e96;">No hay solicitudes pendientes en proceso.</td></tr>`;
-        return;
+async function loadClientes() {
+    try {
+        const res = await apiFetch('/api/clientes');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+            state.clientes = data.data;
+            renderClientesTable();
+        }
+    } catch (e) {
+        console.warn('[LOAD CLIENTES ERROR]', e.message);
     }
-
-    inProcess.forEach(e => {
-        const tr = document.createElement('tr');
-        
-        let wizardStep = 1;
-        if (e.estatus === 'Pago pendiente') wizardStep = 2;
-        if (e.estatus === 'Pago validado') wizardStep = 3;
-        if (e.estatus === 'Autorizado') wizardStep = 4;
-
-        tr.innerHTML = `
-            <td>${e.folio}</td>
-            <td>${e.cliente}</td>
-            <td>${e.fechaRecibo}</td>
-            <td>
-                <span class="badge badge-info">
-                    <svg class="badge-icon-stroke" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Fase ${wizardStep}: ${e.estatus}
-                </span>
-            </td>
-            <td style="text-align: center;">
-                <button class="btn btn-primary" onclick="resumeFlowAtStep(${wizardStep}, '${e.folio}')" style="padding: 6px 14px; font-size: 0.75rem;">Reanudar</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function renderCorreosTable() {
-    const tbody = document.getElementById('tbody-correos');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-    if (state.historialCorreos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-table-cell">No hay correos enviados en esta sesion.</td></tr>';
-        return;
-    }
-    state.historialCorreos.forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${c.fecha}</td>
-            <td>${c.destinatario}</td>
-            <td class="col-folio">${c.folio}</td>
-            <td>${c.adjuntos}</td>
-            <td style="text-align: center;">
-                <span class="badge badge-success">
-                    <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                    ${c.estatus}
-                </span>
-            </td>
-            <td style="text-align: center;">
-                <button class="btn btn-secondary" onclick="resendEmail('${c.destinatario}', '${c.folio}')" style="padding: 5px 10px; font-size: 0.72rem;">Reenviar</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
 }
 
 function renderClientesTable() {
@@ -2915,91 +3108,162 @@ function renderClientesTable() {
     if (!tbody) return;
 
     tbody.innerHTML = '';
-    
-    // Clients will come from the real database once authentication and
-    // persistence are configured. Never seed the production UI with examples.
-    const clients = [];
+    const filter = (document.getElementById('search-clientes')?.value || '').toLowerCase().trim();
 
-    if (clients.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-table-cell">No hay clientes persistentes. La base de datos aun no esta conectada.</td></tr>';
+    const filtered = (state.clientes || []).filter(c => {
+        if (!filter) return true;
+        return [c.rfc, c.razonSocial, c.email, c.codigoPostal].some(v => (v || '').toLowerCase().includes(filter));
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-table-cell" style="text-align:center;padding:30px;color:#868e96;">No hay clientes registrados en el directorio. Registra uno con el botón superior.</td></tr>';
         return;
     }
 
-    clients.forEach(c => {
+    filtered.forEach(c => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td style="font-family: monospace; font-weight: 600;">${c.rfc}</td>
-            <td class="col-cliente">${c.razon}</td>
-            <td>${c.regimen}</td>
-            <td>${c.cp}</td>
-            <td>${c.email}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function renderBitacoraTable() {
-    const tbody = document.getElementById('tbody-bitacora');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-    state.bitacoraSeguridad.forEach(log => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td style="color: #6c757d;">${log.fecha}</td>
-            <td style="font-weight: 600;">${log.usuario}</td>
-            <td><span class="badge badge-pending">${log.accion || log.action}</span></td>
-            <td style="color: #495057;">${log.detalles}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-function renderReportTable() {
-    const tbody = document.getElementById('tbody-report-invoices');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-    if (state.facturas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-table-cell">No hay facturas timbradas reales en esta sesion.</td></tr>';
-    }
-    state.facturas.forEach(f => {
-        const statusClass = ['Timbrada', 'Entregada'].includes(String(f.estatus)) ? 'badge-success' : 'badge-warning';
-        const tr = document.createElement('tr');
-        tr.dataset.invoiceRow = 'true';
-        tr.dataset.status = String(f.estatus || '').toLowerCase();
-        tr.innerHTML = `
-            <td class="col-folio">${f.folioInterno}</td>
-            <td>${f.folioRecibo}</td>
-            <td class="col-cliente">${f.cliente}</td>
-            <td style="color: #6c757d;">${f.fecha}</td>
-            <td style="text-align: right; font-weight: 700; color: #212529;">$${f.importe.toFixed(2)}</td>
-            <td style="text-align: center;">
-                <span class="badge ${statusClass}">
-                    <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                    ${f.estatus}
-                </span>
-            </td>
-            <td style="text-align: center;">
-                <div class="action-icon-group">
-                    <button class="action-icon-btn btn-view" onclick="openInvoicePreviewModal('${f.folioInterno}', '${f.cliente}', '$${f.importe.toFixed(2)}')" title="Ver factura"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
-                    <button class="action-icon-btn btn-dl-pdf" onclick="triggerDownload('FACTURA_${f.folioRecibo.replace('-', '')}.pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                    <button class="action-icon-btn btn-dl-xml" onclick="triggerDownload('FACTURA_${f.folioRecibo.replace('-', '')}.xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                    <button class="action-icon-btn btn-email" onclick="resendEmail('${f.correo || ''}', '${f.folioInterno}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+            <td style="font-family:monospace;font-weight:700;color:#1B365D;">${c.rfc}</td>
+            <td class="col-cliente" style="font-weight:600;">${c.razonSocial}</td>
+            <td><span class="badge badge-info">${c.regimenFiscal || '—'}</span></td>
+            <td>${c.codigoPostal || '—'}</td>
+            <td>${c.usoCfdi || 'G03'}</td>
+            <td style="color:#0d6efd;">${c.email || '—'}</td>
+            <td style="text-align:center;">
+                <div style="display:flex;gap:6px;justify-content:center;">
+                    <button class="btn btn-sm btn-primary" onclick="facturarACliente('${c.rfc}')" title="Facturar a este contribuyente" style="padding:4px 10px;font-size:0.75rem;">
+                        ⚡ Facturar
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick='openClienteModal(${JSON.stringify(c)})' title="Editar datos" style="padding:4px 8px;font-size:0.75rem;">
+                        ✏️
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="deleteCliente('${c.id}', '${c.rfc}')" title="Eliminar del directorio" style="padding:4px 8px;font-size:0.75rem;color:#dc3545;">
+                        🗑️
+                    </button>
                 </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
+}
 
-    const showingText = document.getElementById('showing-results-text');
-    if (showingText) {
-        showingText.textContent = `Mostrando ${state.facturas.length} de ${state.facturas.length} resultados`;
+function filterClientesTable() {
+    renderClientesTable();
+}
+
+let _editingClienteId = null;
+
+function openClienteModal(cliente = null) {
+    _editingClienteId = cliente ? cliente.id : null;
+    const modal = document.getElementById('modal-cliente');
+    const titleEl = document.getElementById('modal-cliente-title');
+    if (!modal) return;
+
+    if (titleEl) titleEl.textContent = cliente ? 'Editar Cliente / Contribuyente' : 'Registrar Nuevo Cliente';
+
+    document.getElementById('cliente-rfc').value = cliente?.rfc || '';
+    document.getElementById('cliente-cp').value = cliente?.codigoPostal || '';
+    document.getElementById('cliente-razon').value = cliente?.razonSocial || '';
+    document.getElementById('cliente-regimen').value = cliente?.regimenFiscal || '626';
+    document.getElementById('cliente-uso-cfdi').value = cliente?.usoCfdi || 'G03';
+    document.getElementById('cliente-forma-pago').value = cliente?.formaPago || '03';
+    document.getElementById('cliente-email').value = cliente?.email || '';
+    document.getElementById('cliente-telefono').value = cliente?.telefono || '';
+    document.getElementById('cliente-domicilio').value = cliente?.domicilio || '';
+
+    modal.classList.add('open');
+}
+
+async function handleSaveClient(event) {
+    if (event) event.preventDefault();
+
+    const rfc = document.getElementById('cliente-rfc')?.value.toUpperCase().trim();
+    const razonSocial = document.getElementById('cliente-razon')?.value.trim();
+    const codigoPostal = document.getElementById('cliente-cp')?.value.trim();
+    const regimenFiscal = document.getElementById('cliente-regimen')?.value;
+    const usoCfdi = document.getElementById('cliente-uso-cfdi')?.value;
+    const formaPago = document.getElementById('cliente-forma-pago')?.value;
+    const email = document.getElementById('cliente-email')?.value.trim();
+    const telefono = document.getElementById('cliente-telefono')?.value.trim();
+    const domicilio = document.getElementById('cliente-domicilio')?.value.trim();
+
+    if (!rfc || rfc.length < 12) {
+        showToast('Captura un RFC válido.', 'error');
+        return;
     }
-    const pagination = document.querySelector('#step-panel-7 .pagination');
-    if (pagination) {
-        pagination.innerHTML = '<li class="page-item active"><a href="#" onclick="setReportPage(1); return false;" aria-label="Pagina 1">1</a></li>';
+    if (!razonSocial) {
+        showToast('Captura el Nombre o Razón Social.', 'error');
+        return;
     }
+
+    try {
+        const res = await apiFetch('/api/clientes', {
+            method: 'POST',
+            body: JSON.stringify({
+                rfc,
+                razonSocial,
+                codigoPostal,
+                regimenFiscal,
+                usoCfdi,
+                formaPago,
+                email,
+                telefono,
+                domicilio
+            })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast('✓ Cliente guardado exitosamente en el Directorio.', 'success');
+            closeModal('modal-cliente');
+            await loadClientes();
+        } else {
+            showToast(`❌ Error al guardar cliente: ${data.error}`, 'error');
+        }
+    } catch (e) {
+        showToast(`❌ Error: ${e.message}`, 'error');
+    }
+}
+
+async function deleteCliente(id, rfc) {
+    if (!confirm(`¿Estás seguro de desactivar al contribuyente con RFC ${rfc}?`)) return;
+    try {
+        const res = await apiFetch(`/api/clientes/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast('✓ Cliente eliminado del Directorio.', 'info');
+            await loadClientes();
+        } else {
+            showToast('Error al eliminar cliente.', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function facturarACliente(rfc) {
+    const cliente = (state.clientes || []).find(c => c.rfc === rfc);
+    if (!cliente) return;
+
+    // Iniciar nuevo expediente con los datos del cliente
+    state.activeExpediente = {
+        folio: `EXP-${Date.now().toString().slice(-6)}`,
+        rfc: cliente.rfc,
+        cliente: cliente.razonSocial,
+        regimenFiscal: cliente.regimenFiscal || '626',
+        codigoPostal: cliente.codigoPostal || '80020',
+        usoCfdi: cliente.usoCfdi || 'G03',
+        formaPago: cliente.formaPago || '03',
+        metodoPago: 'PUE',
+        correo: cliente.email || '',
+        concepto: 'Derechos de Trámite Sanitario COEPRISS',
+        importe: 0,
+        estatus: 'PENDIENTE',
+        archivos: [],
+        auditoria: [`[${getCurrentDateTimeString()}] Expediente iniciado desde el Directorio de Clientes (${cliente.rfc}).`]
+    };
+
+    goToStep(3);
+    showToast(`Iniciando factura para ${cliente.razonSocial}. Completa el importe y timbra.`, 'info');
 }
 
 function updateDashboardCounts() {
