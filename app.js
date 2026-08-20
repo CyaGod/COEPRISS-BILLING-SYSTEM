@@ -1981,6 +1981,18 @@ function openScanPreview(docName = '') {
     reader.readAsDataURL(uploaded.file);
 }
 
+function updatePreviewFields() {
+    if (!state.activeExpediente) return;
+    const clienteCorreo = document.getElementById('lbl-cliente-correo');
+    if (clienteCorreo) {
+        clienteCorreo.textContent = state.activeExpediente.correo || state.activeExpediente.cliente || 'Pendiente de lectura';
+    }
+    const clienteFecha = document.getElementById('lbl-cliente-fecha');
+    if (clienteFecha) {
+        clienteFecha.textContent = state.activeExpediente.fechaRecibo || getCurrentDateTimeString();
+    }
+}
+
 function updateStep2Fields() {
     if (!state.activeExpediente) return;
     const pending = 'Pendiente de lectura';
