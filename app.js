@@ -3266,6 +3266,143 @@ function facturarACliente(rfc) {
     showToast(`Iniciando factura para ${cliente.razonSocial}. Completa el importe y timbra.`, 'info');
 }
 
+// ─────────────────────────────────────────────
+// 10. CONTROL DE FLUJO Y UTILIDADES GLOBALES
+// ─────────────────────────────────────────────
+
+function restartProcess() {
+    state.activeExpediente = null;
+    state.uploadedFiles = [];
+    state.ocrBusy = false;
+    state.scanPreviewUrl = '';
+    state.scanQuality = null;
+    state.lastOcrFields = null;
+    state.xmlUploaded = false;
+    state.pdfUploaded = false;
+
+    const input = document.getElementById('document-file-input');
+    if (input) input.value = '';
+
+    const clienteCorreo = document.getElementById('lbl-cliente-correo');
+    if (clienteCorreo) clienteCorreo.textContent = 'Carga un documento real para iniciar...';
+    
+    const clienteFecha = document.getElementById('lbl-cliente-fecha');
+    if (clienteFecha) clienteFecha.textContent = '--/--/---- --:--';
+
+    const btnScan = document.getElementById('btn-scan');
+    if (btnScan) {
+        btnScan.disabled = false;
+        btnScan.textContent = 'Escanear / Leer documentos';
+    }
+
+    const docListContainer = document.getElementById('doc-list-container');
+    if (docListContainer) {
+        docListContainer.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; color: #868e96; padding: 30px 0; font-size: 0.82rem;">
+                Arrastra o selecciona archivos reales para iniciar el expediente.
+            </div>
+        `;
+    }
+
+    // Limpiar campos del paso 3
+    const fieldsToClear = ['step3-rfc', 'step3-razon', 'step3-cp', 'step3-correo', 'step3-concepto', 'step3-total'];
+    fieldsToClear.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    const badge = document.getElementById('badge-cliente-encontrado');
+    if (badge) badge.style.display = 'none';
+
+    const resultadoTimbrado = document.getElementById('pac-resultado-timbrado');
+    if (resultadoTimbrado) resultadoTimbrado.style.display = 'none';
+
+    _lastStampResult = null;
+
+    goToStep(1);
+    showToast('Nueva solicitud de facturación iniciada.', 'info');
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('open');
+    }
+}
+
+function saveConfiguration() {
+    const smtpHost = document.getElementById('smtp-host')?.value.trim();
+    const smtpPort = document.getElementById('smtp-port')?.value.trim();
+    if (!smtpHost || !/^\d{2,5}$/.test(smtpPort) || Number(smtpPort) > 65535) {
+        showToast('Captura un servidor SMTP y un puerto válido.', 'error');
+        return;
+    }
+    try {
+        sessionStorage.setItem('coepriss-session-config', JSON.stringify({ smtpHost, smtpPort }));
+        addSecurityLog('Configuración local', `SMTP guardado para esta sesión: ${smtpHost}:${smtpPort}.`);
+        renderBitacoraTable();
+        showToast('Configuración guardada en esta sesión.', 'success');
+    } catch (error) {
+        showToast('El navegador no permitió guardar la configuración de esta sesión.', 'error');
+    }
+}
+
+function openInvoicePreviewModal(folio = '', clientName = '', totalVal = '') {
+    const matchedFac = state.facturas.find(f => f.folioInterno === folio || f.folio === folio);
+    const facturamaId = matchedFac ? matchedFac.facturamaId : state.activeExpediente?.facturamaId;
+    if (facturamaId) {
+        openPdfViewer(facturamaId, `Factura ${folio}`);
+        return;
+    }
+
+    const modal = document.getElementById('modal-invoice-preview');
+    if (!modal) return;
+
+    if (!clientName && state.activeExpediente) {
+        clientName = state.activeExpediente.cliente;
+    }
+    const uuid = matchedFac ? matchedFac.uuid : (state.activeExpediente?.uuid || 'Pendiente de timbrado');
+
+    const folioEl = document.getElementById('pdf-folio');
+    if (folioEl) folioEl.textContent = folio || state.activeExpediente?.folio || '—';
+
+    const receptorNameEl = document.getElementById('pdf-receptor-name');
+    if (receptorNameEl) receptorNameEl.textContent = clientName || '—';
+
+    const receptorRfcEl = document.getElementById('pdf-receptor-rfc');
+    if (receptorRfcEl) receptorRfcEl.textContent = state.activeExpediente?.rfc || '—';
+
+    const receptorRegimenEl = document.getElementById('pdf-receptor-regimen');
+    if (receptorRegimenEl) receptorRegimenEl.textContent = state.activeExpediente?.regimenFiscal || '—';
+
+    const receptorCfdiEl = document.getElementById('pdf-receptor-cfdi');
+    if (receptorCfdiEl) receptorCfdiEl.textContent = state.activeExpediente?.usoCfdi || '—';
+
+    const uuidBox = document.getElementById('pdf-uuid-val');
+    if (uuidBox) uuidBox.textContent = uuid;
+
+    const numericTotal = typeof totalVal === 'number' ? totalVal : parseFloat(String(totalVal || '0').replace('$', '').replace(',', ''));
+    const numericSubtotal = numericTotal / 1.16;
+    const numericIva = numericTotal - numericSubtotal;
+
+    const unitPriceEl = document.getElementById('pdf-unit-price');
+    if (unitPriceEl) unitPriceEl.textContent = `$${numericSubtotal.toFixed(2)}`;
+
+    const subtotalEl = document.getElementById('pdf-subtotal');
+    if (subtotalEl) subtotalEl.textContent = `$${numericSubtotal.toFixed(2)}`;
+
+    const ivaEl = document.getElementById('pdf-iva');
+    if (ivaEl) ivaEl.textContent = `$${numericIva.toFixed(2)}`;
+
+    const totalEl = document.getElementById('pdf-total');
+    if (totalEl) totalEl.textContent = `$${numericTotal.toFixed(2)}`;
+
+    const conceptoPreview = document.getElementById('pdf-concepto');
+    if (conceptoPreview) conceptoPreview.textContent = state.activeExpediente?.concepto || 'Derechos de Trámite Sanitario COEPRISS';
+
+    modal.classList.add('open');
+}
+
 function updateDashboardCounts() {
     const timbradasEl = document.getElementById('dash-timbradas-count');
     const procEl = document.getElementById('dash-proc-count');
