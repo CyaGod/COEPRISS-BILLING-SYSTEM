@@ -561,14 +561,14 @@
                         </div>
 
                         <!-- Dropzone Area -->
-                        <div class="upload-dropzone" id="dropzone-step1">
-                            <input id="document-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" capture="environment" multiple hidden>
+                        <div class="upload-dropzone" id="dropzone-step1" onclick="document.getElementById('document-file-input').click()" style="cursor: pointer;">
+                            <input id="document-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple style="display: none;" onchange="handleSelectedFiles(this.files)">
                             <div class="scan-overlay" id="laser-scanner">
                                 <div class="scan-laser"></div>
                             </div>
                             <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            <p class="upload-text">Arrastra más archivos aquí o <span class="upload-link">selecciona</span></p>
-                            <p class="upload-hint">PDF, JPG, PNG (máx. 10 MB c/u). Alinea las cuatro orillas, llena el encuadre y evita reflejos.</p>
+                            <p class="upload-text">Arrastra más archivos aquí o <span class="upload-link" style="text-decoration: underline; font-weight: 700; color: var(--primary-color);">selecciona archivos</span></p>
+                            <p class="upload-hint">PDF, JPG, PNG (máx. 10 MB c/u). Haz clic para abrir el explorador de archivos o fotos.</p>
                         </div>
                     </div>
 

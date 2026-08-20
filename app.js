@@ -685,16 +685,44 @@ function startScanAnimationLegacyDemo() {
     }, 1800);
 }
 
-// Real document picker and local OCR implementation.
+// Real document picker and drag & drop implementation.
+function initDragAndDrop() {
+    const dropzone = document.getElementById('dropzone-step1');
+    if (!dropzone) return;
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, event => {
+            event.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, event => {
+            event.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+    });
+    dropzone.addEventListener('drop', event => {
+        event.preventDefault();
+        if (event.dataTransfer && event.dataTransfer.files) {
+            handleSelectedFiles(event.dataTransfer.files);
+        }
+    });
+}
+
 function initDocumentPicker() {
     const dropzone = document.getElementById('dropzone-step1');
     const input = document.getElementById('document-file-input');
     if (!dropzone || !input) return;
 
     dropzone.addEventListener('click', event => {
-        if (event.target !== input) input.click();
+        if (event.target !== input) {
+            input.click();
+        }
     });
-    input.addEventListener('change', event => handleSelectedFiles(event.target.files));
+    input.addEventListener('change', event => {
+        handleSelectedFiles(event.target.files);
+        input.value = '';
+    });
 }
 
 function handleSelectedFiles(fileList) {
@@ -3238,6 +3266,97 @@ async function deleteCliente(id, rfc) {
     } catch (e) {
         showToast('Error: ' + e.message, 'error');
     }
+}
+
+function renderProcesoTable() {
+    const tbody = document.getElementById('tbody-proceso');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    const inProcess = (state.expedientes || []).filter(e => e.estatus !== 'TIMBRADA' && e.estatus !== 'TIMBRADO' && e.estatus !== 'Entregado');
+    
+    if (inProcess.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#868e96; padding: 24px;">No hay solicitudes pendientes en proceso.</td></tr>`;
+        return;
+    }
+
+    inProcess.forEach(e => {
+        const tr = document.createElement('tr');
+        const folio = e.folio || '—';
+        const cliente = e.cliente || e.receptorNombre || '—';
+        const fecha = e.fechaRecibo || (e.createdAt ? new Date(e.createdAt).toLocaleDateString('es-MX') : '—');
+        const estatus = e.estatus || 'En proceso';
+
+        let wizardStep = 1;
+        if (estatus.includes('validado') || estatus.includes('Extracción')) wizardStep = 2;
+        else if (estatus.includes('Autorizado') || estatus.includes('Vista')) wizardStep = 3;
+        else if (estatus.includes('XML') || estatus.includes('Timbrado')) wizardStep = 4;
+
+        tr.innerHTML = `
+            <td style="font-weight:600; color:#1B365D;">${folio}</td>
+            <td class="col-cliente">${cliente}</td>
+            <td style="color:#6c757d;">${fecha}</td>
+            <td>
+                <span class="badge badge-info">
+                    ${estatus}
+                </span>
+            </td>
+            <td style="text-align: center;">
+                <button class="btn btn-primary" onclick="resumeFlowAtStep(${wizardStep}, '${folio}')" style="padding: 5px 12px; font-size: 0.75rem;">Reanudar</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderCorreosTable() {
+    const tbody = document.getElementById('tbody-correos');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (!state.historialCorreos || state.historialCorreos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-table-cell" style="text-align:center; padding:24px; color:#868e96;">No hay correos enviados en esta sesión.</td></tr>';
+        return;
+    }
+    state.historialCorreos.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="color:#6c757d;">${c.fecha || (c.createdAt ? new Date(c.createdAt).toLocaleString('es-MX') : '—')}</td>
+            <td style="font-weight:600; color:#0d6efd;">${c.destinatario || c.correoDestinatario || '—'}</td>
+            <td class="col-folio">${c.folio || c.folioExpediente || '—'}</td>
+            <td>${c.adjuntos || 'XML y PDF'}</td>
+            <td style="text-align: center;">
+                <span class="badge badge-success">
+                    ${c.estatus || 'Enviado'}
+                </span>
+            </td>
+            <td style="text-align: center;">
+                <button class="btn btn-secondary" onclick="resendEmail('${c.destinatario || c.correoDestinatario || ''}', '${c.folio || c.folioExpediente || ''}')" style="padding: 4px 10px; font-size: 0.72rem;">Reenviar</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderBitacoraTable() {
+    const tbody = document.getElementById('tbody-bitacora');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (!state.bitacoraSeguridad || state.bitacoraSeguridad.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-table-cell" style="text-align:center; padding:24px; color:#868e96;">Sin eventos de seguridad registrados.</td></tr>';
+        return;
+    }
+    state.bitacoraSeguridad.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="color: #6c757d;">${log.fecha || (log.createdAt ? new Date(log.createdAt).toLocaleString('es-MX') : '—')}</td>
+            <td style="font-weight: 600;">${log.usuario || log.usuarioNombre || 'Sistema'}</td>
+            <td><span class="badge badge-pending">${log.accion || log.action || 'Acción'}</span></td>
+            <td style="color: #495057;">${log.detalles || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
 }
 
 function facturarACliente(rfc) {
