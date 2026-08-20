@@ -937,24 +937,9 @@ async function extractUploadedDocuments() {
 }
 
 function enforceOcrQualityGate(fields) {
-    if (!fields || state.scanQuality?.level !== 'baja') return fields;
-    const hasFiscalAnchor = Boolean(fields.uuid) || Boolean(fields.rfcEmisor && fields.rfcReceptor);
-    const hasBankAnchor = Boolean(
-        (fields.claveRastreo || fields.referencia)
-        && Number.isFinite(fields.importePago)
-        && fields.fechaPago
-    );
-    const hasReceiptAnchor = Boolean(fields.folioRecibo && Number.isFinite(fields.importePago));
-    if (hasFiscalAnchor || hasBankAnchor || hasReceiptAnchor) return fields;
-
-    const rejected = {};
-    Object.keys(fields).forEach(key => {
-        if (key === 'confidence') return;
-        rejected[key] = typeof fields[key] === 'number' ? null : '';
-    });
-    rejected.confidence = Object.fromEntries(Object.keys(fields.confidence || {}).map(key => [key, 0]));
-    rejected.qualityRejected = true;
-    return rejected;
+    if (!fields) return fields || {};
+    // Keep all extracted fields so the user can see and confirm what was detected in Step 2.
+    return fields;
 }
 
 // A full-page OCR pass can miss table cells because the borders confuse the
@@ -1562,7 +1547,7 @@ function normalizeOcrDate(value) {
     const cleanValue = cleanOcrValue(value);
     const isoMatch = cleanValue.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(.*)$/);
     if (isoMatch) {
-        return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}${isoMatch[4]}`.trim();
+        return `${isoMatch[3].padStart(2, '0')}/${isoMatch[2].padStart(2, '0')}/${isoMatch[1]}${isoMatch[4]}`;
     }
     return cleanValue;
 }
@@ -1570,25 +1555,23 @@ function normalizeOcrDate(value) {
 function parseExtractedFields(text) {
     const normalized = String(text || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ');
     const plain = stripOcrAccents(normalized).toUpperCase();
-    // Phone photos often insert a dot or space in an RFC (for example
-    // CEP130206L.C4). Normalize that OCR artifact after matching it.
     const rfcPattern = '[A-Z&N]{3,4}\\s*\\d{6}[A-Z0-9](?:\\s*\\.\\s*)?[A-Z0-9]{1,2}';
-    const rfcEmisorMatch = plain.match(new RegExp(`RFC\\s+EMISOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
-    const rfcReceptorMatch = plain.match(new RegExp(`RFC\\s+RECEPTOR\\s*[:\\-]?\\s*(${rfcPattern})`, 'i'));
-    // Only accept an unlabeled RFC when it appears after an RFC label. A
-    // random tracking key can have the same letter/number shape as an RFC.
-    const genericRfcMatch = plain.match(new RegExp(`(?:^|\\n)\\s*RFC(?:\\s+(?:DEL|DE)?\\s*[A-Z ]+?)?\\s*[:\\-]?\\s*(\\b${rfcPattern}\\b)`, 'im'));
+    const rfcEmisorMatch = plain.match(new RegExp(`(?:RFC\\s+(?:DEL\\s+)?(?:EMISOR|ORDENANTE|PAGADOR)|EMISOR)[^A-Z0-9]{0,30}(${rfcPattern})`, 'i'));
+    const rfcReceptorMatch = plain.match(new RegExp(`(?:RFC\\s+(?:DEL\\s+)?(?:RECEPTOR|BENEFICIARIO|DESTINO|CLIENTE)|RECEPTOR|CLIENTE)[^A-Z0-9]{0,30}(${rfcPattern})`, 'i'));
+    const genericRfcMatch = plain.match(new RegExp(`(?:RFC|CURP)[^A-Z0-9]{0,30}(${rfcPattern})`, 'i'))
+        || plain.match(new RegExp(`\\b(${rfcPattern})\\b`, 'i'));
 
-    const stopLabels = 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|CODIGO\\s+POSTAL|REGIMEN\\s+FISCAL|USO\\s+CFDI|FOLIO\\s+FISCAL|EFECTO\\s+DE\\s+COMPROBANTE|CONCEPTOS|DESCRIPCION|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO\\s+DIGITAL';
-    const bankStopLabels = 'INSTITUCION\\s+(?:EMISORA?|RECEPTORA?)|BANCO\\s+(?:EMISOR|RECEPTOR|ORIGEN|DESTINO)|CODIGO|CLAVE|CUENTA|CLABE|MONTO|IMPORTE|REFERENCIA|FECHA|TOTAL|FOLIO';
-    const receiverNameRaw = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?RECEPTOR', stopLabels, 120);
+    const stopLabels = 'RFC|NOMBRE|CODIGO\\s+POSTAL|C\\.?P\\.?|REGIMEN|USO\\s+CFDI|FOLIO|EFECTO|CONCEPTOS|DESCRIPCION|MONEDA|FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|SELLO';
+    const bankStopLabels = 'INSTITUCION|BANCO|CODIGO|CLAVE|CUENTA|CLABE|MONTO|IMPORTE|REFERENCIA|FECHA|TOTAL|FOLIO';
+    const receiverNameRaw = extractOcrLabelValue(plain, '(?:NOMBRE\\s*,?\\s*DENOMINACION\\s+O\\s+RAZON\\s+SOCIAL|DENOMINACION\\s*/?\\s*RAZON\\s+SOCIAL|DENOMINACION\\s+O\\s+RAZON\\s+SOCIAL|RAZON\\s+SOCIAL|NOMBRE\\s+(?:DEL?\\s+)?(?:RECEPTOR|BENEFICIARIO|DESTINO|CLIENTE|CONTRIBUYENTE)|CONTRIBUYENTE|CLIENTE)', stopLabels, 140);
     const receiverName = cleanOcrValue(receiverNameRaw.replace(/\s+REGIM(?:E|EN|EN\s+FISCAL)?[\s\S]*$/i, ''));
-    const nombreEmisor = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?EMISOR', 'RFC\\s+RECEPTOR|NOMBRE\\s+RECEPTOR|FOLIO\\s+FISCAL|NO\\.?\\s+DE\\s+SERIE|CODIGO\\s+POSTAL|EFECTO\\s+DE\\s+COMPROBANTE', 160);
-    const legalName = extractOcrLabelValue(plain, 'RAZON\\s+SOCIAL', stopLabels, 120);
+    const nombreEmisor = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?EMISOR', 'RFC|NOMBRE\\s+RECEPTOR|FOLIO|CODIGO\\s+POSTAL', 160);
+    const legalName = extractOcrLabelValue(plain, '(?:DENOMINACION|RAZON)\\s+SOCIAL', stopLabels, 120);
     const razonSocial = receiverName || legalName;
-    const codigoPostal = (plain.match(/CODIGO\s+POSTAL(?:\s+DEL)?(?:\s+RECEPTOR)?\s*[:\-]?\s*(\d{5})/i) || [])[1] || '';
+    const codigoPostalMatch = plain.match(/(?:CODIGO\s+POSTAL|C\.?P\.?|LUGAR\s+DE\s+EXPEDICION)[^0-9]{0,30}(\d{5})\b/i);
+    const codigoPostal = codigoPostalMatch ? codigoPostalMatch[1] : '';
     const receiverRegimenFiscal = extractOcrLabelValue(plain, '(?:REGIMEN\\s+FISCAL\\s+RECEPTOR|RECEPTOR\\s*[:\\-]?\\s*REGIMEN\\s+FISCAL)', 'RECEPTOR|USO\\s+CFDI|CODIGO\\s+POSTAL|RFC|NOMBRE|CONCEPTOS', 100);
-    const regimenFiscal = receiverRegimenFiscal || extractOcrLabelValue(plain, 'REGIMEN\\s+FISCAL', 'USO\\s+CFDI|CODIGO\\s+POSTAL|EXPORTACION|FOLIO\\s+FISCAL|RFC|NOMBRE|CONCEPTOS', 100);
+    const regimenFiscal = receiverRegimenFiscal || extractOcrLabelValue(plain, 'REGIMEN(?:ES)?(?:\\s+FISCAL(?:ES)?)?', 'USO\\s+CFDI|CODIGO\\s+POSTAL|EXPORTACION|FOLIO\\s+FISCAL|RFC|NOMBRE|CONCEPTOS', 100);
     const regimenFiscalEmisor = extractOcrLabelValue(plain, 'REGIMEN\\s+FISCAL(?!\\s+RECEPTOR)', 'EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|USO\\s+CFDI|CODIGO\\s+POSTAL|RFC|NOMBRE', 100);
     const usoCfdi = extractOcrLabelValue(plain, 'USO\\s+CFDI', 'CONCEPTOS|FOLIO\\s+FISCAL|REGIMEN\\s+FISCAL|MONEDA|FORMA\\s+DE\\s+PAGO', 80);
     const tipoCfdi = extractOcrLabelValue(plain, 'EFECTO\\s+DE\\s+COMPROBANTE', 'REGIMEN\\s+FISCAL|EXPORTACION|FOLIO\\s+FISCAL|CONCEPTOS|DESCRIPCION|NOMBRE|RFC|CODIGO\\s+POSTAL', 40);
@@ -1602,12 +1585,10 @@ function parseExtractedFields(text) {
     const bancoReceptor = extractOcrLabelValue(plain, '(?:INSTITUCION|BANCO)\\s+(?:RECEPTORA?|DESTINO)(?:\\s+DEL\\s+PAGO)?', bankStopLabels, 80);
     const bancoEmisorCodigoMatch = plain.match(/(?:CODIGO|CLAVE)\s+(?:DE\s+)?(?:BANCO|INSTITUCION)\s+(?:EMISOR|EMISORA|ORIGEN)[^0-9]{0,30}(\d{3,6})/i);
     const bancoReceptorCodigoMatch = plain.match(/(?:CODIGO|CLAVE)\s+(?:DE\s+)?(?:BANCO|INSTITUCION)\s+(?:RECEPTOR|RECEPTORA|DESTINO)[^0-9]{0,30}(\d{3,6})/i);
-    const bankDocumentContext = /INSTITUCION\s+(?:EMISORA?|RECEPTORA?)|CLAVE\s+DE\s+RASTREO|CUENTA\s+BENEFICIARIA/i.test(plain);
+    const bankDocumentContext = /INSTITUCION\s+(?:EMISORA?|RECEPTORA?)|CLAVE\s+DE\s+RASTREO|CUENTA\s+BENEFICIARIA|TRANSFERENCIA|PAGO|COMPROBANTE|TICKET/i.test(plain);
 
     const totalMatch = plain.match(/\bTOTAL(?:\s+A\s+PAGAR)?\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
-    // Do not use the bare word "PAGO": it can be followed by an account
-    // number or date and would produce a false, very large amount.
-    const explicitPaymentAmountMatch = normalized.match(/(?:MONTO(?:\s+(?:DEL|DE)?\s*PAGO)?|IMPORTE\s+(?:PAGADO|DEL\s+PAGO)|DEPOSITO)[^\d$\n]{0,60}\$?\s*([\d,]+(?:\.\d{1,2})?)/i)
+    const explicitPaymentAmountMatch = normalized.match(/(?:MONTO(?:\s+(?:DE\s+LA\s+OPERACI[O0E]N|DEL?\s+PAGO))?|IMPORTE\s+(?:TOTAL|PAGADO|DEL?\s+PAGO)|TOTAL\s+A\s+PAGAR|IMPORTE\s*[:=]|DEPOSITO)[^\d$\n]{0,60}\$?\s*([\d,]+(?:\.\d{1,2})?)/i)
         || (bankDocumentContext ? normalized.match(/IMPORTE\s*[:\-]?[^\d$\n]{0,20}\$?\s*([\d,]+(?:\.\d{1,2})?)/i) : null);
     const currencyMatches = [...normalized.matchAll(/\$\s*([\d,]+\.\d{1,2})/g)];
     const currencyMatch = currencyMatches.length ? currencyMatches[currencyMatches.length - 1] : null;
@@ -1615,10 +1596,10 @@ function parseExtractedFields(text) {
     const amountMatch = qrAmountMatch || totalMatch || explicitPaymentAmountMatch || currencyMatch;
     const paymentAmount = explicitPaymentAmountMatch ? Number(explicitPaymentAmountMatch[1].replace(/,/g, '')) : null;
     const subtotalMatch = plain.match(/\bSUBTOTAL\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
-    const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DEL?\s+)?RECIBO|NO\.?\s+DE?\s+RECIBO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
-    const numericReferenceMatch = normalized.match(/(?:NUMERO\s+DE\s+REFERENCIA|REFERENCIA|REF\.?)[\s:#-]*(\d{1,7})(?!\d)/i);
-    const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
-    const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|CLAVE\s+RASTREO|RASTREO)[\s:#-]*([A-Z0-9]{6,30})/i);
+    const folioReciboMatch = normalized.match(/(?:FOLIO\s+(?:DE\s+OPERACI[O0E]N|DEL?\s+RECIBO|DEL?\s+COMPROBANTE)?|NO\.?\s+DE?\s+RECIBO|NUM\.?\s+OPERACI[O0E]N)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
+    const numericReferenceMatch = normalized.match(/(?:NUMERO\s+DE\s+REFERENCIA|FOLIO\s+DE\s+OPERACI[O0E]N|NUM\.?\s+OPERACI[O0E]N|REFERENCIA|REF\.?)[\s:#-]*(\d{1,12})(?!\d)/i);
+    const referenceMatch = normalized.match(/(?:REFERENCIA|REF\.?|AUTORIZACION|FOLIO)[\s:#-]*([A-Z0-9][A-Z0-9 ./_-]{3,45})/i);
+    const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|CLAVE\s+RASTREO|RASTREO|FOLIO\s+DIGITAL)[\s:#-]*([A-Z0-9]{6,30})/i);
     const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,18})/i);
     const productCodeMatch = plain.match(/(?:CONCEPTOS|CLAVE\s+DEL\s+PRODUCTO)[\s\S]{0,1400}?\b(\d{8})\b/i);
     const quantityMatch = plain.match(/CONCEPTOS[\s\S]{0,1400}?\b(1(?:\.0+)?)\b[\s\S]{0,500}?\bE(?:48|51|A)\b/i)
@@ -1645,7 +1626,7 @@ function parseExtractedFields(text) {
     const emissionDateMatch = plain.match(new RegExp(`(?:FECHA\\s+Y\\s+HORA\\s+DE\\s+EMISION|FECHA\\s+DE\\s+EMISION|FECHA\\s+EMISION|FECHA\\s*Y\\s*HORA\\s*DE(?!\\s*CERTIFICACION))[^0-9]{0,60}(?:\\d{5}\\s+)?(${datePattern})`, 'i'));
     const paymentDateMatch = plain.match(new RegExp(`(?:FECHA\\s+DE\\s+(?:OPERACION|PAGO)|FECHA\\s+PAGO)[^0-9]{0,40}(${datePattern})`, 'i'));
     const fechaEmision = emissionDateMatch ? normalizeOcrDate(emissionDateMatch[1]) : '';
-    const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA'];
+    const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'BANCOPPEL', 'STP', 'MERCADOPAGO', 'MERCADO PAGO', 'NUBANK', 'NU', 'BANREGIO', 'INBURSA', 'AFIRME', 'COMPARTAMOS', 'BANJERCITO', 'CI BANCO', 'PAYPAL'];
     const bank = bankNames.find(name => plain.includes(name)) || '';
     const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
     const referencia = numericReferenceMatch ? cleanOcrValue(numericReferenceMatch[1]) : (referenceMatch ? cleanOcrValue(referenceMatch[1]) : '');
