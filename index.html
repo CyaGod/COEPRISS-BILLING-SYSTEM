@@ -560,29 +560,53 @@
                             </div>
                         </div>
 
-                        <!-- Actions Bar: Camera Scanner & File Dropzone -->
-                        <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-primary" onclick="openCameraScannerModal()" style="flex: 1; min-width: 240px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; font-weight: 700; background: linear-gradient(135deg, #0A2240, #1a3a60); border: 1.5px solid var(--secondary-color); box-shadow: 0 4px 12px rgba(10,34,64,0.18);">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                <span>📷 Escanear con Cámara (Detección de Bordes)</span>
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('document-file-input').click()" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; font-weight: 600;">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                <span>Subir Archivos (PDF / Fotos)</span>
-                            </button>
-                        </div>
-
-                        <!-- Dropzone Area -->
-                        <div class="upload-dropzone" id="dropzone-step1" onclick="document.getElementById('document-file-input').click()" style="cursor: pointer;">
+                        <!-- Dropzone Area (Primary for Office Desktop PCs) -->
+                        <div class="upload-dropzone" id="dropzone-step1" onclick="document.getElementById('document-file-input').click()" style="cursor: pointer; border: 2px dashed #0A2240; background: #f8fafc; border-radius: 12px; padding: 32px 20px; text-align: center; transition: all 0.2s ease;">
                             <input id="document-file-input" type="file"
                                 accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tiff,.tif,.heic,.heif,.avif,application/pdf,image/jpeg,image/png,image/webp,image/bmp,image/gif,image/tiff,image/heic,image/heif,image/avif"
                                 multiple style="display: none;" onchange="handleSelectedFiles(this.files)">
                             <div class="scan-overlay" id="laser-scanner">
                                 <div class="scan-laser"></div>
                             </div>
-                            <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            <p class="upload-text">Arrastra más archivos aquí o <span class="upload-link" style="text-decoration: underline; font-weight: 700; color: var(--primary-color);">selecciona archivos</span></p>
-                            <p class="upload-hint">PDF, JPG, PNG, WEBP, BMP, TIFF, GIF, HEIC (máx. 10 MB c/u). Haz clic para abrir el explorador de archivos o fotos.</p>
+                            <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 46px; height: 46px; color: #0A2240; margin-bottom: 8px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            <p class="upload-text" style="font-size: 1.05rem; font-weight: 700; color: #0A2240; margin-bottom: 4px;">
+                                Arrastra aquí los archivos de la oficina o <span class="upload-link" style="text-decoration: underline; color: #C8A84B; cursor: pointer;">haz clic para seleccionar</span>
+                            </p>
+                            <p class="upload-hint" style="color: #64748b; font-size: 0.82rem; margin-top: 4px;">
+                                Puedes subir <strong>varios archivos juntos</strong> (PDF, JPG, PNG, WEBP, TIFF de hasta 10 MB c/u).
+                            </p>
+                            <div style="margin-top: 14px; display: inline-flex; gap: 8px; align-items: center;">
+                                <button type="button" class="btn btn-primary" onclick="event.stopPropagation(); document.getElementById('document-file-input').click();" style="padding: 9px 20px; font-weight: 700; font-size: 0.84rem; background: #0A2240; color: #fff; border-radius: 8px; border: 1px solid #0A2240; display: inline-flex; align-items: center; gap: 6px;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    <span>Examinar Archivos en PC</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); openCameraScannerModal();" style="padding: 9px 16px; font-size: 0.82rem; font-weight: 600; background: #fff; color: #475569; border: 1px solid #cbd5e1; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;" title="Solo si el equipo cuenta con cámara o webcam">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <span>Usar Cámara (Opcional)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Institutional Scanning & OCR Quality Guide -->
+                        <div style="margin-top: 16px; background: #f0f7ff; border: 1px solid #cce3fe; border-left: 4px solid #1a73e8; border-radius: 8px; padding: 14px 18px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <svg fill="none" stroke="#1a73e8" viewBox="0 0 24 24" style="width: 18px; height: 18px; flex-shrink: 0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <strong style="color: #0c4a6e; font-size: 0.86rem; font-weight: 700;">Guía para una lectura OCR óptima (100% de precisión):</strong>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; font-size: 0.80rem; color: #334155; line-height: 1.45;">
+                                <div style="display: flex; align-items: flex-start; gap: 6px;">
+                                    <span style="color: #16a34a; font-weight: bold;">✔</span>
+                                    <span><strong>Sube varios documentos a la vez:</strong> Puedes adjuntar el comprobante bancario, la constancia fiscal y la solicitud juntos. El sistema combinará todos los datos.</span>
+                                </div>
+                                <div style="display: flex; align-items: flex-start; gap: 6px;">
+                                    <span style="color: #16a34a; font-weight bold;">✔</span>
+                                    <span><strong>Prefiere el PDF original:</strong> Si el comprobante o factura fue descargado de la banca en línea o del SAT en PDF, súbelo directo (se lee sin margen de error).</span>
+                                </div>
+                                <div style="display: flex; align-items: flex-start; gap: 6px;">
+                                    <span style="color: #16a34a; font-weight: bold;">✔</span>
+                                    <span><strong>En fotos o escaneos:</strong> Procura que la hoja esté plana, con buena luz y sin sombras oscuras para que el RFC, Folio e Importe se lean a la primera.</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
