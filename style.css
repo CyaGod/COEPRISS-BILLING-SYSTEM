@@ -2719,3 +2719,283 @@ body {
         display: none;
     }
 }
+
+/* ==========================================================================
+   LIVE CAMERA DOCUMENT SCANNER (Apple Notes / CamScanner style)
+   ========================================================================== */
+.camera-scanner-container {
+    width: 94vw;
+    max-width: 920px;
+    height: 88vh;
+    max-height: 820px;
+    background: #080f1a;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+    position: relative;
+    border: 1.5px solid rgba(200, 168, 75, 0.25);
+    animation: camera-modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes camera-modal-pop {
+    from { transform: scale(0.92); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.camera-scanner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: rgba(10, 34, 64, 0.96);
+    backdrop-filter: blur(10px);
+    color: #ffffff;
+    z-index: 20;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.camera-scanner-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: #ffffff;
+}
+
+.camera-scanner-title svg {
+    color: var(--secondary-color);
+}
+
+.camera-scanner-tools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.camera-tool-btn {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.camera-tool-btn svg {
+    width: 19px;
+    height: 19px;
+}
+
+.camera-tool-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.camera-close-btn:hover {
+    background: #e53935;
+    border-color: #e53935;
+}
+
+.camera-scanner-viewport {
+    flex: 1;
+    position: relative;
+    background: #000000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#camera-scanner-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000000;
+}
+
+#camera-scanner-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.camera-hud-pill {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 24, 45, 0.88);
+    backdrop-filter: blur(12px);
+    color: #ffffff;
+    padding: 8px 20px;
+    border-radius: 30px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    pointer-events: none;
+    z-index: 15;
+    text-align: center;
+    white-space: nowrap;
+    transition: all 0.25s ease;
+}
+
+.hud-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #00e676;
+    box-shadow: 0 0 10px #00e676;
+    transition: all 0.25s ease;
+}
+
+.camera-guide-target {
+    position: absolute;
+    width: 78%;
+    height: 78%;
+    max-width: 480px;
+    max-height: 640px;
+    pointer-events: none;
+    opacity: 0.55;
+    transition: opacity 0.3s ease;
+    z-index: 12;
+}
+
+.target-corner {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border: 3.5px solid var(--secondary-color);
+}
+
+.target-corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; border-top-left-radius: 12px; }
+.target-corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; border-top-right-radius: 12px; }
+.target-corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; border-bottom-left-radius: 12px; }
+.target-corner.br { bottom: 0; right: 0; border-left: none; border-top: none; border-bottom-right-radius: 12px; }
+
+.camera-shutter-flash {
+    position: absolute;
+    inset: 0;
+    background: #ffffff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.06s ease-out;
+    z-index: 25;
+}
+
+.camera-shutter-flash.flash {
+    opacity: 0.92;
+}
+
+.camera-scanner-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: rgba(10, 34, 64, 0.96);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 20;
+}
+
+.camera-footer-left, .camera-footer-right {
+    min-width: 140px;
+}
+
+.camera-footer-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.camera-shutter-btn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 4px solid #ffffff;
+    background: transparent;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, border-color 0.2s ease;
+}
+
+.camera-shutter-btn .shutter-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffffff, #e2e8f0);
+    transition: all 0.12s ease;
+}
+
+.camera-shutter-btn:active {
+    transform: scale(0.90);
+}
+
+.camera-shutter-btn.capturing-auto {
+    border-color: #00e676;
+    animation: shutter-pulse 1.1s infinite alternate;
+}
+
+.camera-shutter-btn.capturing-auto .shutter-inner {
+    background: #00e676;
+}
+
+@keyframes shutter-pulse {
+    from { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+    to { box-shadow: 0 0 0 16px rgba(0, 230, 118, 0); }
+}
+
+.camera-badge-counter {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: inline-block;
+}
+
+@media (max-width: 768px) {
+    .camera-scanner-container {
+        width: 100vw;
+        height: 100vh;
+        max-width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+        border: none;
+    }
+    
+    .camera-scanner-footer {
+        padding: 12px 16px;
+    }
+    
+    .camera-footer-left, .camera-footer-right {
+        min-width: auto;
+    }
+    
+    .camera-shutter-btn {
+        width: 60px;
+        height: 60px;
+    }
+}
+

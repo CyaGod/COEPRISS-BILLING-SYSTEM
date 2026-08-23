@@ -4125,3 +4125,482 @@ function showToast(message, type = 'success') {
         });
     }, 4000);
 }
+
+// ==========================================================================
+// REAL-TIME CAMERA DOCUMENT SCANNER CONTROLLER (Apple Notes / CamScanner)
+// ==========================================================================
+
+const cameraState = {
+    stream: null,
+    videoTrack: null,
+    animFrameId: null,
+    facingMode: 'environment', // Start with back camera on mobile
+    capturedCount: 0,
+    lastCorners: null,
+    lastCornersRaw: null,
+    stableFramesCount: 0,
+    isCapturing: false,
+    autoCaptureCooldown: 0,
+    torchOn: false,
+    hasTorch: false,
+    lastProcessTime: 0
+};
+
+async function openCameraScannerModal() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Tu navegador no permite acceso directo a la cámara. Usa el botón de Subir Archivos.', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('modal-camera-scanner');
+    if (!modal) return;
+
+    modal.classList.add('open');
+    cameraState.capturedCount = 0;
+    cameraState.stableFramesCount = 0;
+    cameraState.lastCorners = null;
+    cameraState.isCapturing = false;
+    cameraState.autoCaptureCooldown = Date.now() + 1000;
+
+    const badge = document.getElementById('camera-badge-counter');
+    if (badge) badge.textContent = `📄 0 capturados`;
+
+    await startCameraStream(cameraState.facingMode);
+}
+
+function closeCameraScannerModal() {
+    stopCameraStream();
+    closeModal('modal-camera-scanner');
+    renderDocumentList();
+    if (cameraState.capturedCount > 0) {
+        showToast(`📸 ${cameraState.capturedCount} documento(s) escaneado(s) exitosamente y agregado(s) al expediente.`, 'success');
+    }
+}
+
+async function startCameraStream(facingMode = 'environment') {
+    const video = document.getElementById('camera-scanner-video');
+    if (!video) return;
+
+    stopCameraStream(false);
+    updateCameraHud('Iniciando sensor de cámara...', '#00e676', true);
+
+    try {
+        const constraints = {
+            audio: false,
+            video: {
+                facingMode: { ideal: facingMode },
+                width: { ideal: 1920, min: 1280 },
+                height: { ideal: 1080, min: 720 }
+            }
+        };
+
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (e) {
+            // Fallback for basic webcams or older devices
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: { facingMode: { ideal: facingMode } }
+            });
+        }
+
+        cameraState.stream = stream;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+
+        const tracks = stream.getVideoTracks();
+        if (tracks.length > 0) {
+            cameraState.videoTrack = tracks[0];
+            checkCameraTorchSupport(cameraState.videoTrack);
+        }
+
+        video.onloadedmetadata = () => {
+            video.play().then(() => {
+                updateCameraHud('Apunta la cámara al documento (CFDI, Recibo o Pago)', '#00e676');
+                startCameraDetectionLoop();
+            }).catch(err => {
+                console.warn('Error al reproducir stream de cámara:', err);
+            });
+        };
+    } catch (error) {
+        console.error('Error al acceder a la cámara:', error);
+        updateCameraHud('No se pudo acceder a la cámara. Revisa los permisos.', '#e53935');
+        showToast('No se pudo iniciar la cámara. Verifica que diste permisos en tu navegador.', 'error');
+    }
+}
+
+function stopCameraStream(clearCanvas = true) {
+    if (cameraState.animFrameId) {
+        cancelAnimationFrame(cameraState.animFrameId);
+        cameraState.animFrameId = null;
+    }
+
+    if (cameraState.stream) {
+        cameraState.stream.getTracks().forEach(track => {
+            try { track.stop(); } catch (e) {}
+        });
+        cameraState.stream = null;
+    }
+
+    cameraState.videoTrack = null;
+    cameraState.torchOn = false;
+
+    const video = document.getElementById('camera-scanner-video');
+    if (video) video.srcObject = null;
+
+    if (clearCanvas) {
+        const canvas = document.getElementById('camera-scanner-canvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+}
+
+function checkCameraTorchSupport(track) {
+    const torchBtn = document.getElementById('btn-camera-torch');
+    if (!torchBtn) return;
+
+    if (track && typeof track.getCapabilities === 'function') {
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+            cameraState.hasTorch = true;
+            torchBtn.style.display = 'inline-flex';
+            return;
+        }
+    }
+    cameraState.hasTorch = false;
+    torchBtn.style.display = 'none';
+}
+
+async function toggleCameraTorch() {
+    if (!cameraState.videoTrack || !cameraState.hasTorch) return;
+    cameraState.torchOn = !cameraState.torchOn;
+    try {
+        await cameraState.videoTrack.applyConstraints({
+            advanced: [{ torch: cameraState.torchOn }]
+        });
+        const torchBtn = document.getElementById('btn-camera-torch');
+        if (torchBtn) {
+            torchBtn.style.background = cameraState.torchOn ? '#C8A84B' : 'rgba(255, 255, 255, 0.12)';
+            torchBtn.style.color = cameraState.torchOn ? '#0A2240' : '#ffffff';
+        }
+    } catch (e) {
+        console.warn('No se pudo activar la linterna:', e);
+    }
+}
+
+function flipCameraFacingMode() {
+    cameraState.facingMode = cameraState.facingMode === 'environment' ? 'user' : 'environment';
+    startCameraStream(cameraState.facingMode);
+}
+
+function updateCameraHud(text, dotColor = '#00e676', pulsing = false) {
+    const textEl = document.getElementById('camera-hud-text');
+    const dotEl = document.getElementById('camera-hud-dot');
+    if (textEl) textEl.textContent = text;
+    if (dotEl) {
+        dotEl.style.backgroundColor = dotColor;
+        dotEl.style.boxShadow = `0 0 10px ${dotColor}`;
+        dotEl.style.animation = pulsing ? 'hud-pulse 1s infinite alternate' : 'none';
+    }
+}
+
+// --------------------------------------------------------------------------
+// Real-Time Frame Detection & Canvas Overlay Loop
+// --------------------------------------------------------------------------
+
+function startCameraDetectionLoop() {
+    const video = document.getElementById('camera-scanner-video');
+    const canvas = document.getElementById('camera-scanner-canvas');
+    if (!video || !canvas) return;
+
+    // Small off-screen canvas for high-performance brightness boundary analysis
+    const analysisCanvas = document.createElement('canvas');
+    const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+
+    const detectLoop = () => {
+        if (!cameraState.stream || video.paused || video.ended) {
+            return;
+        }
+
+        const now = Date.now();
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+
+        if (vw > 0 && vh > 0) {
+            // Resize display canvas to match the exact rendered video viewport
+            const rect = video.getBoundingClientRect();
+            if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+                canvas.width = Math.round(rect.width);
+                canvas.height = Math.round(rect.height);
+            }
+
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Throttle heavy edge detection to ~160ms (approx 6 FPS detection rate)
+            // while rendering the smooth overlay at 60 FPS
+            if (now - cameraState.lastProcessTime > 160 && !cameraState.isCapturing) {
+                cameraState.lastProcessTime = now;
+
+                const aW = 360;
+                const aH = Math.round(360 * (vh / vw));
+                analysisCanvas.width = aW;
+                analysisCanvas.height = aH;
+                analysisCtx.drawImage(video, 0, 0, aW, aH);
+
+                const bounds = estimateBrightDocumentBounds(analysisCanvas);
+
+                if (bounds && (bounds.corners || (bounds.right - bounds.left > aW * 0.35 && bounds.bottom - bounds.top > aH * 0.35))) {
+                    let corners = bounds.corners;
+                    if (!corners) {
+                        // Fallback rectangular corners from bounding box
+                        corners = [
+                            { x: bounds.left, y: bounds.top },
+                            { x: bounds.right, y: bounds.top },
+                            { x: bounds.right, y: bounds.bottom },
+                            { x: bounds.left, y: bounds.bottom }
+                        ];
+                    }
+
+                    // Save raw bounds mapped to video native resolution for high-res crop
+                    cameraState.lastCornersRaw = corners.map(pt => ({
+                        x: pt.x * (vw / aW),
+                        y: pt.y * (vh / aH)
+                    }));
+
+                    // Map corners to display canvas coordinates
+                    const displayCorners = corners.map(pt => ({
+                        x: pt.x * (canvas.width / aW),
+                        y: pt.y * (canvas.height / aH)
+                    }));
+
+                    // Check stability between frames
+                    const isStable = checkCornersStability(displayCorners);
+
+                    if (isStable) {
+                        cameraState.stableFramesCount++;
+                    } else {
+                        cameraState.stableFramesCount = Math.max(0, cameraState.stableFramesCount - 1);
+                    }
+
+                    cameraState.lastCorners = displayCorners;
+
+                    // Status resolution
+                    const guideTarget = document.getElementById('camera-guide-target');
+                    if (guideTarget) guideTarget.style.opacity = '0.15';
+
+                    if (cameraState.stableFramesCount >= 5 && now > cameraState.autoCaptureCooldown) {
+                        // Trigger Auto-Capture!
+                        drawPolygonOverlay(ctx, displayCorners, '#00e676', true);
+                        updateCameraHud('✨ ¡Documento detectado! Capturando...', '#00e676', true);
+                        setShutterButtonActive(true);
+                        triggerManualCameraCapture();
+                        cameraState.autoCaptureCooldown = now + 2000;
+                        cameraState.stableFramesCount = 0;
+                    } else if (cameraState.stableFramesCount >= 2) {
+                        drawPolygonOverlay(ctx, displayCorners, '#00e676', false);
+                        updateCameraHud('📐 Mantén firme la cámara... auto-capturando', '#00e676');
+                        setShutterButtonActive(true);
+                    } else {
+                        drawPolygonOverlay(ctx, displayCorners, '#ffeb3b', false);
+                        updateCameraHud('📄 Ajustando bordes del documento...', '#ffeb3b');
+                        setShutterButtonActive(false);
+                    }
+                } else {
+                    cameraState.lastCorners = null;
+                    cameraState.lastCornersRaw = null;
+                    cameraState.stableFramesCount = 0;
+                    setShutterButtonActive(false);
+
+                    const guideTarget = document.getElementById('camera-guide-target');
+                    if (guideTarget) guideTarget.style.opacity = '0.55';
+
+                    updateCameraHud('Apunta la cámara al documento (CFDI, Recibo o Pago)', '#ffffff');
+                }
+            } else if (cameraState.lastCorners && !cameraState.isCapturing) {
+                // Keep drawing current polygon smoothly between analysis ticks
+                const color = cameraState.stableFramesCount >= 2 ? '#00e676' : '#ffeb3b';
+                drawPolygonOverlay(ctx, cameraState.lastCorners, color, false);
+            }
+        }
+
+        cameraState.animFrameId = requestAnimationFrame(detectLoop);
+    };
+
+    cameraState.animFrameId = requestAnimationFrame(detectLoop);
+}
+
+function checkCornersStability(newCorners) {
+    if (!cameraState.lastCorners || !newCorners || newCorners.length !== 4) return false;
+    let totalDist = 0;
+    for (let i = 0; i < 4; i++) {
+        const dx = newCorners[i].x - cameraState.lastCorners[i].x;
+        const dy = newCorners[i].y - cameraState.lastCorners[i].y;
+        totalDist += Math.sqrt((dx * dx) + (dy * dy));
+    }
+    const avgDist = totalDist / 4;
+    return avgDist < 20; // Average displacement under 20 display pixels is considered stable
+}
+
+function drawPolygonOverlay(ctx, corners, color = '#00e676', isFlashing = false) {
+    if (!corners || corners.length < 4) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < corners.length; i++) {
+        ctx.lineTo(corners[i].x, corners[i].y);
+    }
+    ctx.closePath();
+
+    // Semi-transparent glowing fill
+    ctx.fillStyle = isFlashing ? 'rgba(0, 230, 118, 0.35)' : (color === '#00e676' ? 'rgba(0, 230, 118, 0.18)' : 'rgba(255, 235, 59, 0.12)');
+    ctx.fill();
+
+    // Glowing border line
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isFlashing ? 4.5 : 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = isFlashing ? 16 : 8;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 4 Corner Anchor circles (Apple Notes document scanner style)
+    corners.forEach(pt => {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+    });
+
+    ctx.restore();
+}
+
+function setShutterButtonActive(active) {
+    const btn = document.getElementById('btn-camera-shutter');
+    if (!btn) return;
+    if (active) {
+        btn.classList.add('capturing-auto');
+    } else {
+        btn.classList.remove('capturing-auto');
+    }
+}
+
+// --------------------------------------------------------------------------
+// Audio & Visual Shutter Feedback
+// --------------------------------------------------------------------------
+
+function playCameraShutterSound() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.08);
+
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + 0.09);
+    } catch (e) {
+        // AudioContext silent fail is fine
+    }
+}
+
+function triggerShutterFlash() {
+    const flashEl = document.getElementById('camera-shutter-flash');
+    if (!flashEl) return;
+    flashEl.classList.add('flash');
+    setTimeout(() => {
+        flashEl.classList.remove('flash');
+    }, 100);
+}
+
+// --------------------------------------------------------------------------
+// High-Resolution Document Capture & Automatic Perspective Crop
+// --------------------------------------------------------------------------
+
+function triggerManualCameraCapture() {
+    if (cameraState.isCapturing) return;
+    captureDocumentFromCamera();
+}
+
+function captureDocumentFromCamera() {
+    const video = document.getElementById('camera-scanner-video');
+    if (!video || !cameraState.stream) return;
+
+    cameraState.isCapturing = true;
+    playCameraShutterSound();
+    triggerShutterFlash();
+
+    // Create high-res native frame canvas
+    const vw = video.videoWidth || 1920;
+    const vh = video.videoHeight || 1080;
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = vw;
+    fullCanvas.height = vh;
+    const fullCtx = fullCanvas.getContext('2d', { willReadFrequently: true });
+    fullCtx.drawImage(video, 0, 0, vw, vh);
+
+    // Apply Perspective Quad Warp if corners were detected
+    let scannedCanvas;
+    if (cameraState.lastCornersRaw && cameraState.lastCornersRaw.length === 4) {
+        try {
+            scannedCanvas = warpDocumentQuadrilateral(fullCanvas, cameraState.lastCornersRaw);
+        } catch (e) {
+            console.warn('Warp falló, usando recorte estándar:', e);
+        }
+    }
+
+    if (!scannedCanvas) {
+        scannedCanvas = createDocumentScanCanvas(fullCanvas);
+    }
+
+    if (!scannedCanvas) {
+        scannedCanvas = fullCanvas;
+    }
+
+    // Convert scanned canvas to JPEG File
+    scannedCanvas.toBlob(blob => {
+        if (!blob) {
+            cameraState.isCapturing = false;
+            return;
+        }
+
+        const now = new Date();
+        const dateStr = now.toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const fileName = `Escaneo_Camara_${dateStr}_pag${cameraState.capturedCount + 1}.jpg`;
+
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+        handleSelectedFiles([file]);
+
+        cameraState.capturedCount++;
+        const badge = document.getElementById('camera-badge-counter');
+        if (badge) {
+            badge.textContent = `📄 ${cameraState.capturedCount} capturado(s)`;
+            badge.style.background = 'rgba(0, 230, 118, 0.25)';
+            badge.style.borderColor = '#00e676';
+        }
+
+        updateCameraHud(`✅ ¡Documento ${cameraState.capturedCount} capturado! Apunta al siguiente o presiona Listo.`, '#00e676');
+
+        setTimeout(() => {
+            cameraState.isCapturing = false;
+        }, 1200);
+    }, 'image/jpeg', 0.94);
+}
+

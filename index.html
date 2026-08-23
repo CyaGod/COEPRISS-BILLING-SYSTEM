@@ -560,6 +560,18 @@
                             </div>
                         </div>
 
+                        <!-- Actions Bar: Camera Scanner & File Dropzone -->
+                        <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="openCameraScannerModal()" style="flex: 1; min-width: 240px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; font-weight: 700; background: linear-gradient(135deg, #0A2240, #1a3a60); border: 1.5px solid var(--secondary-color); box-shadow: 0 4px 12px rgba(10,34,64,0.18);">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                <span>📷 Escanear con Cámara (Detección de Bordes)</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('document-file-input').click()" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; font-weight: 600;">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span>Subir Archivos (PDF / Fotos)</span>
+                            </button>
+                        </div>
+
                         <!-- Dropzone Area -->
                         <div class="upload-dropzone" id="dropzone-step1" onclick="document.getElementById('document-file-input').click()" style="cursor: pointer;">
                             <input id="document-file-input" type="file"
@@ -1540,6 +1552,73 @@
                 <button class="btn btn-primary" type="submit" form="form-cliente-directorio" style="background-color: var(--primary-color); font-weight: 600;">
                     Guardar Cliente en Directorio
                 </button>
+            </div>
+        </div>
+    <!-- MODAL: ESCÁNER DE CÁMARA INTELIGENTE (Estilo Apple Notes / CamScanner) -->
+    <div class="modal-overlay" id="modal-camera-scanner" style="z-index: 1050; padding: 0;">
+        <div class="camera-scanner-container">
+            <!-- Header Bar -->
+            <div class="camera-scanner-header">
+                <div class="camera-scanner-title">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 22px; height: 22px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Escáner Inteligente (Detección de Bordes)</span>
+                </div>
+                <div class="camera-scanner-tools">
+                    <button type="button" class="camera-tool-btn" id="btn-camera-torch" onclick="toggleCameraTorch()" title="Encender linterna / flash" style="display: none;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </button>
+                    <button type="button" class="camera-tool-btn" id="btn-camera-flip" onclick="flipCameraFacingMode()" title="Cambiar cámara frontal / trasera">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                    <button type="button" class="camera-tool-btn camera-close-btn" onclick="closeCameraScannerModal()" title="Cerrar escáner">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Viewport Area with Video & Canvas Overlay -->
+            <div class="camera-scanner-viewport" id="camera-viewport-area">
+                <video id="camera-scanner-video" autoplay playsinline muted></video>
+                <canvas id="camera-scanner-canvas"></canvas>
+                
+                <!-- HUD Status Guidance Pill -->
+                <div class="camera-hud-pill" id="camera-hud-pill">
+                    <span class="hud-dot" id="camera-hud-dot"></span>
+                    <span id="camera-hud-text">Apunta la cámara al documento (CFDI, recibo o pago)</span>
+                </div>
+
+                <!-- Guide Target Frame (Subtle helper when no paper detected yet) -->
+                <div class="camera-guide-target" id="camera-guide-target">
+                    <div class="target-corner tl"></div>
+                    <div class="target-corner tr"></div>
+                    <div class="target-corner bl"></div>
+                    <div class="target-corner br"></div>
+                </div>
+
+                <!-- Shutter Flash Effect Overlay -->
+                <div class="camera-shutter-flash" id="camera-shutter-flash"></div>
+            </div>
+
+            <!-- Bottom Action Footer -->
+            <div class="camera-scanner-footer">
+                <div class="camera-footer-left">
+                    <span class="camera-badge-counter" id="camera-badge-counter">📄 0 capturados</span>
+                </div>
+
+                <div class="camera-footer-center">
+                    <button type="button" class="camera-shutter-btn" id="btn-camera-shutter" onclick="triggerManualCameraCapture()" title="Capturar foto ahora">
+                        <div class="shutter-inner"></div>
+                    </button>
+                    <div style="font-size: 0.72rem; color: #a0aec0; margin-top: 6px; font-weight: 500;">
+                        Auto-captura activa
+                    </div>
+                </div>
+
+                <div class="camera-footer-right">
+                    <button type="button" class="btn btn-primary" id="btn-camera-done" onclick="closeCameraScannerModal()" style="font-weight: 700; padding: 10px 20px; border-radius: 8px; background: linear-gradient(135deg, #C8A84B, #a07830); color: #0A2240; border: none; box-shadow: 0 4px 12px rgba(200,168,75,0.3);">
+                        ✓ Finalizar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
