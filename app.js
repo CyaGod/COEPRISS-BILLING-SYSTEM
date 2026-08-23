@@ -726,15 +726,26 @@ function initDocumentPicker() {
 }
 
 function handleSelectedFiles(fileList) {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+    // Accepted MIME types: PDF and all common image formats including modern ones.
+    const allowedMimes = [
+        'application/pdf',
+        'image/jpeg', 'image/png', 'image/webp',
+        'image/bmp', 'image/gif', 'image/tiff',
+        'image/heic', 'image/heif', 'image/avif'
+    ];
+    // Extension fallback (some OS/browsers report wrong or empty MIME for HEIC/AVIF).
+    const allowedExtensions = [
+        'pdf', 'jpg', 'jpeg', 'png', 'webp',
+        'bmp', 'gif', 'tiff', 'tif', 'heic', 'heif', 'avif'
+    ];
     const files = Array.from(fileList || []);
     if (!files.length) return;
 
     files.forEach(file => {
         const extension = file.name.toLowerCase().split('.').pop();
-        const validType = allowed.includes(file.type) || ['pdf', 'jpg', 'jpeg', 'png'].includes(extension);
+        const validType = allowedMimes.includes(file.type) || allowedExtensions.includes(extension);
         if (!validType) {
-            showToast(`Formato no permitido: ${file.name}`, 'warning');
+            showToast(`Formato no permitido: ${file.name}. Usa PDF, JPG, PNG, WEBP, BMP, TIFF, GIF o HEIC.`, 'warning');
             return;
         }
         if (file.size > 10 * 1024 * 1024) {
@@ -830,17 +841,24 @@ function createActiveExpedienteFromUploads() {
 async function startScanAnimation() {
     const scanner = document.getElementById('laser-scanner');
     const scanBtn = document.getElementById('btn-scan');
+    const progressWrapper = document.getElementById('ocr-progress-wrapper');
+    const progressBar = document.getElementById('ocr-progress-bar');
+    const progressLabel = document.getElementById('ocr-progress-label');
     if (!scanner || !scanBtn || state.ocrBusy) return;
     if (!state.uploadedFiles.length) {
-        showToast('Selecciona al menos un PDF, JPG o PNG real.', 'warning');
+        showToast('Selecciona al menos un PDF, JPG, PNG u otro archivo compatible.', 'warning');
         return;
     }
 
     state.ocrBusy = true;
     scanBtn.disabled = true;
     scanner.style.display = 'block';
-    scanBtn.textContent = 'Leyendo documentos...';
-    showToast('OCR local iniciado. Los documentos permanecen en este navegador.', 'info');
+    scanBtn.textContent = `Leyendo ${state.uploadedFiles.length} documento(s)...`;
+    // Show and reset the progress bar.
+    if (progressWrapper) progressWrapper.style.display = 'block';
+    if (progressBar) { progressBar.style.width = '0%'; progressBar.setAttribute('aria-valuenow', 0); }
+    if (progressLabel) progressLabel.textContent = 'Preparando motor OCR...';
+    showToast(`OCR iniciado para ${state.uploadedFiles.length} documento(s). Los archivos permanecen en este navegador.`, 'info');
 
     try {
         const fields = await extractUploadedDocuments();
@@ -871,6 +889,8 @@ async function startScanAnimation() {
         showToast(`No se pudo leer el documento: ${error.message || 'error desconocido'}`, 'error');
     } finally {
         scanner.style.display = 'none';
+        if (progressWrapper) progressWrapper.style.display = 'none';
+        if (progressBar) { progressBar.style.width = '0%'; }
         state.ocrBusy = false;
         scanBtn.disabled = state.uploadedFiles.length === 0;
         scanBtn.textContent = 'Escanear / Leer documentos';
@@ -886,55 +906,222 @@ async function extractUploadedDocuments() {
     if (!window.pdfjsLib) throw new Error('No se cargo el lector PDF.');
 
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const ocrLogger = message => {
+
+    const total = state.uploadedFiles.length;
+
+    // Build a per-file progress logger so the button always shows which
+    // document is being read and how far along the OCR engine is.
+    const makeOcrLogger = (fileIndex, fileName) => message => {
         if (message.status === 'recognizing text' && Number.isFinite(message.progress)) {
             const scanBtn = document.getElementById('btn-scan');
-            if (scanBtn) scanBtn.textContent = `Leyendo OCR ${Math.round(message.progress * 100)}%...`;
+            const pct = Math.round(message.progress * 100);
+            if (scanBtn) scanBtn.textContent = `Leyendo ${fileIndex}/${total}: ${fileName} — OCR ${pct}%`;
         }
     };
-    try {
-        state.ocrWorker = await Tesseract.createWorker(['spa', 'eng'], 1, { logger: ocrLogger });
-    } catch (e) {
-        state.ocrWorker = await Tesseract.createWorker('eng', 1, { logger: ocrLogger });
-    }
-    await state.ocrWorker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
 
-    let allText = '';
-    let pageCount = 0;
-    for (const uploaded of state.uploadedFiles) {
+    const updateProgressBar = (fileIndex, fileName) => {
+        const bar = document.getElementById('ocr-progress-bar');
+        const label = document.getElementById('ocr-progress-label');
+        if (bar) {
+            bar.style.width = `${Math.round((fileIndex / total) * 100)}%`;
+            bar.setAttribute('aria-valuenow', fileIndex);
+        }
+        if (label) label.textContent = `Procesando archivo ${fileIndex} de ${total}: ${fileName}`;
+    };
+
+    // --- Per-document OCR -------------------------------------------------
+    // Each file is scanned independently. We collect one parsed-fields object
+    // per document and then merge them so values from every file are available.
+    const allFieldSets = [];
+    let totalPageCount = 0;
+
+    for (let fileIndex = 0; fileIndex < state.uploadedFiles.length; fileIndex += 1) {
+        const uploaded = state.uploadedFiles[fileIndex];
+        const fileNumber = fileIndex + 1;
+        const shortName = uploaded.name.length > 22
+            ? `${uploaded.name.slice(0, 19)}...`
+            : uploaded.name;
+
+        updateProgressBar(fileNumber, shortName);
+
+        // Recreate the worker with a per-file logger so the progress
+        // percentage shown always corresponds to the current document.
+        if (state.ocrWorker) {
+            await state.ocrWorker.terminate();
+            state.ocrWorker = null;
+        }
+        try {
+            state.ocrWorker = await Tesseract.createWorker(
+                ['spa', 'eng'], 1,
+                { logger: makeOcrLogger(fileNumber, shortName) }
+            );
+        } catch (e) {
+            state.ocrWorker = await Tesseract.createWorker(
+                'eng', 1,
+                { logger: makeOcrLogger(fileNumber, shortName) }
+            );
+        }
+        await state.ocrWorker.setParameters({
+            tessedit_pageseg_mode: '6',
+            preserve_interword_spaces: '1'
+        });
+
+        let fileText = '';
+        let filePageCount = 0;
         const isPdf = uploaded.type === 'PDF' || uploaded.name.toLowerCase().endsWith('.pdf');
+
         if (!isPdf) {
-            allText += `\n${await recognizeImageWithFallback(uploaded.file, uploaded)}`;
-            pageCount += 1;
-            continue;
-        }
-
-        const pdf = await window.pdfjsLib.getDocument({ data: await uploaded.file.arrayBuffer() }).promise;
-        const pageLimit = Math.min(pdf.numPages, 3);
-        for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
-            const page = await pdf.getPage(pageNumber);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str || '').join(' ').trim();
-            if (pageText.replace(/\s/g, '').length >= 30) {
-                allText += `\n${pageText}`;
-            } else {
-                const canvas = await renderPdfPageForOcr(page);
-                // PSM 4 works better for scanned PDF pages with a full-page
-                // document layout; image receipts keep the banded PSM 6 path.
-                allText += `\n${await recognizeCanvasWithFallback(canvas, '4')}`;
-                canvas.width = 1;
-                canvas.height = 1;
+            // Image document — use the enhanced multi-region recognizer.
+            fileText += `\n${await recognizeImageWithFallback(uploaded.file, uploaded)}`;
+            filePageCount += 1;
+        } else {
+            const pdf = await window.pdfjsLib.getDocument({ data: await uploaded.file.arrayBuffer() }).promise;
+            const pageLimit = Math.min(pdf.numPages, 3);
+            for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+                const page = await pdf.getPage(pageNumber);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str || '').join(' ').trim();
+                if (pageText.replace(/\s/g, '').length >= 30) {
+                    fileText += `\n${pageText}`;
+                } else {
+                    const canvas = await renderPdfPageForOcr(page);
+                    // PSM 4 works better for scanned PDF pages with a full-page
+                    // document layout; image receipts keep the banded PSM 6 path.
+                    fileText += `\n${await recognizeCanvasWithFallback(canvas, '4')}`;
+                    canvas.width = 1;
+                    canvas.height = 1;
+                }
+                filePageCount += 1;
             }
-            pageCount += 1;
+            if (pdf.numPages > pageLimit) {
+                fileText += '\n[Advertencia: el PDF supera el limite de 3 paginas.]';
+            }
         }
-        if (pdf.numPages > pageLimit) allText += '\n[Advertencia: el PDF supera el limite de 3 paginas.]';
+
+        totalPageCount += filePageCount;
+
+        if (fileText.replace(/\s/g, '').length >= 10) {
+            const fileFields = parseExtractedFields(fileText);
+            // Attach the source filename so the merge can report provenance.
+            fileFields._source = uploaded.name;
+            allFieldSets.push(fileFields);
+            // Store per-file OCR result on the uploaded record for UI display.
+            uploaded.ocrFields = fileFields;
+        }
+
+        uploaded.status = 'OCR procesado';
     }
 
-    if (!pageCount || allText.replace(/\s/g, '').length < 10) {
-        throw new Error('No se detecto texto legible. Usa una imagen nitida y bien iluminada.');
+    // Finalise the progress bar at 100 % and terminate the worker.
+    updateProgressBar(total, '');
+    const scanBtn = document.getElementById('btn-scan');
+    if (scanBtn) scanBtn.textContent = 'Combinando datos de todos los documentos...';
+
+    if (!totalPageCount || allFieldSets.length === 0) {
+        throw new Error('No se detecto texto legible. Usa imagenes nitidas y bien iluminadas.');
     }
-    return enforceOcrQualityGate(parseExtractedFields(allText));
+
+    // Merge individual field-sets into a single consolidated result.
+    const merged = mergeExtractedFieldSets(allFieldSets);
+    return enforceOcrQualityGate(merged);
 }
+
+/**
+ * mergeExtractedFieldSets — combine fields extracted from multiple documents.
+ *
+ * Strategy:
+ *   - For every field, take the first non-empty value found across all documents.
+ *   - Numeric fields (importe, importePago, etc.) prefer the document that also
+ *     carries a reliable fiscal anchor (UUID, RFC) so we don't pick up an
+ *     unrelated total from a cover letter.
+ *   - Quality/confidence scores are averaged across all sets.
+ */
+function mergeExtractedFieldSets(fieldSets) {
+    if (!fieldSets || fieldSets.length === 0) return {};
+    if (fieldSets.length === 1) return fieldSets[0];
+
+    // Numeric fields that should be taken from the most fiscally-anchored document.
+    const numericFields = new Set([
+        'importe', 'importePago', 'subtotal', 'valorUnitario', 'importeLinea', 'cantidad'
+    ]);
+    // Fields whose first non-empty value wins (string fields).
+    const stringFields = [
+        'rfc', 'razonSocial', 'regimenFiscal', 'codigoPostal', 'usoCfdi', 'correo',
+        'concepto', 'folioRecibo', 'banco', 'bancoEmisor', 'bancoReceptor',
+        'bancoEmisorCodigo', 'bancoReceptorCodigo', 'fechaPago', 'fechaRecibo',
+        'referencia', 'claveRastreo', 'cuentaBeneficiaria', 'formaPago', 'moneda',
+        'rfcEmisor', 'nombreEmisor', 'regimenFiscalEmisor', 'fechaEmision',
+        'fechaCertificacion', 'claveProdServ', 'claveUnidad', 'unidad',
+        'objetoImpuesto', 'metodoPago', 'noSerieCsd', 'rfcProveedorCertificacion',
+        'noSerieCertificadoSat', 'tipoCfdi', 'uuid', 'estatus'
+    ];
+
+    // Identify the most fiscally-anchored document (has UUID, or both RFCs, or importe).
+    const anchorScore = fs => {
+        let score = 0;
+        if (fs.uuid) score += 10;
+        if (fs.rfcEmisor && fs.rfcReceptor) score += 6;
+        if (fs.rfc) score += 4;
+        if (Number.isFinite(fs.importe) && fs.importe > 0) score += 3;
+        if (Number.isFinite(fs.importePago) && fs.importePago > 0) score += 2;
+        return score;
+    };
+    const bestAnchor = fieldSets.reduce(
+        (best, fs) => (anchorScore(fs) > anchorScore(best) ? fs : best),
+        fieldSets[0]
+    );
+
+    const merged = {};
+
+    // String fields: first non-empty value wins.
+    stringFields.forEach(key => {
+        for (const fs of fieldSets) {
+            if (fs[key] !== undefined && fs[key] !== null && fs[key] !== '') {
+                merged[key] = fs[key];
+                break;
+            }
+        }
+    });
+
+    // Numeric fields: prefer the best-anchored document, fall back to first non-null.
+    numericFields.forEach(key => {
+        if (Number.isFinite(bestAnchor[key]) && bestAnchor[key] !== null) {
+            merged[key] = bestAnchor[key];
+        } else {
+            for (const fs of fieldSets) {
+                if (Number.isFinite(fs[key]) && fs[key] !== null) {
+                    merged[key] = fs[key];
+                    break;
+                }
+            }
+        }
+    });
+
+    // Confidence: average across all sets that have it.
+    const confidenceKeys = new Set();
+    fieldSets.forEach(fs => {
+        if (fs.confidence && typeof fs.confidence === 'object') {
+            Object.keys(fs.confidence).forEach(k => confidenceKeys.add(k));
+        }
+    });
+    if (confidenceKeys.size > 0) {
+        merged.confidence = {};
+        confidenceKeys.forEach(key => {
+            const values = fieldSets
+                .map(fs => (fs.confidence && Number.isFinite(fs.confidence[key]) ? fs.confidence[key] : null))
+                .filter(v => v !== null);
+            merged.confidence[key] = values.length
+                ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
+                : 0;
+        });
+    }
+
+    // Record provenance: which file contributed which field (for debugging).
+    merged._sources = fieldSets.map(fs => fs._source).filter(Boolean);
+
+    return merged;
+}
+
 
 function enforceOcrQualityGate(fields) {
     if (!fields || state.scanQuality?.level !== 'baja') return fields;
