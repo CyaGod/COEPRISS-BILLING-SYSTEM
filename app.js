@@ -989,7 +989,7 @@ async function extractUploadedDocuments() {
                 if (pageText.replace(/\s/g, '').length >= 30) {
                     fileText += `\n${pageText}`;
                 } else {
-                    const canvas = await renderPdfPageForOcr(page);
+                    const canvas = await renderPdfPageForOcr(page, true);
                     // PSM 4 works better for scanned PDF pages with a full-page
                     // document layout; image receipts keep the banded PSM 6 path.
                     fileText += `\n${await recognizeCanvasWithFallback(canvas, '4')}`;
@@ -1548,81 +1548,224 @@ function createOcrRegionCanvas(sourceCanvas, topRatio, bottomRatio, leftRatio = 
     return canvas;
 }
 
-async function recognizeCanvasOnce(canvas, pageSegMode = '6') {
-    await state.ocrWorker.setParameters({ tessedit_pageseg_mode: pageSegMode, preserve_interword_spaces: '1' });
+async function recognizeCanvasOnce(canvas, pageSegMode = '6', charWhitelist = '') {
+    const params = { tessedit_pageseg_mode: pageSegMode, preserve_interword_spaces: '1' };
+    // A character whitelist dramatically reduces O/0, I/1 substitution errors in
+    // structured fields. Leave empty for full free-text regions.
+    if (charWhitelist) {
+        params.tessedit_char_whitelist = charWhitelist;
+    } else {
+        // Explicitly clear any previous whitelist so free-text regions are unrestricted.
+        params.tessedit_char_whitelist = '';
+    }
+    await state.ocrWorker.setParameters(params);
     const result = await state.ocrWorker.recognize(canvas);
     return result.data.text || '';
 }
 
 async function detectQrText(canvas) {
-    if (!window.BarcodeDetector) return '';
-    try {
-        const formats = typeof window.BarcodeDetector.getSupportedFormats === 'function'
-            ? await window.BarcodeDetector.getSupportedFormats()
-            : ['qr_code'];
-        if (!formats.includes('qr_code')) return '';
-        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        const codes = await detector.detect(canvas);
-        return codes.map(code => code.rawValue || '').filter(Boolean).join('\n');
-    } catch (error) {
-        console.info('QR fiscal no disponible en este navegador:', error);
-        return '';
+    // --- Attempt 1: BarcodeDetector (Chrome/Edge/Android) --------------------
+    if (window.BarcodeDetector) {
+        try {
+            const formats = typeof window.BarcodeDetector.getSupportedFormats === 'function'
+                ? await window.BarcodeDetector.getSupportedFormats()
+                : ['qr_code'];
+            if (formats.includes('qr_code')) {
+                const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+                const codes = await detector.detect(canvas);
+                const raw = codes.map(code => code.rawValue || '').filter(Boolean).join('\n');
+                if (raw) return parseSatQrUrl(raw);
+            }
+        } catch (err) {
+            console.info('BarcodeDetector falló, usando jsQR de respaldo:', err);
+        }
     }
+
+    // --- Attempt 2: jsQR fallback (Firefox, Safari, any browser) -------------
+    // jsQR works directly with ImageData from a canvas, no camera access needed.
+    if (window.jsQR) {
+        try {
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = window.jsQR(imageData.data, canvas.width, canvas.height, {
+                inversionAttempts: 'dontInvert'
+            });
+            if (code && code.data) return parseSatQrUrl(code.data);
+        } catch (err) {
+            console.info('jsQR falló al leer el QR fiscal:', err);
+        }
+    }
+
+    return '';
+}
+
+/**
+ * parseSatQrUrl — extracts key CFDI fields from the SAT QR verification URL.
+ *
+ * SAT QR format:
+ *   https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx
+ *     ?id=UUID&re=RFC_EMISOR&rr=RFC_RECEPTOR&tt=TOTAL&fe=SELLO
+ *
+ * Returns the raw URL text plus structured anchor lines that parseExtractedFields
+ * can pick up reliably (e.g. "FOLIO FISCAL: <uuid>").
+ */
+function parseSatQrUrl(raw) {
+    const lines = [raw];
+    try {
+        const url = new URL(raw.trim());
+        const uuid = url.searchParams.get('id') || '';
+        const rfcEmisor = url.searchParams.get('re') || '';
+        const rfcReceptor = url.searchParams.get('rr') || '';
+        const total = url.searchParams.get('tt') || '';
+        if (uuid) lines.push(`FOLIO FISCAL: ${uuid}`);
+        if (rfcEmisor) lines.push(`RFC DEL EMISOR: ${rfcEmisor}`);
+        if (rfcReceptor) lines.push(`RFC DEL RECEPTOR: ${rfcReceptor}`);
+        if (total) lines.push(`TOTAL: $${total}`);
+    } catch (e) {
+        // Not a standard SAT URL — return the raw value only.
+    }
+    return lines.join('\n');
 }
 
 function createEnhancedOcrCanvas(sourceCanvas) {
+    const W = sourceCanvas.width;
+    const H = sourceCanvas.height;
     const canvas = document.createElement('canvas');
-    canvas.width = sourceCanvas.width;
-    canvas.height = sourceCanvas.height;
+    canvas.width = W;
+    canvas.height = H;
     const context = canvas.getContext('2d', { willReadFrequently: true });
     context.drawImage(sourceCanvas, 0, 0);
 
-    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const image = context.getImageData(0, 0, W, H);
     const data = image.data;
-    const histogram = new Uint32Array(256);
-    for (let index = 0; index < data.length; index += 4) {
-        const gray = Math.round((data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114));
-        histogram[gray] += 1;
+    const n = W * H;
+
+    // --- Step 1: Convert to grayscale -----------------------------------------
+    const gray = new Float32Array(n);
+    for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+        gray[p] = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
     }
-    const pixelCount = Math.max(1, data.length / 4);
-    const percentile = target => {
-        let accumulated = 0;
-        for (let value = 0; value < histogram.length; value += 1) {
-            accumulated += histogram[value];
-            if (accumulated >= pixelCount * target) return value;
+
+    // --- Step 2: Gamma correction for dark (underexposed) images ---------------
+    // When the median brightness is below 110 the shot is underexposed. A gentle
+    // gamma (0.65) lifts shadow detail before thresholding without blowing out
+    // well-lit documents.
+    const sorted = gray.slice().sort();
+    const median = sorted[Math.floor(n / 2)];
+    if (median < 110) {
+        const gamma = 0.65;
+        const gammaLut = new Float32Array(256);
+        for (let v = 0; v < 256; v += 1) {
+            gammaLut[v] = Math.round(255 * Math.pow(v / 255, gamma));
         }
-        return 255;
+        for (let p = 0; p < n; p += 1) {
+            gray[p] = gammaLut[Math.round(Math.min(255, Math.max(0, gray[p])))];
+        }
+    }
+
+    // --- Step 3: 3×3 median filter to remove paper/sensor noise ----------------
+    // Kills isolated white speckles (paper grain) before binarisation so they
+    // are not confused with punctuation by Tesseract.
+    const grayMed = new Float32Array(n);
+    const buf9 = new Float32Array(9);
+    for (let y = 0; y < H; y += 1) {
+        for (let x = 0; x < W; x += 1) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy += 1) {
+                for (let dx = -1; dx <= 1; dx += 1) {
+                    const nx = Math.min(W - 1, Math.max(0, x + dx));
+                    const ny = Math.min(H - 1, Math.max(0, y + dy));
+                    buf9[count] = gray[(ny * W) + nx];
+                    count += 1;
+                }
+            }
+            buf9.sort();
+            grayMed[(y * W) + x] = buf9[4];
+        }
+    }
+
+    // --- Step 4: Sauvola adaptive thresholding (integral-image based, O(N)) ----
+    // Computes a local threshold for every pixel from its 32×32 neighbourhood
+    // mean and standard deviation. This handles uneven lighting and shadows that
+    // global Otsu-style thresholds miss completely.
+    // T(x,y) = mean(x,y) × [1 + k × (stddev(x,y)/R − 1)],  k=0.34, R=128
+    const windowHalf = 16; // half-side of the 32×32 neighbourhood
+    const k = 0.34;
+    const R = 128;
+
+    // Build integral images for sum and sum-of-squares.
+    const intSum = new Float64Array(n);
+    const intSq = new Float64Array(n);
+    for (let y = 0; y < H; y += 1) {
+        for (let x = 0; x < W; x += 1) {
+            const v = grayMed[(y * W) + x];
+            const above = y > 0 ? intSum[((y - 1) * W) + x] : 0;
+            const left = x > 0 ? intSum[(y * W) + (x - 1)] : 0;
+            const diagonal = (y > 0 && x > 0) ? intSum[((y - 1) * W) + (x - 1)] : 0;
+            intSum[(y * W) + x] = v + above + left - diagonal;
+            const aboveSq = y > 0 ? intSq[((y - 1) * W) + x] : 0;
+            const leftSq = x > 0 ? intSq[(y * W) + (x - 1)] : 0;
+            const diagSq = (y > 0 && x > 0) ? intSq[((y - 1) * W) + (x - 1)] : 0;
+            intSq[(y * W) + x] = (v * v) + aboveSq + leftSq - diagSq;
+        }
+    }
+
+    // Rectangular area sum from integral image in O(1).
+    const areaSum = (x1, y1, x2, y2, integral) => {
+        const r2c2 = integral[(y2 * W) + x2];
+        const r1c2 = y1 > 0 ? integral[((y1 - 1) * W) + x2] : 0;
+        const r2c1 = x1 > 0 ? integral[(y2 * W) + (x1 - 1)] : 0;
+        const r1c1 = (y1 > 0 && x1 > 0) ? integral[((y1 - 1) * W) + (x1 - 1)] : 0;
+        return r2c2 - r1c2 - r2c1 + r1c1;
     };
-    const blackPoint = Math.min(150, percentile(0.015));
-    const whitePoint = Math.max(185, percentile(0.985));
-    const range = Math.max(30, whitePoint - blackPoint);
-    for (let index = 0; index < data.length; index += 4) {
-        const gray = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114);
-        const adjusted = Math.max(0, Math.min(255, ((gray - blackPoint) * 255) / range));
-        data[index] = adjusted;
-        data[index + 1] = adjusted;
-        data[index + 2] = adjusted;
+
+    const binarized = new Uint8Array(n);
+    for (let y = 0; y < H; y += 1) {
+        const y1 = Math.max(0, y - windowHalf);
+        const y2 = Math.min(H - 1, y + windowHalf);
+        for (let x = 0; x < W; x += 1) {
+            const x1 = Math.max(0, x - windowHalf);
+            const x2 = Math.min(W - 1, x + windowHalf);
+            const count = Math.max(1, (x2 - x1 + 1) * (y2 - y1 + 1));
+            const sum = areaSum(x1, y1, x2, y2, intSum);
+            const sumSq = areaSum(x1, y1, x2, y2, intSq);
+            const mean = sum / count;
+            const variance = Math.max(0, (sumSq / count) - (mean * mean));
+            const stddev = Math.sqrt(variance);
+            const threshold = mean * (1 + k * ((stddev / R) - 1));
+            binarized[(y * W) + x] = grayMed[(y * W) + x] >= threshold ? 255 : 0;
+        }
+    }
+
+    // Write binarized values back to the ImageData.
+    for (let p = 0; p < n; p += 1) {
+        const v = binarized[p];
+        data[p * 4] = v;
+        data[(p * 4) + 1] = v;
+        data[(p * 4) + 2] = v;
+        data[(p * 4) + 3] = 255;
     }
     context.putImageData(image, 0, 0);
 
-    // Unsharp masking makes thin strokes more distinct after a 480p image is
-    // enlarged. It cannot invent missing pixels, but it improves separation
-    // between similar glyphs without sending the document to any service.
+    // --- Step 5: Adaptive unsharp masking --------------------------------------
+    // After Sauvola binarization the strokes are already crisp, so we use a
+    // lighter strength (0.45) than the old 0.68 to avoid ringing on thin serifs.
     const blurred = document.createElement('canvas');
-    blurred.width = canvas.width;
-    blurred.height = canvas.height;
-    const blurredContext = blurred.getContext('2d', { willReadFrequently: true });
-    blurredContext.filter = 'blur(1.15px)';
-    blurredContext.drawImage(canvas, 0, 0);
-    blurredContext.filter = 'none';
-    const blurredData = blurredContext.getImageData(0, 0, canvas.width, canvas.height).data;
-    for (let index = 0; index < data.length; index += 4) {
-        const base = data[index];
-        const sharpened = Math.max(0, Math.min(255, base + ((base - blurredData[index]) * 0.68)));
-        const cleaned = sharpened > 224 ? 255 : sharpened;
-        data[index] = cleaned;
-        data[index + 1] = cleaned;
-        data[index + 2] = cleaned;
+    blurred.width = W;
+    blurred.height = H;
+    const blurredCtx = blurred.getContext('2d', { willReadFrequently: true });
+    blurredCtx.filter = 'blur(1px)';
+    blurredCtx.drawImage(canvas, 0, 0);
+    blurredCtx.filter = 'none';
+    const blurredData = blurredCtx.getImageData(0, 0, W, H).data;
+    const unsharpStrength = median < 110 ? 0.30 : 0.45;
+    for (let i = 0; i < data.length; i += 4) {
+        const base = data[i];
+        const sharpened = Math.max(0, Math.min(255, base + ((base - blurredData[i]) * unsharpStrength)));
+        const v = sharpened > 230 ? 255 : sharpened;
+        data[i] = v;
+        data[i + 1] = v;
+        data[i + 2] = v;
     }
     context.putImageData(image, 0, 0);
     blurred.width = 1;
@@ -1712,7 +1855,7 @@ async function recognizeCanvasWithFallback(canvas, pageSegMode = '6') {
     return pieces.join('\n');
 }
 
-async function renderPdfPageForOcr(page) {
+async function renderPdfPageForOcr(page, isScanned = false) {
     const baseViewport = page.getViewport({ scale: 1 });
     // Render scanned PDFs at a higher resolution so small RFCs and references
     // do not disappear before Tesseract receives the page canvas.
@@ -1722,6 +1865,16 @@ async function renderPdfPageForOcr(page) {
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+    // Scanned PDF pages benefit from the same Sauvola preprocessing pipeline used
+    // for photographed images. Digital PDFs (text layer) are returned raw to
+    // avoid degrading already-clean vector text.
+    if (isScanned) {
+        const enhanced = createEnhancedOcrCanvas(canvas);
+        canvas.width = 1;
+        canvas.height = 1;
+        return enhanced;
+    }
     return canvas;
 }
 
@@ -1747,7 +1900,11 @@ function normalizeOcrDate(value) {
 function parseExtractedFields(text) {
     const normalized = String(text || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ');
     const plain = stripOcrAccents(normalized).toUpperCase();
-    const rfcPattern = '[A-Z&N]{3,4}\\s*\\d{6}[A-Z0-9](?:\\s*\\.\\s*)?[A-Z0-9]{1,2}';
+    // RFC pattern: 3-4 letters (persons use 4, companies use 3), 6-digit date
+    // with valid month (01-12) and day (01-31), then exactly 3 alphanumeric chars.
+    // The OCR may introduce a single space or dot inside the RFC; we tolerate one
+    // optional separator only between the date and the homoclave suffix.
+    const rfcPattern = '[A-Z&N]{3,4}\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])[A-Z0-9]{2}[0-9A]';
     const rfcEmisorMatch = plain.match(new RegExp(`(?:RFC\\s+(?:DEL\\s+)?(?:EMISOR|ORDENANTE|PAGADOR)|EMISOR)[^A-Z0-9]{0,30}(${rfcPattern})`, 'i'));
     const rfcReceptorMatch = plain.match(new RegExp(`(?:RFC\\s+(?:DEL\\s+)?(?:RECEPTOR|BENEFICIARIO|DESTINO|CLIENTE)|RECEPTOR|CLIENTE)[^A-Z0-9]{0,30}(${rfcPattern})`, 'i'));
     const genericRfcMatch = plain.match(new RegExp(`(?:RFC|CURP)[^A-Z0-9]{0,30}(${rfcPattern})`, 'i'))
@@ -1814,15 +1971,39 @@ function parseExtractedFields(text) {
         : cleanOcrValue(formaPagoRaw).replace(/\s+\$?[\d,.]+[\s\S]*$/, '').slice(0, 100);
     const monedaDetectada = extractOcrLabelValue(plain, 'MONEDA', 'FORMA\\s+DE\\s+PAGO|METODO\\s+DE\\s+PAGO|SUBTOTAL|TOTAL|CONCEPTOS', 40);
     const moneda = /PESO\s+MEXICANO|P\s*EM(?:\s|$)/i.test(plain) ? 'PESO MEXICANO' : monedaDetectada;
-    const datePattern = '(?:\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}|\\d{1,2}[/-]\\d{1,2}[/-]\\d{4})(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?';
+    const datePattern = '(?:\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}(?:T\\d{2}:\\d{2}:\\d{2})?|\\d{1,2}[/-]\\d{1,2}[/-]\\d{4})(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?';
     const emissionDateMatch = plain.match(new RegExp(`(?:FECHA\\s+Y\\s+HORA\\s+DE\\s+EMISION|FECHA\\s+DE\\s+EMISION|FECHA\\s+EMISION|FECHA\\s*Y\\s*HORA\\s*DE(?!\\s*CERTIFICACION))[^0-9]{0,60}(?:\\d{5}\\s+)?(${datePattern})`, 'i'));
     const paymentDateMatch = plain.match(new RegExp(`(?:FECHA\\s+DE\\s+(?:OPERACION|PAGO)|FECHA\\s+PAGO)[^0-9]{0,40}(${datePattern})`, 'i'));
-    const fechaEmision = emissionDateMatch ? normalizeOcrDate(emissionDateMatch[1]) : '';
-    const bankNames = ['BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK', 'BANCO DEL BIENESTAR', 'AZTECA', 'BANCOPPEL', 'STP', 'MERCADOPAGO', 'MERCADO PAGO', 'NUBANK', 'NU', 'BANREGIO', 'INBURSA', 'AFIRME', 'COMPARTAMOS', 'BANJERCITO', 'CI BANCO', 'PAYPAL'];
+
+    // Spanish written-date fallback: "23 de agosto de 2026" → "23/08/2026"
+    const monthMap = { enero:'01', febrero:'02', marzo:'03', abril:'04', mayo:'05', junio:'06', julio:'07', agosto:'08', septiembre:'09', octubre:'10', noviembre:'11', diciembre:'12' };
+    const writtenDateRx = /(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+de\s+(\d{4})/gi;
+    const normalizeWrittenDate = raw => {
+        const m = raw.match(/(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+de\s+(\d{4})/i);
+        if (!m) return null;
+        return `${m[1].padStart(2, '0')}/${monthMap[m[2].toLowerCase()]}/${m[3]}`;
+    };
+    const writtenEmission = !emissionDateMatch ? normalized.match(/(?:FECHA\s+(?:DE\s+)?EMISION|FECHA\s+Y\s+HORA)[^\n]{0,30}(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i) : null;
+    const writtenPayment = !paymentDateMatch ? normalized.match(/(?:FECHA\s+(?:DE\s+)?(?:PAGO|OPERACION))[^\n]{0,30}(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i) : null;
+
+    const fechaEmision = emissionDateMatch ? normalizeOcrDate(emissionDateMatch[1])
+        : (writtenEmission ? (normalizeWrittenDate(writtenEmission[1]) || '') : '');
+
+    // Extended bank list: traditional + neobanks + digital wallets operating in MX.
+    const bankNames = [
+        'BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK',
+        'BANCO DEL BIENESTAR', 'AZTECA', 'BANCOPPEL', 'STP', 'MERCADOPAGO', 'MERCADO PAGO',
+        'NUBANK', 'NU MEXICO', 'NU', 'BANREGIO', 'INBURSA', 'AFIRME', 'COMPARTAMOS',
+        'BANJERCITO', 'CI BANCO', 'PAYPAL', 'BANCA MIFEL', 'MIFEL', 'BANSI', 'MULTIVA',
+        'ACTINVER', 'HEY BANCO', 'HEY', 'ALBO', 'KLAR', 'STORI', 'CUENCA', 'RAPPIBANK',
+        'RAPPI', 'SPIN BY OXXO', 'SPIN', 'CONEKTA', 'STRIPE', 'CLIP', 'BROXEL',
+        'ARCUS', 'MONEXCB', 'MONEX', 'INTERCAM', 'BITSTAMP', 'BITSO', 'DINERIO'
+    ];
     const bank = bankNames.find(name => plain.includes(name)) || '';
     const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
     const referencia = numericReferenceMatch ? cleanOcrValue(numericReferenceMatch[1]) : (referenceMatch ? cleanOcrValue(referenceMatch[1]) : '');
-    const fechaPago = paymentDateMatch ? normalizeOcrDate(paymentDateMatch[1]) : '';
+    const fechaPago = paymentDateMatch ? normalizeOcrDate(paymentDateMatch[1])
+        : (writtenPayment ? (normalizeWrittenDate(writtenPayment[1]) || '') : '');
     const folioRecibo = folioReciboMatch ? cleanOcrValue(folioReciboMatch[1]) : '';
     const claveRastreo = trackingMatch ? cleanOcrValue(trackingMatch[1]).replace(/[^A-Z0-9]/gi, '') : '';
     const cuentaBeneficiaria = accountMatch ? accountMatch[1].replace(/\D/g, '') : '';
@@ -1943,7 +2124,16 @@ function normalizeOcrUuid(value) {
     // These substitutions are safe inside a hexadecimal UUID: the letters
     // O/Q, I/L, S, G and Z cannot be valid UUID digits, but are common OCR
     // confusions for 0, 1, 5, 6 and 2 respectively.
-    return String(value || '').toUpperCase().replace(/[OQ]/g, '0').replace(/[IL]/g, '1').replace(/S/g, '5').replace(/G/g, '6').replace(/Z/g, '2');
+    // B→8 and U→0 are additional LSTM confusions seen in practice for UUIDs.
+    return String(value || '')
+        .toUpperCase()
+        .replace(/[OQ]/g, '0')
+        .replace(/[IL]/g, '1')
+        .replace(/S/g, '5')
+        .replace(/G/g, '6')
+        .replace(/Z/g, '2')
+        .replace(/B(?=[0-9A-F-]|$)/g, '8')   // B→8 only when surrounded by hex chars
+        .replace(/U/g, '0');
 }
 
 function normalizeOcrConcept(value) {
