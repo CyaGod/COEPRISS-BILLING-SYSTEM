@@ -1916,7 +1916,19 @@ function parseExtractedFields(text) {
     const receiverName = cleanOcrValue(receiverNameRaw.replace(/\s+REGIM(?:E|EN|EN\s+FISCAL)?[\s\S]*$/i, ''));
     const nombreEmisor = extractOcrLabelValue(plain, 'NOMBRE\\s+(?:DEL?\\s+)?EMISOR', 'RFC|NOMBRE\\s+RECEPTOR|FOLIO|CODIGO\\s+POSTAL', 160);
     const legalName = extractOcrLabelValue(plain, '(?:DENOMINACION|RAZON)\\s+SOCIAL', stopLabels, 120);
-    const razonSocial = receiverName || legalName;
+
+    // SAT Constancia de Situación Fiscal: Personas Físicas list separate name components
+    const satPrimerApellido = extractOcrLabelValue(plain, 'PRIMER\\s+APELLIDO', 'SEGUNDO\\s+APELLIDO|NOMBRE|RFC|CURP', 50);
+    const satSegundoApellido = extractOcrLabelValue(plain, 'SEGUNDO\\s+APELLIDO', 'NOMBRE\\(S\\)|NOMBRE|RFC|CURP', 50);
+    const satNombres = extractOcrLabelValue(plain, 'NOMBRE\\(S\\)|NOMBRES?', 'PRIMER\\s+APELLIDO|SEGUNDO\\s+APELLIDO|RFC|CURP|FECHA', 70);
+    const personaFisicaName = [satNombres, satPrimerApellido, satSegundoApellido].filter(Boolean).join(' ');
+
+    const razonSocial = personaFisicaName || receiverName || legalName;
+
+    // Automatic email extraction from any text line in the document
+    const emailMatch = normalized.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
+    const correoExtraido = emailMatch ? emailMatch[1].toLowerCase() : '';
+
     const codigoPostalMatch = plain.match(/(?:CODIGO\s+POSTAL|C\.?P\.?|LUGAR\s+DE\s+EXPEDICION)[^0-9]{0,30}(\d{5})\b/i);
     const codigoPostal = codigoPostalMatch ? codigoPostalMatch[1] : '';
     const receiverRegimenFiscal = extractOcrLabelValue(plain, '(?:REGIMEN\\s+FISCAL\\s+RECEPTOR|RECEPTOR\\s*[:\\-]?\\s*REGIMEN\\s+FISCAL)', 'RECEPTOR|USO\\s+CFDI|CODIGO\\s+POSTAL|RFC|NOMBRE|CONCEPTOS', 100);
@@ -2039,6 +2051,7 @@ function parseExtractedFields(text) {
         tipoCfdi,
         efectoComprobante: tipoCfdi,
         uuid: fiscalUuid,
+        correo: correoExtraido,
         banco: bancoDetectado,
         bancoEmisor,
         bancoReceptor,
@@ -2080,6 +2093,7 @@ function parseExtractedFields(text) {
             usoCfdi: usoCfdi ? 0.85 : 0,
             tipoCfdi: tipoCfdi ? 0.8 : 0,
             uuid: fiscalUuid ? 0.98 : 0,
+            correo: correoExtraido ? 0.9 : 0,
             banco: bancoDetectado ? 0.85 : 0,
             bancoEmisor: bancoEmisor ? 0.85 : 0,
             bancoReceptor: bancoReceptor ? 0.85 : 0,
@@ -2144,12 +2158,72 @@ function normalizeOcrConcept(value) {
         .trim();
 }
 
+// ─────────────────────────────────────────────
+// SAT CFDI 4.0 Catalog Normalization Helpers
+// ─────────────────────────────────────────────
+
+function normalizeSatRegimen(val) {
+    if (!val) return '';
+    const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\b601\b|GENERAL DE LEY/.test(clean)) return '601';
+    if (/\b603\b|FINES NO LUCRATIVOS|PERSONAS MORALES CON FINES/.test(clean)) return '603';
+    if (/\b605\b|SUELDOS|SALARIOS|ASIMILADOS/.test(clean)) return '605';
+    if (/\b606\b|ARRENDAMIENTO/.test(clean)) return '606';
+    if (/\b612\b|ACTIVIDADES EMPRESARIALES|PROFESIONALES/.test(clean)) return '612';
+    if (/\b616\b|SIN OBLIGACIONES/.test(clean)) return '616';
+    if (/\b621\b|INCORPORACION FISCAL|RIF/.test(clean)) return '621';
+    if (/\b625\b|PLATAFORMAS/.test(clean)) return '625';
+    if (/\b626\b|SIMPLIFICADO DE CONFIANZA|RESICO/.test(clean)) return '626';
+    const num = clean.match(/\b(601|603|605|606|612|616|621|625|626)\b/);
+    return num ? num[1] : '';
+}
+
+function normalizeSatUsoCfdi(val) {
+    if (!val) return '';
+    const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\bG03\b|GASTOS EN GENERAL|GASTOS/.test(clean)) return 'G03';
+    if (/\bG01\b|ADQUISICION DE MERCANCIAS|MERCANCIAS/.test(clean)) return 'G01';
+    if (/\bG02\b|DEVOLUCIONES|DESCUENTOS/.test(clean)) return 'G02';
+    if (/\bI01\b|CONSTRUCCIONES/.test(clean)) return 'I01';
+    if (/\bI04\b|EQUIPO DE COMPUTO|COMPUTO/.test(clean)) return 'I04';
+    if (/\bI08\b|MAQUINARIA/.test(clean)) return 'I08';
+    if (/\bD01\b|HONORARIOS MEDICOS|MEDICOS/.test(clean)) return 'D01';
+    if (/\bD02\b|INCAPACIDAD/.test(clean)) return 'D02';
+    if (/\bD04\b|DONATIVOS/.test(clean)) return 'D04';
+    if (/\bS01\b|SIN EFECTOS FISCALES|SIN EFECTOS/.test(clean)) return 'S01';
+    if (/\bCP01\b|PAGOS/.test(clean)) return 'CP01';
+    const code = clean.match(/\b(G01|G02|G03|I01|I04|I08|D01|D02|D04|S01|CP01)\b/);
+    return code ? code[1] : '';
+}
+
+function normalizeSatFormaPago(val) {
+    if (!val) return '';
+    const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\b03\b|TRANSFERENCIA|SPEI|ELECTRONICA/.test(clean)) return '03';
+    if (/\b01\b|EFECTIVO/.test(clean)) return '01';
+    if (/\b02\b|CHEQUE/.test(clean)) return '02';
+    if (/\b04\b|TARJETA DE CREDITO|CREDITO/.test(clean)) return '04';
+    if (/\b28\b|TARJETA DE DEBITO|DEBITO/.test(clean)) return '28';
+    if (/\b99\b|POR DEFINIR/.test(clean)) return '99';
+    const code = clean.match(/\b(01|02|03|04|28|99)\b/);
+    return code ? code[1] : '';
+}
+
+function normalizeSatMetodoPago(val) {
+    if (!val) return '';
+    const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\bPUE\b|UNA SOLA EXHIBICION|CONTADO/.test(clean)) return 'PUE';
+    if (/\bPPD\b|PARCIALIDADES|DIFERIDO/.test(clean)) return 'PPD';
+    return '';
+}
+
 function applyExtractedFields(fields) {
     if (!state.activeExpediente) createActiveExpedienteFromUploads();
     if (!state.activeExpediente) return;
     const dossier = state.activeExpediente;
     if (fields.rfc) dossier.rfc = fields.rfc;
     if (fields.razonSocial) dossier.cliente = fields.razonSocial;
+    if (fields.correo) dossier.correo = fields.correo;
     if (fields.banco) dossier.banco = fields.banco;
     if (Number.isFinite(fields.importe)) dossier.importe = fields.importe;
     if (Number.isFinite(fields.importePago)) dossier.importePago = fields.importePago;
@@ -2709,11 +2783,33 @@ function updateStep3UIFromActiveExpediente() {
     if (rfcInput && d.rfc) rfcInput.value = d.rfc;
     if (razonInput && d.cliente) razonInput.value = d.cliente;
     if (cpInput && d.codigoPostal) cpInput.value = d.codigoPostal;
-    if (regimenSelect && d.regimenFiscal) regimenSelect.value = d.regimenFiscal;
-    if (usoCfdiSelect && d.usoCfdi) usoCfdiSelect.value = d.usoCfdi;
+
+    // Normalización inteligente de catálogos SAT
+    const normRegimen = normalizeSatRegimen(d.regimenFiscal) || d.regimenFiscal;
+    if (regimenSelect && normRegimen) {
+        regimenSelect.value = normRegimen;
+        d.regimenFiscal = normRegimen;
+    }
+
+    const normUso = normalizeSatUsoCfdi(d.usoCfdi) || d.usoCfdi;
+    if (usoCfdiSelect && normUso) {
+        usoCfdiSelect.value = normUso;
+        d.usoCfdi = normUso;
+    }
+
+    const normForma = normalizeSatFormaPago(d.formaPago) || d.formaPago;
+    if (formaPagoSelect && normForma) {
+        formaPagoSelect.value = normForma;
+        d.formaPago = normForma;
+    }
+
+    const normMetodo = normalizeSatMetodoPago(d.metodoPago) || d.metodoPago;
+    if (metodoPagoSelect && normMetodo) {
+        metodoPagoSelect.value = normMetodo;
+        d.metodoPago = normMetodo;
+    }
+
     if (correoInput && d.correo) correoInput.value = d.correo;
-    if (formaPagoSelect && d.formaPago) formaPagoSelect.value = d.formaPago;
-    if (metodoPagoSelect && d.metodoPago) metodoPagoSelect.value = d.metodoPago;
     if (conceptoInput && d.concepto) conceptoInput.value = d.concepto;
 
     const totalVal = parseFloat(d.importe || d.total || d.cfdiTotal || d.importePago || 0);
@@ -2722,7 +2818,7 @@ function updateStep3UIFromActiveExpediente() {
     }
     updateStep3Summary(totalVal);
 
-    // Verificar si ya existe en clientes
+    // Verificar si ya existe en clientes del directorio institucional
     if (d.rfc) buscarClientePorRfc(d.rfc, false);
 }
 
