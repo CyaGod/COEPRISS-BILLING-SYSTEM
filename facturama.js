@@ -88,6 +88,20 @@ async function facturamaRequest(method, path, body = null) {
 // CONSTRUCCIÓN DEL CFDI 4.0 DESDE UN EXPEDIENTE
 // ─────────────────────────────────────────────────────────────────────────────
 
+function cleanSatRazonSocial(name, rfc = '') {
+    if (!name) return '';
+    let clean = name.trim().toUpperCase();
+    // SAT CFDI 4.0: Para personas morales (RFC 12 caracteres), el SAT exige remover el régimen societario
+    if (rfc && rfc.length === 12) {
+        clean = clean
+            .replace(/\b(S\.?A\.?\s+DE\s+C\.?V\.?|S\.?A\.?P\.?I\.?\s+DE\s+C\.?V\.?|S\.?A\.?P\.?I\.?|S\.?A\.?|S\.?\s+DE\s+R\.?L\.?\s+DE\s+C\.?V\.?|S\.?\s+DE\s+R\.?L\.?|S\.?C\.?|A\.?C\.?|ASOCIACION\s+CIVIL|SOCIEDAD\s+ANONIMA(\s+DE\s+CAPITAL\s+VARIABLE)?|I\.?A\.?P\.?|S\.?N\.?C\.?|S\.?C\.?S\.?)\b/gi, '')
+            .replace(/[,.]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    return clean || name.trim().toUpperCase();
+}
+
 /**
  * Convierte un expediente de COEPRISS en el JSON que espera Facturama (CFDI 4.0).
  */
@@ -102,7 +116,8 @@ function buildCFDIPayload(expediente) {
     const iva      = parseFloat((totalBruto - subtotal).toFixed(2));
 
     const rfc     = (expediente.receptorRfc || '').toUpperCase().trim();
-    const nombre  = (expediente.receptorNombre || '').trim();
+    const rawName = (expediente.receptorNombre || '').trim();
+    const nombre  = cleanSatRazonSocial(rawName, rfc);
     const cp      = (expediente.receptorCodigoPostal || CP_EXPEDICION).trim();
     const regimen = (expediente.receptorRegimenFiscal || (rfc.length === 12 ? '601' : '616')).trim();
     
