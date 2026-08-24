@@ -2434,6 +2434,40 @@ function updatePreviewFields() {
     setText('preview-metodo-pago', d.metodoPago);
 }
 
+function getRegimenLabel(code) {
+    const map = {
+        '601': 'General de Ley Personas Morales',
+        '603': 'Personas Morales con Fines no Lucrativos',
+        '605': 'Sueldos y Salarios e Ingresos Asimilados a Salarios',
+        '606': 'Arrendamiento',
+        '608': 'Demás ingresos',
+        '612': 'Personas Físicas con Actividades Empresariales y Profesionales',
+        '616': 'Sin obligaciones fiscales',
+        '621': 'Incorporación Fiscal',
+        '625': 'Actividades Empresariales con ingresos vía Plataformas Tecnológicas',
+        '626': 'Régimen Simplificado de Confianza (RESICO)'
+    };
+    return map[String(code)] || 'General';
+}
+
+function getUsoCfdiLabel(code) {
+    const map = {
+        'G01': 'Adquisición de mercancías',
+        'G02': 'Devoluciones, descuentos o bonificaciones',
+        'G03': 'Gastos en general',
+        'I01': 'Construcciones',
+        'I02': 'Mobiliario y equipo de oficina',
+        'I04': 'Equipo de cómputo y accesorios',
+        'I08': 'Otra maquinaria y equipo',
+        'D01': 'Honorarios médicos, dentales y gastos hospitalarios',
+        'D02': 'Gastos médicos por incapacidad o discapacidad',
+        'D04': 'Donativos',
+        'S01': 'Sin efectos fiscales',
+        'CP01': 'Pagos'
+    };
+    return map[String(code)] || 'Gastos en general';
+}
+
 function updateStep2Fields() {
     if (!state.activeExpediente) return;
     const pending = 'Pendiente de lectura';
