@@ -579,7 +579,7 @@ app.post('/api/excel/importar', autenticarToken, upload.single('archivo'), async
 async function enviarCorreoBrevo({ destinatario, nombreDestinatario, asunto, cuerpoHtml, adjuntos = [] }) {
     const apiKey = process.env.BREVO_API_KEY;
     if (!apiKey) {
-        throw new Error('BREVO_API_KEY no configurada en las variables de entorno.');
+        throw new Error('BREVO_API_KEY no configurada en las variables de entorno de Render.');
     }
     const senderEmail = process.env.BREVO_SENDER_EMAIL || 'coepriss1@gmail.com';
     const senderName  = process.env.BREVO_SENDER_NAME  || 'COEPRISS Sinaloa - Facturación';

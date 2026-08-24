@@ -3514,6 +3514,11 @@ async function handleSendInvoiceEmail(event) {
     }
 
     try {
+        const activeExp = state.activeExpediente;
+        const matchingFactura = (state.facturas || []).find(f => (f.folioInterno === _currentEmailExpedienteId) || (f.folio === _currentEmailExpedienteId));
+        const effectiveFacturamaId = activeExp?.facturamaId || _lastStampResult?.facturamaId || matchingFactura?.facturamaId || null;
+        const effectiveUuid = activeExp?.uuid || _lastStampResult?.uuid || matchingFactura?.uuid || null;
+
         const res = await apiFetch('/api/correo/enviar', {
             method: 'POST',
             body: JSON.stringify({
@@ -3523,7 +3528,9 @@ async function handleSendInvoiceEmail(event) {
                 asunto,
                 mensaje,
                 adjuntarXml,
-                adjuntarPdf
+                adjuntarPdf,
+                facturamaId: effectiveFacturamaId,
+                uuid: effectiveUuid
             })
         });
         const data = await res.json();
