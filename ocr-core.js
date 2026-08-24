@@ -232,6 +232,8 @@
             const mNum = monthMap[selloMatch[2].toLowerCase().slice(0, 3)] || '01';
             result.fechaRecepcion = `${selloMatch[1].padStart(2, '0')}/${mNum}/${selloMatch[3]}`;
         }
+        result.fechaPago = result.fechaRecepcion || result.fechaExpedicion || '';
+        result.fechaRecibo = result.fechaExpedicion || result.fechaRecepcion || '';
 
         return result;
     }
@@ -375,6 +377,17 @@
                 referencia = cleanOcrValue(rawRef);
             }
         }
+        if (!referencia && docType === 'COMPROBANTE_BANCARIO') {
+            const altRefMatch = normalized.match(/(?:FOLIO\s+INTERBANCARIO|FOLIO\s+DE\s+FIRMA|FOLIO\s+[UÚ]NICO|CONCEPTO\s+DE\s+PAGO)[\s:#-]*([A-Z0-9]{4,30})/i);
+            if (altRefMatch) referencia = cleanOcrValue(altRefMatch[1]);
+        }
+
+        // Fecha de Pago en comprobante bancario
+        let fechaPago = '';
+        if (docType === 'COMPROBANTE_BANCARIO' || docType === 'RECIBO_CIS') {
+            const fechaBancoMatch = normalized.match(/(?:FECHA\s+DE\s+(?:APLICACI[OÓ0]N|CREACI[OÓ0]N|OPERACI[OÓ0]N|PAGO)|FECHA\s+Y\s+HORA|FECHA)[\s:#-]*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i);
+            if (fechaBancoMatch) fechaPago = normalizeOcrDate(fechaBancoMatch[1]);
+        }
 
         // Cuenta o CLABE
         const accountMatch = normalized.match(/(?:CUENTA\s+DE\s+DEP[OÓ0]SITO|CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,18})\b/i);
@@ -415,6 +428,7 @@
             claveRastreo,
             cuentaBeneficiaria,
             concepto,
+            fechaPago,
             formaPago,
             metodoPago,
             confidence: {
@@ -506,6 +520,17 @@
                 conflicts[field] = validCandidates;
             }
         });
+
+        // Smart defaults and cross-field fallbacks
+        if (!merged.usoCfdi) {
+            merged.usoCfdi = 'G03'; // Gastos en general standard for COEPRISS sanitary procedures
+        }
+        if (!merged.fechaPago) {
+            merged.fechaPago = merged.fechaRecepcion || merged.fechaExpedicion || merged.fechaEmision || '';
+        }
+        if (!merged.referencia && merged.folioRecibo) {
+            merged.referencia = merged.folioRecibo;
+        }
 
         merged._evidence = evidence;
         merged._conflicts = conflicts;

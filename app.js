@@ -2339,24 +2339,24 @@ function updateOcrResultAlert(fields) {
     const labels = alert.querySelectorAll('span');
     const title = labels[0];
     const description = labels[1];
-    const quality = state.scanQuality;
-    const reliableFields = countReliableOcrFields(fields);
-    const fiscalCore = [fields?.rfc, fields?.razonSocial, fields?.importe].filter(Boolean).length;
-    const needsReview = !quality || quality.level !== 'alta' || fiscalCore < 3 || reliableFields < 5;
+    const d = state.activeExpediente;
+    const hasCoreFiscal = Boolean(d?.rfc && d?.cliente && d?.codigoPostal);
+    const hasPayment = Boolean(Number.isFinite(d?.importe) && d?.importe > 0);
+    const isSuccess = hasCoreFiscal && hasPayment;
 
-    alert.classList.toggle('ocr-needs-review', needsReview);
-    if (needsReview) {
+    alert.classList.toggle('ocr-needs-review', !isSuccess);
+    if (isSuccess) {
+        if (title) title.textContent = '✅ Extracción exitosa';
+        if (description) description.textContent = 'Se detectaron y validaron los datos fiscales del SAT, el recibo CIS y el pago bancario.';
+    } else {
         if (title) title.textContent = fields?.qualityRejected
             ? 'Lectura rechazada: calidad insuficiente'
-            : 'Lectura completada: precarga editable disponible';
+            : 'Lectura completada: precarga editable';
         if (description) {
             description.textContent = fields?.qualityRejected
-                ? 'El encuadre o contraste fue insuficiente para extraer los datos fiscales con certeza. Sube una foto nitida y plana.'
-                : `${quality?.label || 'Documento procesado'}. Revisa los campos antes de timbrar.`;
+                ? 'El encuadre o contraste fue insuficiente para extraer los datos fiscales con certeza. Sube una foto nítida y plana.'
+                : 'Revisa los campos antes de timbrar. Puedes editarlos en el siguiente paso.';
         }
-    } else {
-        if (title) title.textContent = 'Extracción exitosa';
-        if (description) description.textContent = 'Todos los campos clave fueron leídos con alta certeza.';
     }
 
     let previewButton = document.getElementById('btn-view-scan');
@@ -2439,20 +2439,26 @@ function updateStep2Fields() {
     const pending = 'Pendiente de lectura';
     const d = state.activeExpediente;
 
-    const setTextWithMissing = (id, val) => {
+    const setTextWithMissing = (id, val, isOptional = false) => {
         const element = document.getElementById(id);
         if (element) {
-            element.textContent = val || 'No detectado';
-            element.classList.toggle('ocr-field-missing', !val);
+            element.textContent = val || (isOptional ? 'No registrado (opcional)' : 'No detectado');
+            element.classList.toggle('ocr-field-missing', !val && !isOptional);
         }
     };
 
     setTextWithMissing('val-rfc', d.rfc);
     setTextWithMissing('val-razon', d.cliente);
-    setTextWithMissing('val-regimen', d.regimenFiscal);
+    setTextWithMissing('val-regimen', d.regimenFiscal ? `${d.regimenFiscal} - ${getRegimenLabel(d.regimenFiscal)}` : '');
     setTextWithMissing('val-cp', d.codigoPostal);
-    setTextWithMissing('val-cfdi', d.usoCfdi);
-    setTextWithMissing('val-correo', d.correo);
+    setTextWithMissing('val-cfdi', d.usoCfdi ? `${d.usoCfdi} - ${getUsoCfdiLabel(d.usoCfdi)}` : 'G03 - Gastos en general');
+    setTextWithMissing('val-correo', d.correo, true);
+
+    // Toggle pre-existing CFDI section only if a UUID was scanned
+    const cfdiSection = document.getElementById('section-cfdi-detectados');
+    if (cfdiSection) {
+        cfdiSection.style.display = d.uuid ? 'block' : 'none';
+    }
 
     const formatDetectedAmount = value => value !== null && value !== '' && Number.isFinite(Number(value))
         ? `$${Number(value).toFixed(2)} MXN`
@@ -2481,7 +2487,7 @@ function updateStep2Fields() {
     setTextWithMissing('val-certificados', certificateValues.length ? certificateValues.join(' / ') : '');
 
     document.getElementById('val-cis-folio').textContent = d.folioRecibo || pending;
-    document.getElementById('val-cis-fecha').textContent = d.fechaPago || pending;
+    document.getElementById('val-cis-fecha').textContent = d.fechaPago || d.fechaRecibo || pending;
     document.getElementById('val-cis-concepto').textContent = d.concepto || pending;
     
     const paymentAmount = Number(d.importePago || d.importe || d.total || 0);
@@ -2498,6 +2504,13 @@ function updateStep2Fields() {
     document.getElementById('val-banco-clave').textContent = d.claveRastreo || pending;
     document.getElementById('val-banco-cuenta').textContent = d.cuentaBeneficiaria || pending;
     document.getElementById('val-banco-forma').textContent = d.formaPago || pending;
+
+    // Enable step 2 confirm button
+    const confirmBtn = document.getElementById('btn-confirm-step2');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Confirmar datos y continuar al timbrado →';
+    }
 }
 
 function formatBanxicoDate(value) {
