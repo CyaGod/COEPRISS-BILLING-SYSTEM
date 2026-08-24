@@ -496,53 +496,62 @@ function triggerSidebarClick(navId) {
 }
 
 function resumeFlowAtStep(wizardStep, folio) {
-    // Find expediente
-    const exp = state.expedientes.find(e => e.folio === folio) || (state.activeExpediente?.folio === folio ? state.activeExpediente : null);
-    if (exp) {
-        state.activeExpediente = exp;
-        if (exp.receptorRfc && !exp.rfc) exp.rfc = exp.receptorRfc;
-        if (exp.receptorNombre && !exp.cliente) exp.cliente = exp.receptorNombre;
-        if (exp.receptorCodigoPostal && !exp.codigoPostal) exp.codigoPostal = exp.receptorCodigoPostal;
-        if (exp.receptorRegimenFiscal && !exp.regimenFiscal) exp.regimenFiscal = exp.receptorRegimenFiscal;
-        if (exp.receptorUsoCfdi && !exp.usoCfdi) exp.usoCfdi = exp.receptorUsoCfdi;
-        if (exp.receptorEmail && !exp.correo) exp.correo = exp.receptorEmail;
-        if (exp.cfdiTotal && !exp.importe) exp.importe = parseFloat(exp.cfdiTotal);
-        if (exp.cfdiConcepto && !exp.concepto) exp.concepto = exp.cfdiConcepto;
-        if (exp.cfdiFormaPago && !exp.formaPago) exp.formaPago = exp.cfdiFormaPago;
-        if (exp.cfdiMetodoPago && !exp.metodoPago) exp.metodoPago = exp.cfdiMetodoPago;
+    try {
+        // Find expediente
+        const exp = state.expedientes.find(e => e.folio === folio) || (state.activeExpediente?.folio === folio ? state.activeExpediente : null);
+        if (exp) {
+            state.activeExpediente = exp;
+            if (!Array.isArray(exp.archivos)) exp.archivos = [];
+            if (!Array.isArray(exp.auditoria)) exp.auditoria = [];
 
-        updatePreviewFields();
-        updateStep2Fields();
-        updateStep3UIFromActiveExpediente();
-        renderDocumentList();
-        renderTimeline();
-    }
-    
-    // Auto-determine best wizard step: if ready for stamping, go directly to Step 4!
-    let targetStep = wizardStep || 1;
-    if (exp) {
-        if (exp.rfc && exp.cliente && exp.codigoPostal && (exp.importe || exp.cfdiTotal)) {
-            targetStep = 4;
-        } else if (exp.rfc || exp.cliente) {
-            targetStep = 3;
+            if (exp.receptorRfc && !exp.rfc) exp.rfc = exp.receptorRfc;
+            if (exp.receptorNombre && !exp.cliente) exp.cliente = exp.receptorNombre;
+            if (exp.receptorCodigoPostal && !exp.codigoPostal) exp.codigoPostal = exp.receptorCodigoPostal;
+            if (exp.receptorRegimenFiscal && !exp.regimenFiscal) exp.regimenFiscal = exp.receptorRegimenFiscal;
+            if (exp.receptorUsoCfdi && !exp.usoCfdi) exp.usoCfdi = exp.receptorUsoCfdi;
+            if (exp.receptorEmail && !exp.correo) exp.correo = exp.receptorEmail;
+            if (exp.cfdiTotal && !exp.importe) exp.importe = parseFloat(exp.cfdiTotal);
+            if (exp.cfdiConcepto && !exp.concepto) exp.concepto = exp.cfdiConcepto;
+            if (exp.cfdiFormaPago && !exp.formaPago) exp.formaPago = exp.cfdiFormaPago;
+            if (exp.cfdiMetodoPago && !exp.metodoPago) exp.metodoPago = exp.cfdiMetodoPago;
+
+            updatePreviewFields();
+            updateStep2Fields();
+            updateStep3UIFromActiveExpediente();
+            renderDocumentList();
+            renderTimeline();
         }
+        
+        // Auto-determine best wizard step: if ready for stamping, go directly to Step 4!
+        let targetStep = wizardStep || 1;
+        if (exp) {
+            if (exp.rfc && exp.cliente && exp.codigoPostal && (exp.importe || exp.cfdiTotal)) {
+                targetStep = 4;
+            } else if (exp.rfc || exp.cliente) {
+                targetStep = 3;
+            }
+        }
+
+        showToast(`Reanudando expediente ${folio} en el Paso ${targetStep}...`, 'info');
+        
+        // Highlight "Nueva solicitud" sidebar link
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active', 'active-pulse'));
+        const navSolicitud = document.getElementById('nav-solicitud');
+        if (navSolicitud) navSolicitud.classList.add('active-pulse');
+
+        // Enable scan button if resuming
+        const btnScan = document.getElementById('btn-scan');
+        if (btnScan) btnScan.disabled = false;
+
+        // Check payment validation button toggles
+        updatePaymentValidationUI();
+
+        goToStep(targetStep);
+    } catch (err) {
+        console.error('[RESUME ERROR]', err);
+        showToast(`Error al reanudar: ${err.message}`, 'error');
+        goToStep(wizardStep || 3);
     }
-
-    showToast(`Reanudando expediente ${folio} en el Paso ${targetStep}...`, 'info');
-    
-    // Highlight "Nueva solicitud" sidebar link
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active', 'active-pulse'));
-    const navSolicitud = document.getElementById('nav-solicitud');
-    if (navSolicitud) navSolicitud.classList.add('active-pulse');
-
-    // Enable scan button if resuming
-    const btnScan = document.getElementById('btn-scan');
-    if (btnScan) btnScan.disabled = false;
-
-    // Check payment validation button toggles
-    updatePaymentValidationUI();
-
-    goToStep(targetStep);
 }
 
 function resendEmail(email, folio) {
@@ -2305,7 +2314,6 @@ function applyExtractedFields(fields) {
     if (fields.metodoPago) dossier.metodoPago = fields.metodoPago;
     if (Number.isFinite(fields.subtotal)) dossier.subtotal = fields.subtotal;
     if (fields.noSerieCsd) dossier.noSerieCsd = fields.noSerieCsd;
-    if (fields.rfcProveedorCertificacion) dossier.rfcProveedorCertificacion = fields.rfcProveedorCertificacion;
     if (fields.noSerieCertificadoSat) dossier.noSerieCertificadoSat = fields.noSerieCertificadoSat;
 }
 
@@ -2319,14 +2327,17 @@ function renderDocumentList() {
     if (!listContainer || !state.activeExpediente) return;
 
     listContainer.innerHTML = '';
-    state.activeExpediente.archivos.forEach(file => {
-        const isPdf = file.name.endsWith('.pdf');
+    const archivos = Array.isArray(state.activeExpediente.archivos) ? state.activeExpediente.archivos : [];
+    archivos.forEach(file => {
+        if (!file || !file.name) return;
+        const isPdf = String(file.name).toLowerCase().endsWith('.pdf');
         const iconClass = isPdf ? 'doc-icon-pdf' : 'doc-icon-img';
         const iconSvg = isPdf 
             ? `<svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9.5 6H8v6H6.5v-1.5H5v-1.5h1.5V9H5V7.5h4.5V9zm5 4.5c0 .83-.67 1.5-1.5 1.5h-2.5V7.5H13c.83 0 1.5.67 1.5 1.5v4.5zm5-3H18v1.5h1.5V12H18v3h-1.5V7.5h3v2.5zm-6.5-1.5H11.5v3H13c.28 0 .5-.22.5-.5V9c0-.28-.22-.5-.5-.5z"/></svg>`
             : `<svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z"/></svg>`;
 
-        const isScanned = file.status.includes('OCR');
+        const fileStatus = String(file.status || 'Leído');
+        const isScanned = fileStatus.includes('OCR') || fileStatus.includes('Leído');
         const badgeClass = isScanned ? 'badge-success' : 'badge-warning';
         const badgeIcon = isScanned 
             ? `<svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>`
@@ -2338,11 +2349,11 @@ function renderDocumentList() {
             <div class="doc-icon-container ${iconClass}">
                 ${iconSvg}
             </div>
-            <span class="doc-title">${file.type}</span>
+            <span class="doc-title">${file.type || 'Documento'}</span>
             <span class="doc-filename"><a href="#" onclick="return false;">${file.name}</a></span>
             <span class="badge ${badgeClass} doc-status-badge">
                 ${badgeIcon}
-                ${file.status}
+                ${fileStatus}
             </span>
             <button class="doc-view-btn" onclick="previewDocument('${file.name}', '${isPdf ? 'PDF' : 'Imagen'}')" style="position: absolute; bottom: 12px; right: 12px;">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -2822,7 +2833,14 @@ function renderTimeline() {
     if (!timeline || !state.activeExpediente) return;
 
     timeline.innerHTML = '';
-    state.activeExpediente.auditoria.forEach(log => {
+    if (!Array.isArray(state.activeExpediente.auditoria)) {
+        state.activeExpediente.auditoria = [];
+    }
+    const logs = state.activeExpediente.auditoria.length > 0
+        ? state.activeExpediente.auditoria
+        : [`[${state.activeExpediente.fechaRecibo || getCurrentDateTimeString()}] Trámite registrado en el sistema.`];
+
+    logs.forEach(log => {
         const logItem = document.createElement('div');
         logItem.style.display = 'flex';
         logItem.style.gap = '10px';
@@ -2837,6 +2855,9 @@ function renderTimeline() {
 
 function addAuditLogToActive(message) {
     if (state.activeExpediente) {
+        if (!Array.isArray(state.activeExpediente.auditoria)) {
+            state.activeExpediente.auditoria = [];
+        }
         state.activeExpediente.auditoria.push(`[${getCurrentDateTimeString()}] ${message}`);
     }
 }
