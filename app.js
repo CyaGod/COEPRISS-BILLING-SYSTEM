@@ -3590,21 +3590,38 @@ function filterReportTable() {
     tbody.innerHTML = '';
     let matchesCount = 0;
 
-    const list = state.facturas.length > 0 ? state.facturas : state.expedientes.filter(e => e.estatus === 'TIMBRADO');
+    const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
+    const expedientesRestantes = (state.expedientes || []).filter(e => !facturaFolios.has(e.folio));
+    const list = [...(state.facturas || []), ...expedientesRestantes];
 
     list.forEach(f => {
         const folio = f.folioInterno || f.folio || '';
         const uuid = f.uuid || f.cfdiUuid || '';
         const cliente = f.cliente || f.receptorNombre || '';
         const rfc = f.rfc || f.receptorRfc || '';
-        const estatus = (f.estatus || 'TIMBRADA').toUpperCase();
+        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
         const total = parseFloat(f.importe || f.cfdiTotal || 0);
+
+        const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
+        const isPendiente = estatus === 'PENDIENTE' || estatus === 'EN_PROCESO' || estatus === 'RECIBIDO' || estatus === 'PAGO PENDIENTE' || estatus === 'EN PROCESO';
+        const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
 
         // Filtro por texto
         const matchText = !busqueda || [folio, uuid, cliente, rfc].some(val => val.toLowerCase().includes(busqueda));
 
         // Filtro por estatus
-        const matchEstatus = (estatusFilter === 'TODOS') || (estatus === estatusFilter);
+        let matchEstatus = false;
+        if (estatusFilter === 'TODOS') {
+            matchEstatus = true;
+        } else if (estatusFilter === 'TIMBRADA' || estatusFilter === 'TIMBRADO') {
+            matchEstatus = isTimbrada;
+        } else if (estatusFilter === 'PENDIENTE') {
+            matchEstatus = isPendiente && !isTimbrada;
+        } else if (estatusFilter === 'CANCELADA' || estatusFilter === 'CANCELADO') {
+            matchEstatus = isCancelada;
+        } else {
+            matchEstatus = (estatus === estatusFilter);
+        }
 
         // Filtro por fecha
         let matchFecha = true;
@@ -3616,26 +3633,34 @@ function filterReportTable() {
 
         if (matchText && matchEstatus && matchFecha) {
             matchesCount++;
+            const badgeClass = isTimbrada ? 'badge-success' : (isCancelada ? 'badge-danger' : 'badge-info');
+            const displayEstatus = isTimbrada ? 'TIMBRADA' : estatus;
+            const facturamaId = f.facturamaId || '';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="font-weight:700;color:#1B365D;">${folio}</td>
                 <td style="font-family:monospace;font-size:0.75rem;color:#495057;">${uuid ? uuid.substring(0, 18) + '...' : '—'}</td>
                 <td class="col-cliente">${cliente}</td>
                 <td style="font-family:monospace;font-weight:600;">${rfc}</td>
-                <td style="color:#6c757d;">${f.fecha || new Date(f.createdAt).toLocaleDateString('es-MX')}</td>
+                <td style="color:#6c757d;">${f.fecha || (f.createdAt ? new Date(f.createdAt).toLocaleDateString('es-MX') : '—')}</td>
                 <td style="text-align:right;font-weight:700;color:#1B365D;">$${total.toFixed(2)}</td>
                 <td style="text-align:center;">
-                    <span class="badge badge-success">
+                    <span class="badge ${badgeClass}">
                         <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                        ${estatus}
+                        ${displayEstatus}
                     </span>
                 </td>
                 <td style="text-align:center;">
                     <div class="action-icon-group">
-                        <button class="action-icon-btn btn-view" onclick="openPdfViewer('${f.facturamaId || ''}')" title="Ver PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
-                        <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${f.facturamaId}', 'pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                        <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${f.facturamaId}', 'xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                        <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                        ${isTimbrada ? `
+                            <button class="action-icon-btn btn-view" onclick="openPdfViewer('${facturamaId}')" title="Ver PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                            <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${facturamaId}', 'pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                            <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${facturamaId}', 'xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                            <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                        ` : `
+                            <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
+                        `}
                     </div>
                 </td>
             `;
