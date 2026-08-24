@@ -1045,6 +1045,10 @@ function mergeExtractedFieldSets(fieldSets) {
     if (!fieldSets || fieldSets.length === 0) return {};
     if (fieldSets.length === 1) return fieldSets[0];
 
+    if (typeof window !== 'undefined' && window.OcrCore && typeof window.OcrCore.mergeExtractedFieldSets === 'function') {
+        return window.OcrCore.mergeExtractedFieldSets(fieldSets);
+    }
+
     // Numeric fields that should be taken from the most fiscally-anchored document.
     const numericFields = new Set([
         'importe', 'importePago', 'subtotal', 'valorUnitario', 'importeLinea', 'cantidad'
@@ -1142,15 +1146,15 @@ async function recognizeImageWithFallback(file, uploadedRecord = null) {
     const canvas = document.createElement('canvas');
     const originalWidth = bitmap.width;
     const originalHeight = bitmap.height;
+    const isLandscape = (originalWidth / originalHeight) >= 1.15;
+
     // A 480p photograph needs much more than the old 1.85x enlargement.
-    // Scale adaptively until the photographed page is about 1800x2400, but
-    // cap memory so the browser remains responsive on ordinary office PCs.
-    const scale = Math.min(
-        5.5,
-        2600 / bitmap.width,
-        3200 / bitmap.height,
-        Math.max(1.85, 1800 / bitmap.width, 2400 / bitmap.height)
-    );
+    // Scale adaptively until the photographed page is about 1800x2400 (portrait)
+    // or 2400x1600 (landscape), but cap memory so the browser remains responsive.
+    const scale = isLandscape
+        ? Math.min(5.5, 2600 / bitmap.width, 2000 / bitmap.height, Math.max(1.85, 2200 / bitmap.width))
+        : Math.min(5.5, 2600 / bitmap.width, 3200 / bitmap.height, Math.max(1.85, 1800 / bitmap.width, 2400 / bitmap.height));
+
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const sourceContext = canvas.getContext('2d');
@@ -1159,74 +1163,65 @@ async function recognizeImageWithFallback(file, uploadedRecord = null) {
     sourceContext.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     if (typeof bitmap.close === 'function') bitmap.close();
 
-    // First normalize the photograph like a document-scanner app: remove the
-    // desk/hand margins and enlarge the sheet before Tesseract sees it.
+    // First normalize the photograph like a document-scanner app: remove desk margins
     const scanCanvas = createDocumentScanCanvas(canvas);
     const quality = assessScanQuality(scanCanvas, originalWidth, originalHeight);
     state.scanQuality = quality;
 
-    // Keep the corrected sheet so the employee can verify the framing and
-    // compare every extracted value with the real source image.
     const readableCanvas = createEnhancedOcrCanvas(scanCanvas);
-    // The preview preserves the real tones of the photographed sheet. The
-    // stronger black-and-white enhancement is used only by Tesseract so the
-    // employee does not mistake OCR artifacts for content in the source.
     const previewUrl = scanCanvas.toDataURL('image/jpeg', 0.94);
     state.scanPreviewUrl = previewUrl;
     if (uploadedRecord) {
         uploadedRecord.scanPreviewUrl = previewUrl;
         uploadedRecord.scanQuality = quality;
     }
-    // Put the focused passes first. Tesseract can misread a small label in a
-    // full-page photograph; parseExtractedFields keeps the first matching
-    // value, so the cleaner regional reads must have priority.
+
     let text = '';
 
-    // One full-page pass is not enough for two-column CFDIs. These focused
-    // passes spend a little more local CPU, but prevent small labels and the
-    // concepts/payment blocks from being lost in the page layout.
-    const regions = quality.level === 'baja'
+    // 1. FULL PAGE PASS FIRST (Guarantees unbroken text sentences and full lines have top priority)
+    const button = document.getElementById('btn-scan');
+    if (button) button.textContent = 'Leyendo documento completo...';
+    text += `\n${await recognizeCanvasWithFallback(scanCanvas, quality.level === 'baja' ? '11' : '6')}`;
+
+    // 2. ADAPTIVE REGIONAL PASSES
+    const regions = isLandscape
         ? [
-            { name: 'encabezado izquierdo', left: 0.01, right: 0.52, top: 0.02, bottom: 0.38, psm: '6' },
-            { name: 'encabezado derecho', left: 0.50, right: 0.99, top: 0.02, bottom: 0.38, psm: '6' },
-            { name: 'conceptos', left: 0.01, right: 0.99, top: 0.28, bottom: 0.59, psm: '11' },
-            { name: 'pago', left: 0.01, right: 0.99, top: 0.50, bottom: 0.76, psm: '6' },
-            { name: 'certificacion', left: 0.01, right: 0.99, top: 0.70, bottom: 0.99, psm: '11' }
+            { name: 'encabezado institucional', left: 0.01, right: 0.99, top: 0.00, bottom: 0.26, psm: '6' },
+            { name: 'datos contribuyente', left: 0.01, right: 0.99, top: 0.18, bottom: 0.52, psm: '6' },
+            { name: 'concepto y tramite', left: 0.01, right: 0.99, top: 0.40, bottom: 0.78, psm: '6' },
+            { name: 'importes folios y sello', left: 0.01, right: 0.99, top: 0.65, bottom: 0.99, psm: '6' }
         ]
-        : [
-            { name: 'encabezado izquierdo', left: 0.01, right: 0.52, top: 0.02, bottom: 0.38, psm: '6' },
-            { name: 'encabezado derecho', left: 0.50, right: 0.99, top: 0.02, bottom: 0.38, psm: '6' },
-            { name: 'conceptos', left: 0.01, right: 0.99, top: 0.27, bottom: 0.60, psm: '11' },
-            { name: 'pago', left: 0.01, right: 0.99, top: 0.50, bottom: 0.76, psm: '6' }
-        ];
+        : (quality.level === 'baja'
+            ? [
+                { name: 'encabezado izquierdo', left: 0.01, right: 0.52, top: 0.02, bottom: 0.38, psm: '6' },
+                { name: 'encabezado derecho', left: 0.50, right: 0.99, top: 0.02, bottom: 0.38, psm: '6' },
+                { name: 'conceptos', left: 0.01, right: 0.99, top: 0.28, bottom: 0.59, psm: '11' },
+                { name: 'pago', left: 0.01, right: 0.99, top: 0.50, bottom: 0.76, psm: '6' },
+                { name: 'certificacion', left: 0.01, right: 0.99, top: 0.70, bottom: 0.99, psm: '11' }
+            ]
+            : [
+                { name: 'encabezado izquierdo', left: 0.01, right: 0.52, top: 0.02, bottom: 0.38, psm: '6' },
+                { name: 'encabezado derecho', left: 0.50, right: 0.99, top: 0.02, bottom: 0.38, psm: '6' },
+                { name: 'conceptos', left: 0.01, right: 0.99, top: 0.27, bottom: 0.60, psm: '11' },
+                { name: 'pago', left: 0.01, right: 0.99, top: 0.50, bottom: 0.76, psm: '6' }
+            ]);
+
     for (const region of regions) {
         const regionCanvas = createOcrRegionCanvas(readableCanvas, region.top, region.bottom, region.left, region.right);
-        const button = document.getElementById('btn-scan');
         if (button) button.textContent = `Leyendo zona ${region.name}...`;
         text += `\n${await recognizeCanvasOnce(regionCanvas, region.psm)}`;
         regionCanvas.width = 1;
         regionCanvas.height = 1;
     }
 
-    // Keep one full-page pass as a safety net for labels that fall between
-    // regions (for example footer metadata and long CFDI descriptions).
-    const button = document.getElementById('btn-scan');
-    if (button) button.textContent = 'Leyendo pagina completa...';
-    text += `\n${await recognizeCanvasWithFallback(scanCanvas, quality.level === 'baja' ? '11' : '6')}`;
-
-    // Mexican CFDI photographs normally include the SAT QR. When the
-    // browser supports BarcodeDetector, it supplies an exact UUID/RFC/total
-    // even when a character is visually ambiguous to OCR.
+    // 3. QR DETECTION
     const qrText = await detectQrText(scanCanvas);
     if (qrText) text += `\n${qrText}`;
 
     const firstFields = parseExtractedFields(text);
 
-    // A second, high-contrast sparse-text pass helps photographs of CFDIs:
-    // the first pass is better for tables, while PSM 11 is better for the
-    // two-column header and the small fiscal metadata on the right.
     const hasFiscalCore = Boolean(firstFields.rfc && firstFields.razonSocial && firstFields.importe && firstFields.uuid);
-    if (!hasFiscalCore) {
+    if (!hasFiscalCore && !isLandscape) {
         text += `\n${await recognizeCanvasWithFallback(readableCanvas, '11')}`;
     }
     readableCanvas.width = 1;
@@ -1897,7 +1892,10 @@ function normalizeOcrDate(value) {
     return cleanValue;
 }
 
-function parseExtractedFields(text) {
+function parseExtractedFields(text, sourceFileName = '') {
+    if (typeof window !== 'undefined' && window.OcrCore && typeof window.OcrCore.parseExtractedFields === 'function') {
+        return window.OcrCore.parseExtractedFields(text, sourceFileName);
+    }
     const normalized = String(text || '').replace(/\r/g, '').replace(/[ \t]+/g, ' ');
     const plain = stripOcrAccents(normalized).toUpperCase();
     // RFC pattern: 3-4 letters (persons use 4, companies use 3), 6-digit date
