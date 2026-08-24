@@ -1021,9 +1021,46 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
 
     try {
         // Buscar expediente en BD
-        const expediente = await prisma.expediente.findUnique({
+        let expediente = await prisma.expediente.findUnique({
             where: { folio: expedienteId }
         });
+
+        if (!expediente && req.body.expediente) {
+            const d = req.body.expediente;
+            expediente = await prisma.expediente.upsert({
+                where: { folio: expedienteId },
+                update: {
+                    receptorRfc: d.rfc || d.receptorRfc,
+                    receptorNombre: d.cliente || d.receptorNombre,
+                    receptorRegimenFiscal: d.regimenFiscal || d.receptorRegimenFiscal,
+                    receptorCodigoPostal: d.codigoPostal || d.receptorCodigoPostal,
+                    receptorUsoCfdi: d.usoCfdi || d.receptorUsoCfdi || 'G03',
+                    cfdiTotal: parseFloat(d.importe || d.cfdiTotal || 0),
+                    cfdiSubtotal: parseFloat(d.subtotal || (d.importe ? d.importe / 1.16 : 0)),
+                    cfdiConcepto: d.concepto || d.cfdiConcepto,
+                    cfdiFormaPago: d.formaPago || d.cfdiFormaPago || '03',
+                    cfdiMetodoPago: d.metodoPago || d.cfdiMetodoPago || 'PUE',
+                    receptorEmail: d.correo || d.receptorEmail
+                },
+                create: {
+                    folio: expedienteId,
+                    usuarioId: req.user.id,
+                    estatus: 'PENDIENTE',
+                    receptorRfc: d.rfc || d.receptorRfc,
+                    receptorNombre: d.cliente || d.receptorNombre,
+                    receptorRegimenFiscal: d.regimenFiscal || d.receptorRegimenFiscal,
+                    receptorCodigoPostal: d.codigoPostal || d.receptorCodigoPostal,
+                    receptorUsoCfdi: d.usoCfdi || d.receptorUsoCfdi || 'G03',
+                    cfdiTotal: parseFloat(d.importe || d.cfdiTotal || 0),
+                    cfdiSubtotal: parseFloat(d.subtotal || (d.importe ? d.importe / 1.16 : 0)),
+                    cfdiConcepto: d.concepto || d.cfdiConcepto,
+                    cfdiFormaPago: d.formaPago || d.cfdiFormaPago || '03',
+                    cfdiMetodoPago: d.metodoPago || d.cfdiMetodoPago || 'PUE',
+                    receptorEmail: d.correo || d.receptorEmail
+                }
+            });
+        }
+
         if (!expediente) return res.status(404).json({ error: `Expediente ${expedienteId} no encontrado.` });
 
         // Verificar que no tenga ya una factura timbrada

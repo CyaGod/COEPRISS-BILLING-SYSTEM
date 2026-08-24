@@ -497,16 +497,38 @@ function triggerSidebarClick(navId) {
 
 function resumeFlowAtStep(wizardStep, folio) {
     // Find expediente
-    const exp = state.expedientes.find(e => e.folio === folio);
+    const exp = state.expedientes.find(e => e.folio === folio) || (state.activeExpediente?.folio === folio ? state.activeExpediente : null);
     if (exp) {
         state.activeExpediente = exp;
+        if (exp.receptorRfc && !exp.rfc) exp.rfc = exp.receptorRfc;
+        if (exp.receptorNombre && !exp.cliente) exp.cliente = exp.receptorNombre;
+        if (exp.receptorCodigoPostal && !exp.codigoPostal) exp.codigoPostal = exp.receptorCodigoPostal;
+        if (exp.receptorRegimenFiscal && !exp.regimenFiscal) exp.regimenFiscal = exp.receptorRegimenFiscal;
+        if (exp.receptorUsoCfdi && !exp.usoCfdi) exp.usoCfdi = exp.receptorUsoCfdi;
+        if (exp.receptorEmail && !exp.correo) exp.correo = exp.receptorEmail;
+        if (exp.cfdiTotal && !exp.importe) exp.importe = parseFloat(exp.cfdiTotal);
+        if (exp.cfdiConcepto && !exp.concepto) exp.concepto = exp.cfdiConcepto;
+        if (exp.cfdiFormaPago && !exp.formaPago) exp.formaPago = exp.cfdiFormaPago;
+        if (exp.cfdiMetodoPago && !exp.metodoPago) exp.metodoPago = exp.cfdiMetodoPago;
+
         updatePreviewFields();
         updateStep2Fields();
+        updateStep3UIFromActiveExpediente();
         renderDocumentList();
         renderTimeline();
     }
     
-    showToast(`Reanudando expediente ${folio} en el paso ${wizardStep}...`, 'info');
+    // Auto-determine best wizard step: if ready for stamping, go directly to Step 4!
+    let targetStep = wizardStep || 1;
+    if (exp) {
+        if (exp.rfc && exp.cliente && exp.codigoPostal && (exp.importe || exp.cfdiTotal)) {
+            targetStep = 4;
+        } else if (exp.rfc || exp.cliente) {
+            targetStep = 3;
+        }
+    }
+
+    showToast(`Reanudando expediente ${folio} en el Paso ${targetStep}...`, 'info');
     
     // Highlight "Nueva solicitud" sidebar link
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active', 'active-pulse'));
@@ -520,7 +542,7 @@ function resumeFlowAtStep(wizardStep, folio) {
     // Check payment validation button toggles
     updatePaymentValidationUI();
 
-    goToStep(wizardStep);
+    goToStep(targetStep);
 }
 
 function resendEmail(email, folio) {
@@ -3102,7 +3124,7 @@ async function stampInvoiceViaPAC() {
         setLoading('Validando datos fiscales con Facturama...', 'Verificando RFC, clave SAT e importes.');
         const testRes = await apiFetch('/api/facturama/test', {
             method: 'POST',
-            body: JSON.stringify({ expedienteId: folio }),
+            body: JSON.stringify({ expedienteId: folio, expediente: state.activeExpediente }),
         });
         const testData = await testRes.json();
 
@@ -3125,7 +3147,7 @@ async function stampInvoiceViaPAC() {
         }
 
         setLoading('Generando Sello Digital y Timbrando...', 'PAC Facturama está sellando el CFDI 4.0 ante el SAT.');
-        const body = { expedienteId: folio };
+        const body = { expedienteId: folio, expediente: state.activeExpediente };
         if (!isSandbox) body.confirmarProduccion = true;
 
         const stampRes = await apiFetch('/api/facturama/timbrar', {
