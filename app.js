@@ -3217,7 +3217,22 @@ async function stampInvoiceViaPAC() {
 
         const modoStr = isSandbox ? '🧪 (SANDBOX)' : '✅ (PRODUCCIÓN)';
         showToast(`${modoStr} ¡CFDI 4.0 timbrado exitosamente! UUID: ${stampData.uuid}`, 'success');
-        addSecurityLog('CFDI Timbrado Oficial', `UUID: ${stampData.uuid} | Folio Facturama: ${stampData.facturamaId}`);
+        
+        if (stampData.correoEnviado && stampData.correoDestinatario) {
+            state.historialCorreos.unshift({
+                fecha: new Date().toLocaleString('es-MX'),
+                destinatario: stampData.correoDestinatario,
+                folio: folio,
+                adjuntos: 'XML / PDF',
+                estatus: 'Enviado'
+            });
+            renderCorreosTable();
+            setTimeout(() => {
+                showToast(`✉️ Factura (XML + PDF) enviada automáticamente a ${stampData.correoDestinatario} vía Brevo.`, 'success');
+            }, 1000);
+        }
+
+        addSecurityLog('CFDI Timbrado Oficial', `UUID: ${stampData.uuid} | Folio Facturama: ${stampData.facturamaId}${stampData.correoEnviado ? ` | Correo enviado a ${stampData.correoDestinatario}` : ''}`);
 
     } catch (err) {
         clearLoading();

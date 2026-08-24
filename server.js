@@ -1178,28 +1178,107 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
             }).catch(e => console.warn('[CLIENTE AUTO-SAVE ERROR]', e.message));
         }
 
+        // Auto-envío de correo vía Brevo si el expediente tiene correo registrado
+        let correoEnviadoAuto = false;
+        const targetEmail = expediente.receptorEmail || req.body.expediente?.correo;
+        if (targetEmail && targetEmail.includes('@')) {
+            try {
+                const adjuntos = [];
+                let xmlB64 = resultado.xmlBase64;
+                let pdfB64 = resultado.pdfBase64;
+
+                if (!xmlB64 && resultado.id) {
+                    xmlB64 = await facturama.descargarArchivo(resultado.id, 'xml').catch(() => null);
+                }
+                if (!pdfB64 && resultado.id) {
+                    pdfB64 = await facturama.descargarArchivo(resultado.id, 'pdf').catch(() => null);
+                }
+
+                if (xmlB64) {
+                    adjuntos.push({ name: `COEPRISS_${expedienteId}.xml`, content: xmlB64 });
+                }
+                if (pdfB64) {
+                    adjuntos.push({ name: `COEPRISS_${expedienteId}.pdf`, content: pdfB64 });
+                }
+
+                const clientName = expediente.receptorNombre || req.body.expediente?.cliente || 'Contribuyente';
+                const emailSubject = `Comprobante Fiscal Digital (CFDI 4.0) - COEPRISS Sinaloa - Folio ${expedienteId}`;
+                const emailHtml = `
+                    <div style="font-family: Arial, sans-serif; max-width: 650px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #ffffff;">
+                        <div style="background: #1B365D; color: #ffffff; padding: 24px; text-align: center;">
+                            <h2 style="margin: 0; font-size: 1.4rem; color: #ffffff; letter-spacing: 1px;">COEPRISS SINALOA</h2>
+                            <p style="margin: 6px 0 0; font-size: 0.85rem; color: #D4AF37; font-weight: bold;">Comisión Estatal para la Protección contra Riesgos Sanitarios</p>
+                        </div>
+                        <div style="padding: 24px; color: #333333; line-height: 1.6;">
+                            <h3 style="color: #1B365D; margin-top: 0;">Estimado(a) ${clientName},</h3>
+                            <p>Le hacemos llegar adjunto su Comprobante Fiscal Digital por Internet (CFDI 4.0) oficial correspondiente a su trámite sanitario ante esta Comisión.</p>
+                            <div style="background: #f1f5f9; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                                <table style="width: 100%; font-size: 0.88rem; border-collapse: collapse;">
+                                    <tr><td style="color: #64748b; padding: 4px 0; width: 140px;">Folio / Trámite:</td><td style="font-weight: bold;">${expedienteId}</td></tr>
+                                    <tr><td style="color: #64748b; padding: 4px 0;">RFC Receptor:</td><td style="font-weight: bold;">${expediente.receptorRfc || '—'}</td></tr>
+                                    <tr><td style="color: #64748b; padding: 4px 0;">Folio Fiscal (UUID):</td><td style="font-family: monospace; font-size: 0.82rem; word-break: break-all;">${resultado.uuid}</td></tr>
+                                    ${resultado.total ? `<tr><td style="color: #64748b; padding: 4px 0;">Importe Total:</td><td style="font-weight: bold; color: #1B365D; font-size: 1rem;">$${parseFloat(resultado.total).toFixed(2)} MXN</td></tr>` : ''}
+                                </table>
+                            </div>
+                            <p style="font-size: 0.85rem; color: #64748b;">En los archivos adjuntos a este correo encontrará las versiones oficiales <strong>XML</strong> y <strong>PDF</strong> con sello digital del SAT.</p>
+                        </div>
+                        <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; text-align: center; font-size: 0.75rem; color: #94a3b8;">
+                            COEPRISS Sinaloa — Blvd. Alfonso G. Calderón #2193, C.P. 80020, Culiacán, Sinaloa, México.<br>
+                            Este es un mensaje institucional automático generado por el Sistema de Facturación Electrónica.
+                        </div>
+                    </div>
+                `;
+
+                const brevoRes = await enviarCorreoBrevo({
+                    destinatario: targetEmail,
+                    nombreDestinatario: clientName,
+                    asunto: emailSubject,
+                    cuerpoHtml: emailHtml,
+                    adjuntos
+                });
+
+                await prisma.historialCorreo.create({
+                    data: {
+                        expedienteId: expediente.id,
+                        usuarioId: req.user.id,
+                        destinatario: targetEmail,
+                        asunto: emailSubject,
+                        cuerpo: `Envío automático al timbrar (${adjuntos.length} adjuntos)`,
+                        estatus: 'ENVIADO'
+                    }
+                });
+
+                correoEnviadoAuto = true;
+                console.log(`[AUTO-CORREO BREVO] Factura enviada exitosamente a ${targetEmail} (Brevo ID: ${brevoRes.messageId})`);
+            } catch (mailErr) {
+                console.warn('[AUTO-CORREO BREVO ERROR]', mailErr.message);
+            }
+        }
+
         // Registrar en bitácora
         await registrarBitacora(
             req.user.id,
             'CFDI_TIMBRADO',
-            `Expediente: ${expedienteId} | UUID: ${resultado.uuid} | Sandbox: ${facturama.SANDBOX} | Folio Facturama: ${resultado.id}`,
+            `Expediente: ${expedienteId} | UUID: ${resultado.uuid} | Sandbox: ${facturama.SANDBOX} | Folio Facturama: ${resultado.id}${correoEnviadoAuto ? ` | Correo enviado a ${targetEmail}` : ''}`,
             req.ip,
             'EXITOSO'
         );
 
         res.json({
-            success:    true,
-            sandbox:    resultado.sandbox,
-            facturaId:  factura.id,
-            facturamaId: resultado.id,
-            uuid:       resultado.uuid,
-            folio:      resultado.folio,
-            serie:      resultado.serie,
-            fecha:      resultado.fecha,
-            subtotal:   resultado.subtotal,
-            total:      resultado.total,
-            xmlBase64:  resultado.xmlBase64,
-            pdfBase64:  resultado.pdfBase64,
+            success:           true,
+            sandbox:           resultado.sandbox,
+            facturaId:         factura.id,
+            facturamaId:       resultado.id,
+            uuid:              resultado.uuid,
+            folio:             resultado.folio,
+            serie:             resultado.serie,
+            fecha:             resultado.fecha,
+            subtotal:          resultado.subtotal,
+            total:             resultado.total,
+            xmlBase64:         resultado.xmlBase64,
+            pdfBase64:         resultado.pdfBase64,
+            correoEnviado:     correoEnviadoAuto,
+            correoDestinatario: targetEmail || null
         });
 
     } catch (err) {
