@@ -106,7 +106,9 @@ function cleanSatRazonSocial(name, rfc = '') {
  * Convierte un expediente de COEPRISS en el JSON que espera Facturama (CFDI 4.0).
  */
 function buildCFDIPayload(expediente) {
-    const totalBruto = parseFloat(expediente.cfdiTotal || 0);
+    if (!expediente) throw new Error('Se requiere el objeto expediente para construir el CFDI.');
+
+    const totalBruto = parseFloat(expediente.cfdiTotal || expediente.importe || expediente.total || 0);
     if (!totalBruto || totalBruto <= 0) {
         throw new Error('El expediente no tiene un monto (Total) válido para facturar.');
     }
@@ -115,14 +117,14 @@ function buildCFDIPayload(expediente) {
     const subtotal = parseFloat((totalBruto / 1.16).toFixed(2));
     const iva      = parseFloat((totalBruto - subtotal).toFixed(2));
 
-    const rfc     = (expediente.receptorRfc || '').toUpperCase().trim();
-    const rawName = (expediente.receptorNombre || '').trim();
+    const rfc     = (expediente.receptorRfc || expediente.rfc || '').toUpperCase().trim();
+    const rawName = (expediente.receptorNombre || expediente.cliente || expediente.razonSocial || expediente.nombre || '').trim();
     const nombre  = cleanSatRazonSocial(rawName, rfc);
-    const cp      = (expediente.receptorCodigoPostal || CP_EXPEDICION).trim();
-    const regimen = (expediente.receptorRegimenFiscal || (rfc.length === 12 ? '601' : '616')).trim();
+    const cp      = (expediente.receptorCodigoPostal || expediente.codigoPostal || expediente.cp || CP_EXPEDICION).trim();
+    const regimen = (expediente.receptorRegimenFiscal || expediente.regimenFiscal || expediente.regimen || (rfc.length === 12 ? '601' : '616')).trim();
     
     // Reglas SAT para uso de CFDI según régimen
-    let usoCfdi = expediente.receptorUsoCfdi;
+    let usoCfdi = expediente.receptorUsoCfdi || expediente.usoCfdi;
     if (!usoCfdi) {
         usoCfdi = (regimen === '616' || rfc === 'XAXX010101000') ? 'S01' : USO_CFDI;
     }
@@ -130,7 +132,7 @@ function buildCFDIPayload(expediente) {
     if (!rfc)    throw new Error('El expediente no tiene RFC del receptor.');
     if (!nombre) throw new Error('El expediente no tiene Nombre/Razón Social del receptor.');
 
-    const concepto = expediente.cfdiConcepto || 'Derechos de Trámite Sanitario COEPRISS';
+    const concepto = expediente.cfdiConcepto || expediente.concepto || 'Derechos de Trámite Sanitario COEPRISS';
     const folio    = String(expediente.cfdiFolio || expediente.folio || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '');
 
     const payload = {
@@ -138,9 +140,9 @@ function buildCFDIPayload(expediente) {
         NameId:          1,              // Factura
         ExpeditionPlace: CP_EXPEDICION,
         Exportation:     '01',           // No aplica
-        PaymentForm:     expediente.cfdiFormaPago   || FORMA_PAGO,
-        PaymentMethod:   expediente.cfdiMetodoPago  || METODO_PAGO,
-        Currency:        expediente.cfdiMoneda      || MONEDA,
+        PaymentForm:     expediente.cfdiFormaPago  || expediente.formaPago   || FORMA_PAGO,
+        PaymentMethod:   expediente.cfdiMetodoPago || expediente.metodoPago  || METODO_PAGO,
+        Currency:        expediente.cfdiMoneda     || expediente.moneda      || MONEDA,
         Folio:           folio,
         Issuer: {
             Rfc:          EMISOR.Rfc,
