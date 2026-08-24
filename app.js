@@ -856,6 +856,7 @@ function createActiveExpedienteFromUploads() {
     state.expedientes.unshift(state.activeExpediente);
     renderProcesoTable();
     updateDashboardCounts();
+    saveDatabaseToStorage();
     document.getElementById('lbl-cliente-correo').textContent = 'Pendiente de lectura';
     document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
 }
@@ -909,6 +910,7 @@ async function startScanAnimation() {
         updatePreviewFields();
         renderTimeline();
         updatePaymentValidationUI();
+        saveDatabaseToStorage();
         showToast(`✅ Lectura terminada: ${readCount} de ${totalCount} archivo(s) procesado(s). Revisa o corrige los datos antes de continuar.`, 'info');
         goToStep(2);
     } catch (error) {

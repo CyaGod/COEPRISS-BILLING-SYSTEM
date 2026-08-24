@@ -291,18 +291,35 @@ app.patch('/api/expedientes/:folio/estatus', autenticarToken, async (req, res) =
 });
 
 function sanitizeExpediente(data) {
-    const allowed = [
-        'receptorRfc','receptorNombre','receptorEmail','receptorUsoCfdi',
-        'receptorRegimenFiscal','receptorCodigoPostal','receptorDomicilio',
-        'cfdiUuid','cfdiTotal','cfdiSubtotal','cfdiIva','cfdiConcepto',
-        'cfdiMetodoPago','cfdiFormaPago','cfdiMoneda','cfdiTipoCambio',
-        'cfdiSerie','cfdiFolio','cfdiVersion','cfdiCertificado','cfdiNoCertificado',
-        'pagoMonto','pagoFecha','pagoBanco','pagoReferencia','pagoCuenta','pagoTipo',
-        'transferenciaClabe','transferenciaMonto','transferenciaFecha',
-        'transferenciaBanco','transferenciaReferencia',
-        'estatus','observaciones','empresaId'
-    ];
-    return Object.fromEntries(Object.entries(data).filter(([k]) => allowed.includes(k)));
+    if (!data || typeof data !== 'object') return {};
+    const mapped = {
+        receptorRfc: data.receptorRfc || data.rfc || null,
+        receptorNombre: data.receptorNombre || data.cliente || null,
+        receptorEmail: data.receptorEmail || data.correo || null,
+        receptorUsoCfdi: data.receptorUsoCfdi || data.usoCfdi || 'G03',
+        receptorRegimenFiscal: data.receptorRegimenFiscal || data.regimenFiscal || null,
+        receptorCodigoPostal: data.receptorCodigoPostal || data.codigoPostal || null,
+        receptorDomicilio: data.receptorDomicilio || data.domicilio || null,
+        cfdiUuid: data.cfdiUuid || data.uuid || null,
+        cfdiTotal: (data.cfdiTotal !== undefined && data.cfdiTotal !== null) ? parseFloat(data.cfdiTotal) : ((data.importe !== undefined && data.importe !== null) ? parseFloat(data.importe) : null),
+        cfdiSubtotal: (data.cfdiSubtotal !== undefined && data.cfdiSubtotal !== null) ? parseFloat(data.cfdiSubtotal) : ((data.subtotal !== undefined && data.subtotal !== null) ? parseFloat(data.subtotal) : null),
+        cfdiConcepto: data.cfdiConcepto || data.concepto || null,
+        cfdiMetodoPago: data.cfdiMetodoPago || data.metodoPago || 'PUE',
+        cfdiFormaPago: data.cfdiFormaPago || data.formaPago || '03',
+        cfdiMoneda: data.cfdiMoneda || data.moneda || 'MXN',
+        pagoMonto: (data.pagoMonto !== undefined && data.pagoMonto !== null) ? parseFloat(data.pagoMonto) : ((data.importePago !== undefined && data.importePago !== null) ? parseFloat(data.importePago) : null),
+        pagoFecha: data.pagoFecha || data.fechaPago || null,
+        pagoBanco: data.pagoBanco || data.banco || null,
+        pagoReferencia: data.pagoReferencia || data.referencia || null,
+        pagoCuenta: data.pagoCuenta || data.cuentaBeneficiaria || null,
+        pagoTipo: data.pagoTipo || data.tipoPago || null,
+        transferenciaClabe: data.transferenciaClabe || data.cuentaBeneficiaria || null,
+        transferenciaBanco: data.transferenciaBanco || data.banco || null,
+        transferenciaReferencia: data.transferenciaReferencia || data.claveRastreo || null,
+        observaciones: data.observaciones || null,
+        estatus: (data.estatus === 'TIMBRADA' || data.estatus === 'TIMBRADO') ? 'TIMBRADO' : (data.estatus || 'PENDIENTE')
+    };
+    return Object.fromEntries(Object.entries(mapped).filter(([_, v]) => v !== null && v !== undefined));
 }
 
 // ─────────────────────────────────────────────
@@ -906,12 +923,39 @@ app.post('/api/usuarios', autenticarToken, requiereRol('Administrador'), async (
 
 app.get('/api/db', autenticarToken, async (req, res) => {
     try {
-        const [expedientes, facturas, historialCorreos, bitacoraSeguridad] = await Promise.all([
+        const [rawExpedientes, rawFacturas, historialCorreos, bitacoraSeguridad] = await Promise.all([
             prisma.expediente.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
             prisma.factura.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
             prisma.historialCorreo.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
             prisma.bitacoraSeguridad.findMany({ orderBy: { createdAt: 'desc' }, take: 200 })
         ]);
+
+        const expedientes = rawExpedientes.map(e => ({
+            ...e,
+            rfc: e.receptorRfc || '',
+            cliente: e.receptorNombre || '',
+            correo: e.receptorEmail || '',
+            codigoPostal: e.receptorCodigoPostal || '',
+            regimenFiscal: e.receptorRegimenFiscal || '',
+            usoCfdi: e.receptorUsoCfdi || 'G03',
+            importe: e.cfdiTotal ? parseFloat(e.cfdiTotal) : 0,
+            concepto: e.cfdiConcepto || '',
+            formaPago: e.cfdiFormaPago || '03',
+            metodoPago: e.cfdiMetodoPago || 'PUE',
+            banco: e.pagoBanco || e.transferenciaBanco || '',
+            claveRastreo: e.transferenciaReferencia || '',
+            referencia: e.pagoReferencia || '',
+            cuentaBeneficiaria: e.pagoCuenta || e.transferenciaClabe || '',
+            fechaPago: e.pagoFecha || '',
+            fechaRecibo: e.createdAt ? new Date(e.createdAt).toLocaleDateString('es-MX') : ''
+        }));
+
+        const facturas = rawFacturas.map(f => ({
+            ...f,
+            folioInterno: f.folio,
+            importe: f.xmlContent ? undefined : 0
+        }));
+
         res.json({ success: true, data: { expedientes, facturas, historialCorreos, bitacoraSeguridad } });
     } catch (err) {
         res.status(500).json({ error: err.message });
