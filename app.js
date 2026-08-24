@@ -980,12 +980,24 @@ async function extractUploadedDocuments() {
             fileText += `\n${await recognizeImageWithFallback(uploaded.file, uploaded)}`;
             filePageCount += 1;
         } else {
-            const pdf = await window.pdfjsLib.getDocument({ data: await uploaded.file.arrayBuffer() }).promise;
+            const arrayBuffer = await uploaded.file.arrayBuffer();
+            const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
             const pageLimit = Math.min(pdf.numPages, 3);
             for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
                 const page = await pdf.getPage(pageNumber);
                 const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str || '').join(' ').trim();
+                let pageText = '';
+                let lastY;
+                for (const item of (textContent.items || [])) {
+                    if (lastY !== undefined && item.transform && Math.abs(item.transform[5] - lastY) > 5) {
+                        pageText += '\n';
+                    } else if (pageText.length > 0 && !pageText.endsWith(' ') && !pageText.endsWith('\n')) {
+                        pageText += ' ';
+                    }
+                    pageText += item.str || '';
+                    if (item.transform) lastY = item.transform[5];
+                }
+                pageText = pageText.trim();
                 if (pageText.replace(/\s/g, '').length >= 30) {
                     fileText += `\n${pageText}`;
                 } else {
@@ -2223,8 +2235,20 @@ function applyExtractedFields(fields) {
     if (fields.razonSocial) dossier.cliente = fields.razonSocial;
     if (fields.correo) dossier.correo = fields.correo;
     if (fields.banco) dossier.banco = fields.banco;
-    if (Number.isFinite(fields.importe)) dossier.importe = fields.importe;
-    if (Number.isFinite(fields.importePago)) dossier.importePago = fields.importePago;
+    if (Number.isFinite(fields.importe)) {
+        dossier.importe = fields.importe;
+        dossier.total = fields.importe;
+        dossier.cfdiTotal = fields.importe;
+        if (!Number.isFinite(dossier.importePago)) dossier.importePago = fields.importe;
+    }
+    if (Number.isFinite(fields.importePago)) {
+        dossier.importePago = fields.importePago;
+        if (!Number.isFinite(dossier.importe)) {
+            dossier.importe = fields.importePago;
+            dossier.total = fields.importePago;
+            dossier.cfdiTotal = fields.importePago;
+        }
+    }
     if (fields.referencia) dossier.referencia = fields.referencia;
     if (fields.concepto) dossier.concepto = fields.concepto;
     if (fields.fechaPago) dossier.fechaPago = fields.fechaPago;
@@ -2261,32 +2285,9 @@ function applyExtractedFields(fields) {
     if (fields.noSerieCertificadoSat) dossier.noSerieCertificadoSat = fields.noSerieCertificadoSat;
 }
 
-// Load presets of test invoices
 function loadPresetDossier(presetIndex) {
     showToast('Los expedientes de demostración están deshabilitados. Carga un documento real.', 'warning');
     return;
-
-    const defaultData = state.expedientes[presetIndex];
-    if (!defaultData) return;
-    
-    // Deep clone the preset data to allow mutations
-    state.activeExpediente = JSON.parse(JSON.stringify(defaultData));
-    state.uploadedFiles = [];
-    
-    // Set view headers
-    document.getElementById('lbl-cliente-correo').textContent = state.activeExpediente.correo;
-    document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
-    
-    // A preset is only sample data. Do not allow a fake scan until a real file
-    // is selected, otherwise the UI can look successful without OCR running.
-    const btnScan = document.getElementById('btn-scan');
-    if (btnScan) btnScan.disabled = state.uploadedFiles.length === 0;
-
-    // Render files
-    renderDocumentList();
-    renderTimeline();
-
-    showToast(`Preset "${state.activeExpediente.cliente}" cargado. Listo para escanear.`, 'success');
 }
 
 function renderDocumentList() {
@@ -2346,17 +2347,16 @@ function updateOcrResultAlert(fields) {
     alert.classList.toggle('ocr-needs-review', needsReview);
     if (needsReview) {
         if (title) title.textContent = fields?.qualityRejected
-            ? 'Resolucion insuficiente: datos dudosos descartados'
-            : 'Lectura incompleta: documento no confirmado';
+            ? 'Lectura rechazada: calidad insuficiente'
+            : 'Lectura completada: precarga editable disponible';
         if (description) {
-            const qualityText = quality?.label || 'calidad no determinada';
             description.textContent = fields?.qualityRejected
-                ? `${qualityText}. No se encontro un UUID/RFC o una clave bancaria verificable. Toma otra foto mas cerca.`
-                : `${qualityText}. Revisa los campos en rojo; el OCR no sustituye la confirmacion fiscal o bancaria.`;
+                ? 'El encuadre o contraste fue insuficiente para extraer los datos fiscales con certeza. Sube una foto nitida y plana.'
+                : `${quality?.label || 'Documento procesado'}. Revisa los campos antes de timbrar.`;
         }
     } else {
-        if (title) title.textContent = 'Datos detectados con buena legibilidad';
-        if (description) description.textContent = 'Compara los valores con la hoja encuadrada antes de continuar.';
+        if (title) title.textContent = 'Extracción exitosa';
+        if (description) description.textContent = 'Todos los campos clave fueron leídos con alta certeza.';
     }
 
     let previewButton = document.getElementById('btn-view-scan');
@@ -2418,75 +2418,86 @@ function openScanPreview(docName = '') {
 
 function updatePreviewFields() {
     if (!state.activeExpediente) return;
-    const clienteCorreo = document.getElementById('lbl-cliente-correo');
-    if (clienteCorreo) {
-        clienteCorreo.textContent = state.activeExpediente.correo || state.activeExpediente.cliente || 'Pendiente de lectura';
-    }
-    const clienteFecha = document.getElementById('lbl-cliente-fecha');
-    if (clienteFecha) {
-        clienteFecha.textContent = state.activeExpediente.fechaRecibo || getCurrentDateTimeString();
-    }
+    const d = state.activeExpediente;
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val || '—';
+    };
+    setText('preview-rfc', d.rfc);
+    setText('preview-razon', d.cliente);
+    setText('preview-cp', d.codigoPostal);
+    setText('preview-regimen', d.regimenFiscal);
+    setText('preview-uso', d.usoCfdi);
+    setText('preview-concepto', d.concepto);
+    setText('preview-total', d.importe ? `$${Number(d.importe).toFixed(2)} MXN` : '—');
+    setText('preview-forma-pago', d.formaPago);
+    setText('preview-metodo-pago', d.metodoPago);
 }
 
 function updateStep2Fields() {
     if (!state.activeExpediente) return;
     const pending = 'Pendiente de lectura';
-    document.getElementById('val-rfc').textContent = state.activeExpediente.rfc;
-    document.getElementById('val-razon').textContent = state.activeExpediente.cliente;
-    document.getElementById('val-regimen').textContent = state.activeExpediente.regimenFiscal;
-    document.getElementById('val-cp').textContent = state.activeExpediente.codigoPostal;
-    document.getElementById('val-cfdi').textContent = state.activeExpediente.usoCfdi;
-    document.getElementById('val-correo').textContent = state.activeExpediente.correo;
+    const d = state.activeExpediente;
 
-    const setDetected = (id, value) => {
+    const setTextWithMissing = (id, val) => {
         const element = document.getElementById(id);
         if (element) {
-            element.textContent = value || 'No detectado';
-            element.classList.toggle('ocr-field-missing', !value);
+            element.textContent = val || 'No detectado';
+            element.classList.toggle('ocr-field-missing', !val);
         }
     };
+
+    setTextWithMissing('val-rfc', d.rfc);
+    setTextWithMissing('val-razon', d.cliente);
+    setTextWithMissing('val-regimen', d.regimenFiscal);
+    setTextWithMissing('val-cp', d.codigoPostal);
+    setTextWithMissing('val-cfdi', d.usoCfdi);
+    setTextWithMissing('val-correo', d.correo);
+
     const formatDetectedAmount = value => value !== null && value !== '' && Number.isFinite(Number(value))
         ? `$${Number(value).toFixed(2)} MXN`
         : 'No detectado';
-    setDetected('val-rfc-emisor', state.activeExpediente.rfcEmisor);
-    setDetected('val-nombre-emisor', state.activeExpediente.nombreEmisor);
-    setDetected('val-regimen-emisor', state.activeExpediente.regimenFiscalEmisor);
-    setDetected('val-tipo-cfdi', state.activeExpediente.tipoCfdi ? state.activeExpediente.tipoCfdi.toUpperCase() : '');
-    setDetected('val-fecha-emision', state.activeExpediente.fechaEmision);
-    setDetected('val-uuid', state.activeExpediente.uuid);
-    setDetected('val-metodo-pago', state.activeExpediente.metodoPago);
-    setDetected('val-moneda', state.activeExpediente.moneda);
-    setDetected('val-subtotal', formatDetectedAmount(state.activeExpediente.subtotal));
-    setDetected('val-clave-prodserv', state.activeExpediente.claveProdServ);
-    setDetected('val-cantidad-unidad', [state.activeExpediente.cantidad, state.activeExpediente.claveUnidad, state.activeExpediente.unidad].filter(Boolean).join(' / '));
-    const lineValues = [
-        state.activeExpediente.valorUnitario !== null && state.activeExpediente.valorUnitario !== '' && Number.isFinite(Number(state.activeExpediente.valorUnitario)) ? `$${Number(state.activeExpediente.valorUnitario).toFixed(2)}` : '',
-        state.activeExpediente.importeLinea !== null && state.activeExpediente.importeLinea !== '' && Number.isFinite(Number(state.activeExpediente.importeLinea)) ? `$${Number(state.activeExpediente.importeLinea).toFixed(2)}` : ''
-    ].filter(Boolean);
-    setDetected('val-valores-linea', lineValues.length ? lineValues.join(' / ') + ' MXN' : '');
-    setDetected('val-objeto-impuesto', state.activeExpediente.objetoImpuesto);
-    const certificateValues = [state.activeExpediente.noSerieCsd, state.activeExpediente.rfcProveedorCertificacion, state.activeExpediente.noSerieCertificadoSat].filter(Boolean);
-    setDetected('val-certificados', certificateValues.length ? certificateValues.join(' / ') : '');
 
-    // These values come from OCR only. The word "PAGADO" in a document is
-    // not bank confirmation, so the validation status remains pending.
-    document.getElementById('val-cis-folio').textContent = state.activeExpediente.folioRecibo || pending;
-    document.getElementById('val-cis-fecha').textContent = state.activeExpediente.fechaPago || pending;
-    document.getElementById('val-cis-concepto').textContent = state.activeExpediente.concepto || pending;
-    const paymentAmount = Number(state.activeExpediente.importePago);
+    setTextWithMissing('val-rfc-emisor', d.rfcEmisor);
+    setTextWithMissing('val-nombre-emisor', d.nombreEmisor);
+    setTextWithMissing('val-regimen-emisor', d.regimenFiscalEmisor);
+    setTextWithMissing('val-tipo-cfdi', d.tipoCfdi ? d.tipoCfdi.toUpperCase() : '');
+    setTextWithMissing('val-fecha-emision', d.fechaEmision);
+    setTextWithMissing('val-uuid', d.uuid);
+    setTextWithMissing('val-metodo-pago', d.metodoPago);
+    setTextWithMissing('val-moneda', d.moneda);
+    setTextWithMissing('val-subtotal', formatDetectedAmount(d.subtotal));
+    setTextWithMissing('val-clave-prodserv', d.claveProdServ);
+    setTextWithMissing('val-cantidad-unidad', [d.cantidad, d.claveUnidad, d.unidad].filter(Boolean).join(' / '));
+    
+    const lineValues = [
+        d.valorUnitario !== null && d.valorUnitario !== '' && Number.isFinite(Number(d.valorUnitario)) ? `$${Number(d.valorUnitario).toFixed(2)}` : '',
+        d.importeLinea !== null && d.importeLinea !== '' && Number.isFinite(Number(d.importeLinea)) ? `$${Number(d.importeLinea).toFixed(2)}` : ''
+    ].filter(Boolean);
+    setTextWithMissing('val-valores-linea', lineValues.length ? lineValues.join(' / ') + ' MXN' : '');
+    setTextWithMissing('val-objeto-impuesto', d.objetoImpuesto);
+    
+    const certificateValues = [d.noSerieCsd, d.rfcProveedorCertificacion, d.noSerieCertificadoSat].filter(Boolean);
+    setTextWithMissing('val-certificados', certificateValues.length ? certificateValues.join(' / ') : '');
+
+    document.getElementById('val-cis-folio').textContent = d.folioRecibo || pending;
+    document.getElementById('val-cis-fecha').textContent = d.fechaPago || pending;
+    document.getElementById('val-cis-concepto').textContent = d.concepto || pending;
+    
+    const paymentAmount = Number(d.importePago || d.importe || d.total || 0);
     document.getElementById('val-cis-importe').textContent = Number.isFinite(paymentAmount) && paymentAmount > 0
         ? `$${paymentAmount.toFixed(2)} MXN`
         : pending;
 
-    document.getElementById('val-banco').textContent = state.activeExpediente.banco || pending;
-    document.getElementById('val-banco-fecha').textContent = state.activeExpediente.fechaPago || pending;
+    document.getElementById('val-banco').textContent = d.banco || pending;
+    document.getElementById('val-banco-fecha').textContent = d.fechaPago || pending;
     document.getElementById('val-banco-importe').textContent = Number.isFinite(paymentAmount) && paymentAmount > 0
         ? `$${paymentAmount.toFixed(2)} MXN`
         : pending;
-    document.getElementById('val-banco-ref').textContent = state.activeExpediente.referencia || pending;
-    document.getElementById('val-banco-clave').textContent = state.activeExpediente.claveRastreo || pending;
-    document.getElementById('val-banco-cuenta').textContent = state.activeExpediente.cuentaBeneficiaria || pending;
-    document.getElementById('val-banco-forma').textContent = state.activeExpediente.formaPago || pending;
+    document.getElementById('val-banco-ref').textContent = d.referencia || pending;
+    document.getElementById('val-banco-clave').textContent = d.claveRastreo || pending;
+    document.getElementById('val-banco-cuenta').textContent = d.cuentaBeneficiaria || pending;
+    document.getElementById('val-banco-forma').textContent = d.formaPago || pending;
 }
 
 function formatBanxicoDate(value) {

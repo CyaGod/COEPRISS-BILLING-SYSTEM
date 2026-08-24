@@ -22,6 +22,7 @@
             .replace(/[|]+/g, '')
             .replace(/\s+/g, ' ')
             .trim()
+            .replace(/^[.:\-,\s]+/, '')
             .replace(/[.,;:]$/, '');
     }
 
@@ -99,7 +100,7 @@
     function normalizeSatFormaPago(val) {
         if (!val) return '';
         const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
-        if (/\b03\b|TRANSFERENCIA|SPEI|ELECTRONICA/.test(clean)) return '03';
+        if (/\b03\b|TRANSFERENCIA|SPEI|ELECTRONICA|INTERBANCARIO/.test(clean)) return '03';
         if (/\b01\b|EFECTIVO/.test(clean)) return '01';
         if (/\b02\b|CHEQUE/.test(clean)) return '02';
         if (/\b04\b|TARJETA DE CREDITO|CREDITO/.test(clean)) return '04';
@@ -131,14 +132,14 @@
         }
 
         // 2. Bank Payment / SPEI Transfer Confirmation
-        if ((p.includes('TRANSFERENCIA') || p.includes('SPEI') || p.includes('COMPROBANTE DE OPERACION') || p.includes('COMPROBANTE DE TRANSFERENCIA')) &&
-            (p.includes('CLAVE DE RASTREO') || p.includes('CUENTA BENEFICIARIA') || p.includes('INSTITUCION EMISORA') || p.includes('INSTITUCION RECEPTORA') || p.includes('HORA DE CAPTURA'))) {
+        if ((p.includes('TRANSFERENCIA') || p.includes('SPEI') || p.includes('COMPROBANTE DE OPERACION') || p.includes('PAGO INTERBANCARIO') || p.includes('BBVA NET CASH')) &&
+            (p.includes('CLAVE DE RASTREO') || p.includes('CUENTA DE RETIRO') || p.includes('CUENTA DE DEPOSITO') || p.includes('INSTITUCION EMISORA') || p.includes('HORA DE CAPTURA'))) {
             return 'COMPROBANTE_BANCARIO';
         }
 
         // 3. Coepriss CIS Payment Receipt
         if ((p.includes('COEPRISS') || p.includes('RIESGOS SANITARIOS') || p.includes('SECRETARIA DE SALUD')) &&
-            (p.includes('RECIBO DE PAGO') || p.includes('DERECHOS Y SERVICIOS') || p.includes('LINEA DE CAPTURA') || p.includes('CUOTA UNITARIA'))) {
+            (p.includes('RECIBO DE PAGO') || p.includes('TRAMITES Y SERVICIOS') || p.includes('DERECHOS Y SERVICIOS') || p.includes('ORDEN DE PAGO') || p.includes('LINEA DE CAPTURA') || p.includes('CUOTA UNITARIA'))) {
             return 'RECIBO_CIS';
         }
 
@@ -146,7 +147,7 @@
         if (p.includes('CEDULA DE IDENTIFICACION FISCAL') || 
             p.includes('CONSTANCIA DE SITUACION FISCAL') || 
             p.includes('REGISTRO FEDERAL DE CONTRIBUYENTES') || 
-            (p.includes('DOMICILIO FISCAL') && p.includes('REGIMENES:'))) {
+            (p.includes('DOMICILIO') && p.includes('REGIMENES:'))) {
             return 'CONSTANCIA_SAT';
         }
 
@@ -176,9 +177,9 @@
         const munMatch = plain.match(/\b(LOS\s+MOCHIS|CULIACAN|MAZATLAN|GUASAVE|GUAMUCHIL|NAVOLATO|ESCUINAPA|EL\s+FUERTE|CHOIX)\b/i);
         if (munMatch) result.municipio = cleanOcrValue(munMatch[1]);
 
-        // 2. Folio CIS (ej. 074673 o AB-074673 o LN-14-00084 o N° Folio: ...)
-        const folioMatch = normalized.match(/(?:N[°O]\.?\s*(?:FOLIO|DE\s+PAGO|RECIBO)|FOLIO\s*(?:DE\s+PAGO)?|RECIBO\s*N[°O]\.?)[\s:#-]*([A-Z0-9][A-Z0-9-]{3,18})\b/i)
-            || plain.match(/(?:AB|LN|CIS)[-\s]?\d{4,8}\b/i);
+        // 2. Folio CIS u Orden de Pago (ej. LMO-00084, 074673, AB-074673)
+        const folioMatch = normalized.match(/(?:N[°O]\.?\s*(?:ORDEN\s+DE\s+PAGO|FOLIO(?:\s+DE\s+PAGO)?|RECIBO)|ORDEN\s+DE\s+PAGO|FOLIO\s*(?:DE\s+PAGO)?|RECIBO\s*N[°O]\.?)[\s:#-]*([A-Z0-9][A-Z0-9-]{3,18})\b/i)
+            || plain.match(/(?:LMO|AB|LN|CIS)[-\s]?\d{4,8}\b/i);
         if (folioMatch) {
             const rawFolio = folioMatch[1] || folioMatch[0];
             if (!/INTERBANCARIO|FECHA|HORA|PAGO/i.test(rawFolio)) {
@@ -196,7 +197,7 @@
         }
 
         // 4. Nombre o Razón Social
-        const razonMatch = normalized.match(/(?:NOMBRE\s+O\s+RAZ[O0Ó]N\s+SOCIAL|CONTRIBUYENTE|SOLICITANTE)[\s:#-]*([^\n\r]{3,120}?)(?=\s*(?:DOMICILIO|CONCEPTO|CLAVE|RFC|N[°O]|TELEFONO|FECHA|$))/i);
+        const razonMatch = normalized.match(/(?:NOMBRE\s+O\s+RAZ[O0Ó]N\s+SOCIAL|CONTRIBUYENTE|SOLICITANTE)[\s:#-]*([^\n\r]{3,120}?)(?=\s*(?:S[IÍ]RVASE|DOMICILIO|CONCEPTO|TRAMITE|CLAVE|RFC|N[°O]|TELEFONO|FECHA|$))/i);
         if (razonMatch) {
             const cleanedRazon = cleanOcrValue(razonMatch[1]).replace(/^[:\-\s]+/, '');
             if (cleanedRazon.length >= 3 && !/^(RFC|CONCEPTO|DOMICILIO)/i.test(cleanedRazon)) {
@@ -204,15 +205,15 @@
             }
         }
 
-        // 5. Concepto o Servicio
-        const conceptoMatch = normalized.match(/(?:POR\s+CONCEPTO\s+A\s+PAGAR|POR\s+CONCEPTO\s+DE|CONCEPTO|SERVICIO)[\s:#-]*([^\n\r]{6,240}?)(?=\s*(?:[•\*\-]|\bCUOTA\b|\bIMPORTE\b|\bTOTAL\b|\bCANTIDAD\b|\bVALOR\b|\bSELLO\b|\bFIRMA\b|\bLA\s+PRESENTE\b|$))/i)
-            || normalized.match(/(\d+\.\d+\s*-\s*[^\n\r]{8,200}?)(?=\s*(?:[•\*\-]|\bCUOTA\b|\bIMPORTE\b|\bTOTAL\b|\$|\bSELLO\b|$))/i);
+        // 5. Concepto o Trámite
+        const conceptoMatch = normalized.match(/(?:TR[AÁ]MITE\(S\)\s+A\s+PAGAR|POR\s+CONCEPTO\s+A\s+PAGAR|POR\s+CONCEPTO\s+DE|CONCEPTO|SERVICIO)[\s:#-]*([^\n\r]{6,240}?)(?=\s*(?:[•\*\-]|\bN[°O]\s+TR[AÁ]MITES\b|\bCUOTA\b|\bIMPORTE\b|\bTOTAL\b|\bMONTO\s+A\s+PAGAR\b|\bCANTIDAD\b|\bVALOR\b|\bSELLO\b|\bFIRMA\b|\bLA\s+PRESENTE\b|$))/i)
+            || normalized.match(/(\d+[-.]\d+[-.]\s*[^\n\r]{8,200}?)(?=\s*(?:[•\*\-]|\bN[°O]\s+TR[AÁ]MITES\b|\bCUOTA\b|\bIMPORTE\b|\bTOTAL\b|\$|\bSELLO\b|$))/i);
         if (conceptoMatch) {
             result.concepto = cleanOcrValue(conceptoMatch[1] || conceptoMatch[0]);
         }
 
         // 6. Importe ($1,408.00)
-        const importeMatch = normalized.match(/(?:IMPORTE(?:\s+TOTAL)?|TOTAL(?:\s+M\.N\.)?|PRECIO\s+A\s+PAGAR|CUOTA)[\s:#-]*\$?\s*([\d,]+\.\d{2})\b/i)
+        const importeMatch = normalized.match(/(?:MONTO\s+A\s+PAGAR|IMPORTE(?:\s+TOTAL)?|TOTAL(?:\s+M\.N\.)?|PRECIO\s+A\s+PAGAR|CUOTA)[\s:#-]*\$?\s*([\d,]+\.\d{2})\b/i)
             || normalized.match(/\$\s*([\d,]+\.\d{2})\b/);
         if (importeMatch) {
             const val = parseFloat(importeMatch[1].replace(/,/g, ''));
@@ -280,21 +281,36 @@
         const bankStopLabels = 'INSTITUCION|BANCO|CODIGO|CLAVE|CUENTA|CLABE|MONTO|IMPORTE|REFERENCIA|FECHA|TOTAL|FOLIO|HORA';
 
         // 1. Razón Social y Nombre
-        const receiverNameRaw = extractOcrLabelValue(plain, '(?:NOMBRE\\s*,?\\s*DENOMINACION\\s+O\\s+RAZON\\s+SOCIAL|DENOMINACION\\s*/?\\s*RAZON\\s+SOCIAL|DENOMINACION\\s+O\\s+RAZON\\s+SOCIAL|RAZON\\s+SOCIAL|NOMBRE\\s+(?:DEL?\\s+)?(?:RECEPTOR|BENEFICIARIO|DESTINO|CLIENTE|CONTRIBUYENTE)|CONTRIBUYENTE|CLIENTE)', stopLabels, 140);
-        const receiverName = cleanOcrValue(receiverNameRaw.replace(/\s+REGIM(?:E|EN|EN\s+FISCAL)?[\s\S]*$/i, ''));
-        const legalName = extractOcrLabelValue(plain, '(?:DENOMINACION|RAZON)\\s+SOCIAL', stopLabels, 120);
+        // SAT Constancia: Denominación/Razón Social: EDUCACION INTEGRAL AS
+        let razonSocial = '';
+        const satDenomMatch = plain.match(/(?:DENOMINACI[OÓ0]N\s*\/?\s*RAZ[OÓ0]N\s+SOCIAL|DENOMINACI[OÓ0]N\s+O\s+RAZ[OÓ0]N\s+SOCIAL)[\s:#-]*([^\n\r]{3,120}?)(?=\s*(?:R[EÉ]GIMEN\s+CAPITAL|NOMBRE\s+COMERCIAL|FECHA|$))/i);
+        const satRegimenCapitalMatch = plain.match(/R[EÉ]GIMEN\s+CAPITAL[\s:#-]*([^\n\r]{3,60}?)(?=\s*(?:NOMBRE\s+COMERCIAL|FECHA|$))/i);
+
+        if (satDenomMatch) {
+            const baseName = cleanOcrValue(satDenomMatch[1]);
+            const capital = satRegimenCapitalMatch ? cleanOcrValue(satRegimenCapitalMatch[1]) : '';
+            if (capital && !baseName.toUpperCase().includes(capital.toUpperCase())) {
+                razonSocial = `${baseName} ${capital}`.trim();
+            } else {
+                razonSocial = baseName;
+            }
+        }
+
+        if (!razonSocial) {
+            const receiverNameRaw = extractOcrLabelValue(plain, '(?:NOMBRE\\s*,?\\s*DENOMINACION\\s+O\\s+RAZON\\s+SOCIAL|RAZON\\s+SOCIAL|NOMBRE\\s+(?:DEL?\\s+)?(?:RECEPTOR|BENEFICIARIO|DESTINO|CLIENTE|CONTRIBUYENTE)|CONTRIBUYENTE|CLIENTE)', stopLabels, 140);
+            razonSocial = cleanOcrValue(receiverNameRaw.replace(/\s+REGIM(?:E|EN|EN\s+FISCAL)?[\s\S]*$/i, ''));
+        }
 
         // SAT Constancia Personas Físicas
         const satPrimerApellido = extractOcrLabelValue(plain, 'PRIMER\\s+APELLIDO', 'SEGUNDO\\s+APELLIDO|NOMBRE|RFC|CURP', 50);
         const satSegundoApellido = extractOcrLabelValue(plain, 'SEGUNDO\\s+APELLIDO', 'NOMBRE\\(S\\)|NOMBRE|RFC|CURP', 50);
         const satNombres = extractOcrLabelValue(plain, 'NOMBRE\\(S\\)|NOMBRES?', 'PRIMER\\s+APELLIDO|SEGUNDO\\s+APELLIDO|RFC|CURP|FECHA', 70);
-        const personaFisicaName = [satNombres, satPrimerApellido, satSegundoApellido].filter(Boolean).join(' ');
-
-        const razonSocial = personaFisicaName || receiverName || legalName;
+        if (satNombres && satPrimerApellido) {
+            razonSocial = [satNombres, satPrimerApellido, satSegundoApellido].filter(Boolean).join(' ');
+        }
 
         // 2. Correo Electrónico (Con filtro estricto anti-SAT/Gobierno)
         let correoExtraido = '';
-        // Prioridad 1: Correo explícitamente etiquetado
         const labeledEmailMatch = normalized.match(/(?:CORREO(?:\s+ELECTR[OÓ0]NICO)?(?:\s+REGISTRADO)?|E-?MAIL)[\s:#-]*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/i);
         if (labeledEmailMatch) {
             const em = labeledEmailMatch[1].toLowerCase();
@@ -302,7 +318,6 @@
                 correoExtraido = em;
             }
         }
-        // Prioridad 2: Cualquier correo no institucional en el texto
         if (!correoExtraido) {
             const allEmails = [...normalized.matchAll(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g)].map(m => m[1].toLowerCase());
             const clientEmail = allEmails.find(em => !/@sat\.gob\.mx|@shcp\.gob\.mx|@gob\.mx|denuncias@|quejas@|atencionalcontribuyente@/i.test(em));
@@ -315,17 +330,15 @@
 
         // 4. Régimen Fiscal (Ignorando explícitamente "Régimen Capital")
         let regimenFiscal = '';
-        const regFiscalMatch = plain.match(/(?:REGIMEN(?:ES)?\s+FISCAL(?:ES)?|REGIMEN\s+FISCAL\s+RECEPTOR|REGIMEN\s+RECEPTOR)[^A-Z0-9]{0,30}([^\n\r]{3,80}?)(?=\s*(?:USO\s+CFDI|CODIGO|FOLIO|EXPORTACION|$))/i);
-        if (regFiscalMatch) {
-            const rawReg = regFiscalMatch[1];
-            if (!/CAPITAL/i.test(rawReg)) {
-                regimenFiscal = normalizeSatRegimen(rawReg) || cleanOcrValue(rawReg);
-            }
+        const satRegimenTableMatch = plain.match(/REGIMENES\s*:\s*(?:REGIMEN\s+FECHA\s+INICIO\s+FECHA\s+FIN\s*)?([^\n\r0-9]{3,80})/i);
+        if (satRegimenTableMatch && !/CAPITAL/i.test(satRegimenTableMatch[1])) {
+            regimenFiscal = normalizeSatRegimen(satRegimenTableMatch[1]) || cleanOcrValue(satRegimenTableMatch[1]);
         }
+
         if (!regimenFiscal) {
-            const regSectionMatch = plain.match(/REGIMENES\s*:\s*([^\n\r]{4,100})/i);
-            if (regSectionMatch && !/CAPITAL/i.test(regSectionMatch[1])) {
-                regimenFiscal = normalizeSatRegimen(regSectionMatch[1]) || cleanOcrValue(regSectionMatch[1]);
+            const regFiscalMatch = plain.match(/(?:REGIMEN(?:ES)?\s+FISCAL(?:ES)?|REGIMEN\s+FISCAL\s+RECEPTOR|REGIMEN\s+RECEPTOR)[^A-Z0-9]{0,30}([^\n\r]{3,80}?)(?=\s*(?:USO\s+CFDI|CODIGO|FOLIO|EXPORTACION|$))/i);
+            if (regFiscalMatch && !/CAPITAL/i.test(regFiscalMatch[1])) {
+                regimenFiscal = normalizeSatRegimen(regFiscalMatch[1]) || cleanOcrValue(regFiscalMatch[1]);
             }
         }
 
@@ -342,10 +355,10 @@
         const bankNames = [
             'BBVA', 'SANTANDER', 'BANAMEX', 'CITIBANAMEX', 'HSBC', 'BANORTE', 'SCOTIABANK',
             'BANCO DEL BIENESTAR', 'AZTECA', 'BANCOPPEL', 'STP', 'MERCADOPAGO', 'MERCADO PAGO',
-            'NUBANK', 'NU MEXICO', 'NU', 'BANREGIO', 'INBURSA', 'AFIRME', 'COMPARTAMOS',
+            'NUBANK', 'NU MEXICO', 'BANREGIO', 'INBURSA', 'AFIRME', 'COMPARTAMOS',
             'BANJERCITO', 'CI BANCO', 'PAYPAL', 'BANCA MIFEL', 'MIFEL', 'BANSI', 'MULTIVA',
-            'ACTINVER', 'HEY BANCO', 'HEY', 'ALBO', 'KLAR', 'STORI', 'CUENCA', 'RAPPIBANK',
-            'RAPPI', 'SPIN BY OXXO', 'SPIN', 'CONEKTA', 'STRIPE', 'CLIP', 'BROXEL'
+            'ACTINVER', 'HEY BANCO', 'ALBO', 'KLAR', 'STORI', 'CUENCA', 'RAPPIBANK',
+            'SPIN BY OXXO', 'SPIN', 'CONEKTA', 'STRIPE', 'CLIP', 'BROXEL'
         ];
         const bank = bankNames.find(name => plain.includes(name)) || '';
 
@@ -353,7 +366,7 @@
         const trackingMatch = normalized.match(/(?:CLAVE\s+DE\s+RASTREO|RASTREO)[\s:#-]*([A-Z0-9]{10,35})\b/i);
         const claveRastreo = trackingMatch ? cleanOcrValue(trackingMatch[1]) : '';
 
-        // Referencia bancaria (Con exclusión estricta de palabras de cabecera)
+        // Referencia bancaria
         let referencia = '';
         const refMatch = normalized.match(/(?:NUMERO\s+DE\s+REFERENCIA|NO\.?\s+REFERENCIA|REFERENCIA|REF\.?)[\s:#-]*([A-Z0-9]{3,25})\b/i);
         if (refMatch) {
@@ -364,7 +377,7 @@
         }
 
         // Cuenta o CLABE
-        const accountMatch = normalized.match(/(?:CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,18})\b/i);
+        const accountMatch = normalized.match(/(?:CUENTA\s+DE\s+DEP[OÓ0]SITO|CUENTA\s+BENEFICIARIA|CLABE|CUENTA\s+DESTINO)[\s:#-]*(\d{10,18})\b/i);
         const cuentaBeneficiaria = accountMatch ? accountMatch[1] : '';
 
         // 8. Importes
