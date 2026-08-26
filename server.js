@@ -946,66 +946,197 @@ app.get('/api/reportes/dashboard', autenticarToken, async (req, res) => {
 
 app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
     try {
-        const { estatus, desde, hasta, busqueda } = req.query;
+        const { estatus, desde, hasta, busqueda, anio, mes } = req.query;
         const where = {};
+
+        // Filtro por Estatus
         if (estatus && estatus.trim() && estatus.toUpperCase() !== 'TODOS') {
-            where.estatus = estatus.toUpperCase().trim();
+            const estatusNorm = estatus.toUpperCase().trim();
+            if (estatusNorm === 'TIMBRADA' || estatusNorm === 'TIMBRADO') {
+                where.OR = [
+                    { estatus: 'TIMBRADO' },
+                    { cfdiUuid: { not: null } },
+                    { facturas: { some: { estatus: 'TIMBRADA' } } }
+                ];
+            } else if (estatusNorm === 'PENDIENTE') {
+                where.estatus = 'PENDIENTE';
+            } else if (estatusNorm === 'CANCELADA' || estatusNorm === 'CANCELADO') {
+                where.estatus = 'CANCELADO';
+            } else if (estatusNorm === 'ERROR') {
+                where.estatus = 'ERROR';
+            } else {
+                where.estatus = estatusNorm;
+            }
         }
-        if (desde || hasta) {
-            where.createdAt = {};
+
+        // Filtro por Año y Mes / Rango de fechas
+        let fechaInicio = null;
+        let fechaFin = null;
+
+        if (anio && anio !== 'TODOS') {
+            const y = parseInt(anio, 10);
+            if (mes && mes !== 'TODOS') {
+                const m = parseInt(mes, 10); // 1 - 12
+                fechaInicio = new Date(y, m - 1, 1, 0, 0, 0, 0);
+                fechaFin = new Date(y, m, 0, 23, 59, 59, 999);
+            } else {
+                fechaInicio = new Date(y, 0, 1, 0, 0, 0, 0);
+                fechaFin = new Date(y, 11, 31, 23, 59, 59, 999);
+            }
+        } else if (desde || hasta) {
             if (desde) {
-                const d = new Date(desde);
-                d.setHours(0, 0, 0, 0);
-                where.createdAt.gte = d;
+                fechaInicio = new Date(desde);
+                fechaInicio.setHours(0, 0, 0, 0);
             }
             if (hasta) {
-                const h = new Date(hasta);
-                h.setHours(23, 59, 59, 999);
-                where.createdAt.lte = h;
+                fechaFin = new Date(hasta);
+                fechaFin.setHours(23, 59, 59, 999);
             }
         }
+
+        if (fechaInicio || fechaFin) {
+            where.createdAt = {};
+            if (fechaInicio) where.createdAt.gte = fechaInicio;
+            if (fechaFin) where.createdAt.lte = fechaFin;
+        }
+
+        // Filtro por Búsqueda de texto
         if (busqueda && busqueda.trim()) {
             const b = busqueda.trim();
-            where.OR = [
+            const searchConditions = [
                 { folio: { contains: b, mode: 'insensitive' } },
                 { receptorNombre: { contains: b, mode: 'insensitive' } },
-                { receptorRfc: { contains: b, mode: 'insensitive' } }
+                { receptorRfc: { contains: b, mode: 'insensitive' } },
+                { cfdiUuid: { contains: b, mode: 'insensitive' } },
+                { cfdiConcepto: { contains: b, mode: 'insensitive' } }
             ];
+            if (where.OR) {
+                where.AND = [{ OR: where.OR }, { OR: searchConditions }];
+                delete where.OR;
+            } else {
+                where.OR = searchConditions;
+            }
         }
 
         const expedientes = await prisma.expediente.findMany({
             where,
             orderBy: { createdAt: 'desc' },
             include: {
-                usuario: { select: { nombreCompleto: true } },
-                facturas: { select: { uuid: true, estatus: true, fechaTimbrado: true, folio: true }, take: 1 }
+                usuario: { select: { nombreCompleto: true, email: true } },
+                facturas: {
+                    select: {
+                        id: true,
+                        uuid: true,
+                        folio: true,
+                        facturamaId: true,
+                        estatus: true,
+                        fechaTimbrado: true,
+                        noCertificadoSat: true,
+                        createdAt: true
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1
+                }
             }
         });
 
-        const rows = expedientes.map(e => ({
-            'Folio Interno': e.folio,
-            'RFC Receptor': e.receptorRfc || '',
-            'Nombre / Razón Social': e.receptorNombre || '',
-            'Régimen Fiscal': e.receptorRegimenFiscal || '',
-            'Código Postal': e.receptorCodigoPostal || '',
-            'Uso CFDI': e.receptorUsoCfdi || '',
-            'Concepto': e.cfdiConcepto || '',
-            'Total': parseFloat(e.cfdiTotal || 0).toFixed(2),
-            'Estatus': e.estatus,
-            'UUID Fiscal': e.facturas[0]?.uuid || e.cfdiUuid || '',
-            'Fecha Registro': e.createdAt.toLocaleDateString('es-MX'),
-            'Usuario': e.usuario?.nombreCompleto || ''
-        }));
+        const rows = expedientes.map(e => {
+            const fac = (e.facturas && e.facturas.length > 0) ? e.facturas[0] : null;
+            const total = parseFloat(e.cfdiTotal || 0);
+            const subtotal = e.cfdiSubtotal ? parseFloat(e.cfdiSubtotal) : parseFloat((total / 1.16).toFixed(2));
+            const iva = e.cfdiIva ? parseFloat(e.cfdiIva) : parseFloat((total - subtotal).toFixed(2));
+            const uuid = fac?.uuid || e.cfdiUuid || '';
+            const isTimbrada = Boolean(uuid) || e.estatus === 'TIMBRADO';
+            const estatusDesc = isTimbrada ? 'TIMBRADA' : (e.estatus || 'PENDIENTE');
+
+            const fechaRegistro = e.createdAt ? new Date(e.createdAt).toLocaleString('es-MX') : '';
+            const fechaTimbrado = fac?.fechaTimbrado ? new Date(fac.fechaTimbrado).toLocaleString('es-MX') : (isTimbrada ? fechaRegistro : 'Pendiente');
+
+            return {
+                'Folio Interno': e.folio || '',
+                'Folio Fiscal (UUID SAT)': uuid || 'Sin timbrar',
+                'Fecha de Timbrado': fechaTimbrado,
+                'Fecha de Registro': fechaRegistro,
+                'Estatus': estatusDesc,
+                'RFC Receptor': (e.receptorRfc || '').toUpperCase(),
+                'Nombre / Razón Social': e.receptorNombre || '',
+                'Régimen Fiscal': e.receptorRegimenFiscal || '',
+                'Código Postal': e.receptorCodigoPostal || '',
+                'Uso CFDI': e.receptorUsoCfdi || 'G03',
+                'Forma de Pago': e.cfdiFormaPago || '03',
+                'Método de Pago': e.cfdiMetodoPago || 'PUE',
+                'Moneda': e.cfdiMoneda || 'MXN',
+                'Concepto / Descripción': e.cfdiConcepto || '',
+                'Subtotal ($ MXN)': Number(subtotal.toFixed(2)),
+                'IVA 16% ($ MXN)': Number(iva.toFixed(2)),
+                'Total ($ MXN)': Number(total.toFixed(2)),
+                'Correo Receptor': e.receptorEmail || '',
+                'No. Certificado SAT': fac?.noCertificadoSat || e.cfdiNoCertificado || '',
+                'ID Facturama': fac?.facturamaId || '',
+                'Usuario que Registró': e.usuario?.nombreCompleto || 'Sistema',
+                'Banco': e.pagoBanco || e.transferenciaBanco || '',
+                'Referencia de Pago': e.pagoReferencia || e.transferenciaReferencia || '',
+                'Fecha de Pago': e.pagoFecha || e.transferenciaFecha || ''
+            };
+        });
 
         const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(rows);
-        XLSX.utils.book_append_sheet(wb, ws, 'Reporte COEPRISS');
+        const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{
+            'Folio Interno': 'Sin datos',
+            'Folio Fiscal (UUID SAT)': '',
+            'Fecha de Timbrado': '',
+            'Fecha de Registro': '',
+            'Estatus': '',
+            'RFC Receptor': '',
+            'Nombre / Razón Social': '',
+            'Régimen Fiscal': '',
+            'Código Postal': '',
+            'Uso CFDI': '',
+            'Forma de Pago': '',
+            'Método de Pago': '',
+            'Moneda': '',
+            'Concepto / Descripción': '',
+            'Subtotal ($ MXN)': 0,
+            'IVA 16% ($ MXN)': 0,
+            'Total ($ MXN)': 0,
+            'Correo Receptor': '',
+            'No. Certificado SAT': '',
+            'ID Facturama': '',
+            'Usuario que Registró': '',
+            'Banco': '',
+            'Referencia de Pago': '',
+            'Fecha de Pago': ''
+        }]);
+
+        // Ajustar ancho de columnas automáticamente
+        const keys = Object.keys(rows[0] || {});
+        if (keys.length > 0) {
+            ws['!cols'] = keys.map(k => {
+                const maxVal = Math.max(k.length, ...rows.map(r => String(r[k] || '').length));
+                return { wch: Math.min(Math.max(maxVal + 3, 12), 50) };
+            });
+        }
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Historial Facturación');
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-        res.setHeader('Content-Disposition', 'attachment; filename=COEPRISS_Reporte_Facturacion.xlsx');
+        let nombreArchivo = 'COEPRISS_Reporte_Facturacion';
+        if (anio && anio !== 'TODOS') {
+            nombreArchivo += `_${anio}`;
+            if (mes && mes !== 'TODOS') {
+                const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                nombreArchivo += `_${mesesNombres[parseInt(mes, 10) - 1] || mes}`;
+            }
+        } else {
+            nombreArchivo += `_${new Date().toISOString().slice(0, 10)}`;
+        }
+        nombreArchivo += '.xlsx';
+
+        res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
     } catch (err) {
+        console.error('[EXCEL EXPORT ERROR]', err);
         res.status(500).json({ error: err.message });
     }
 });

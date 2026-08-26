@@ -3574,68 +3574,135 @@ function resendEmail(destinatario, folio) {
 // 8. STEP 7: REPORTE GENERAL Y EXPORTACIÓN EXCEL
 // ─────────────────────────────────────────────
 
-function setReportDatePreset(preset) {
+function parseInvoiceDate(f) {
+    if (!f) return null;
+    const raw = f.fechaTimbrado || f.createdAt || f.fecha || f.fechaRecibo || f.pagoFecha;
+    if (!raw) return null;
+    if (raw instanceof Date && !isNaN(raw)) return raw;
+
+    const isoDate = new Date(raw);
+    if (!isNaN(isoDate.getTime())) return isoDate;
+
+    const parts = String(raw).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+    if (parts) {
+        const d = parseInt(parts[1], 10);
+        const m = parseInt(parts[2], 10) - 1;
+        const y = parseInt(parts[3], 10);
+        const parsed = new Date(y, m, d);
+        if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return null;
+}
+
+function onReportYearMonthChange() {
+    const yearVal = document.getElementById('report-filter-year')?.value || 'TODOS';
+    const monthVal = document.getElementById('report-filter-month')?.value || 'TODOS';
     const fromInput = document.getElementById('report-date-from');
     const toInput = document.getElementById('report-date-to');
-    if (!fromInput || !toInput) return;
 
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${yyyy}-${mm}-${dd}`;
-
-    if (preset === 'hoy') {
-        fromInput.value = todayStr;
-        toInput.value = todayStr;
-    } else if (preset === 'mes') {
-        fromInput.value = `${yyyy}-${mm}-01`;
-        toInput.value = todayStr;
-    } else if (preset === 'anio') {
-        fromInput.value = `${yyyy}-01-01`;
-        toInput.value = todayStr;
-    } else if (preset === 'todos') {
-        fromInput.value = '';
-        toInput.value = '';
+    if (fromInput && toInput) {
+        if (yearVal !== 'TODOS') {
+            const y = parseInt(yearVal, 10);
+            if (monthVal !== 'TODOS') {
+                const m = parseInt(monthVal, 10);
+                const mm = String(m).padStart(2, '0');
+                const lastDay = new Date(y, m, 0).getDate();
+                const dd = String(lastDay).padStart(2, '0');
+                fromInput.value = `${y}-${mm}-01`;
+                toInput.value = `${y}-${mm}-${dd}`;
+            } else {
+                fromInput.value = `${y}-01-01`;
+                toInput.value = `${y}-12-31`;
+            }
+        } else if (monthVal !== 'TODOS') {
+            fromInput.value = '';
+            toInput.value = '';
+        } else {
+            fromInput.value = '';
+            toInput.value = '';
+        }
     }
     filterReportTable();
 }
 
-function filterReportTable() {
+function onCustomDateChange() {
+    filterReportTable();
+}
+
+function setReportDatePreset(preset) {
+    const fromInput = document.getElementById('report-date-from');
+    const toInput = document.getElementById('report-date-to');
+    const yearSelect = document.getElementById('report-filter-year');
+    const monthSelect = document.getElementById('report-filter-month');
+    const statusSelect = document.getElementById('report-status-filter');
+    const searchInput = document.getElementById('search-report');
+
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mmNum = today.getMonth() + 1;
+    const mm = String(mmNum).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    if (preset === 'hoy') {
+        if (fromInput) fromInput.value = todayStr;
+        if (toInput) toInput.value = todayStr;
+        if (yearSelect) yearSelect.value = String(yyyy);
+        if (monthSelect) monthSelect.value = String(mmNum);
+    } else if (preset === 'mes') {
+        const lastDay = new Date(yyyy, mmNum, 0).getDate();
+        if (fromInput) fromInput.value = `${yyyy}-${mm}-01`;
+        if (toInput) toInput.value = `${yyyy}-${mm}-${String(lastDay).padStart(2, '0')}`;
+        if (yearSelect) yearSelect.value = String(yyyy);
+        if (monthSelect) monthSelect.value = String(mmNum);
+    } else if (preset === 'anio') {
+        if (fromInput) fromInput.value = `${yyyy}-01-01`;
+        if (toInput) toInput.value = `${yyyy}-12-31`;
+        if (yearSelect) yearSelect.value = String(yyyy);
+        if (monthSelect) monthSelect.value = 'TODOS';
+    } else if (preset === 'todos') {
+        if (fromInput) fromInput.value = '';
+        if (toInput) toInput.value = '';
+        if (yearSelect) yearSelect.value = 'TODOS';
+        if (monthSelect) monthSelect.value = 'TODOS';
+        if (statusSelect) statusSelect.value = 'TODOS';
+        if (searchInput) searchInput.value = '';
+    }
+    filterReportTable();
+}
+
+function getFilteredInvoicesList() {
     const busqueda = (document.getElementById('search-report')?.value || '').toLowerCase().trim();
     const estatusFilter = (document.getElementById('report-status-filter')?.value || 'TODOS').toUpperCase().trim();
+    const filterYear = document.getElementById('report-filter-year')?.value || 'TODOS';
+    const filterMonth = document.getElementById('report-filter-month')?.value || 'TODOS';
     const dateFrom = document.getElementById('report-date-from')?.value;
     const dateTo = document.getElementById('report-date-to')?.value;
 
     const fromDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : null;
     const toDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : null;
 
-    const tbody = document.getElementById('tbody-report-invoices');
-    if (!tbody) return;
-
-    tbody.innerHTML = '';
-    let matchesCount = 0;
-
     const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
     const expedientesRestantes = (state.expedientes || []).filter(e => !facturaFolios.has(e.folio));
     const list = [...(state.facturas || []), ...expedientesRestantes];
 
-    list.forEach(f => {
+    return list.filter(f => {
         const folio = f.folioInterno || f.folio || '';
         const uuid = f.uuid || f.cfdiUuid || '';
         const cliente = f.cliente || f.receptorNombre || '';
         const rfc = f.rfc || f.receptorRfc || '';
+        const concepto = f.concepto || f.cfdiConcepto || '';
         const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
-        const total = parseFloat(f.importe || f.cfdiTotal || 0);
 
         const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
         const isPendiente = estatus === 'PENDIENTE' || estatus === 'EN_PROCESO' || estatus === 'RECIBIDO' || estatus === 'PAGO PENDIENTE' || estatus === 'EN PROCESO';
         const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
+        const isError = estatus === 'ERROR' || estatus === 'FALLIDO';
 
-        // Filtro por texto
-        const matchText = !busqueda || [folio, uuid, cliente, rfc].some(val => val.toLowerCase().includes(busqueda));
+        // 1. Filtro por texto
+        const matchText = !busqueda || [folio, uuid, cliente, rfc, concepto].some(val => (val || '').toLowerCase().includes(busqueda));
 
-        // Filtro por estatus
+        // 2. Filtro por estatus
         let matchEstatus = false;
         if (estatusFilter === 'TODOS') {
             matchEstatus = true;
@@ -3645,61 +3712,106 @@ function filterReportTable() {
             matchEstatus = isPendiente && !isTimbrada;
         } else if (estatusFilter === 'CANCELADA' || estatusFilter === 'CANCELADO') {
             matchEstatus = isCancelada;
+        } else if (estatusFilter === 'ERROR') {
+            matchEstatus = isError;
         } else {
             matchEstatus = (estatus === estatusFilter);
         }
 
-        // Filtro por fecha
-        let matchFecha = true;
-        if (f.fecha || f.createdAt) {
-            const fDate = new Date(f.createdAt || f.fecha);
-            if (fromDateObj && fDate < fromDateObj) matchFecha = false;
-            if (toDateObj && fDate > toDateObj) matchFecha = false;
+        // 3. Filtro por Año y Mes
+        const dObj = parseInvoiceDate(f);
+        let matchYearMonth = true;
+        if (dObj) {
+            const invYear = dObj.getFullYear();
+            const invMonth = dObj.getMonth() + 1;
+
+            if (filterYear !== 'TODOS' && parseInt(filterYear, 10) !== invYear) {
+                matchYearMonth = false;
+            }
+            if (filterMonth !== 'TODOS' && parseInt(filterMonth, 10) !== invMonth) {
+                matchYearMonth = false;
+            }
+        } else {
+            if (filterYear !== 'TODOS' || filterMonth !== 'TODOS') {
+                matchYearMonth = false;
+            }
         }
 
-        if (matchText && matchEstatus && matchFecha) {
-            matchesCount++;
-            const badgeClass = isTimbrada ? 'badge-success' : (isCancelada ? 'badge-danger' : 'badge-info');
-            const displayEstatus = isTimbrada ? 'TIMBRADA' : estatus;
-            const facturamaId = f.facturamaId || '';
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="font-weight:700;color:#1B365D;">${folio}</td>
-                <td style="font-family:monospace;font-size:0.75rem;color:#495057;">${uuid ? uuid.substring(0, 18) + '...' : '—'}</td>
-                <td class="col-cliente">${cliente}</td>
-                <td style="font-family:monospace;font-weight:600;">${rfc}</td>
-                <td style="color:#6c757d;">${f.fecha || (f.createdAt ? new Date(f.createdAt).toLocaleDateString('es-MX') : '—')}</td>
-                <td style="text-align:right;font-weight:700;color:#1B365D;">$${total.toFixed(2)}</td>
-                <td style="text-align:center;">
-                    <span class="badge ${badgeClass}">
-                        <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                        ${displayEstatus}
-                    </span>
-                </td>
-                <td style="text-align:center;">
-                    <div class="action-icon-group">
-                        ${isTimbrada ? `
-                            <button class="action-icon-btn btn-view" onclick="openPdfViewer('${facturamaId}')" title="Ver PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
-                            <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${facturamaId}', 'pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                            <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${facturamaId}', 'xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                            <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
-                        ` : `
-                            <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
-                        `}
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(tr);
+        // 4. Filtro por rango de fechas (si se especificó)
+        let matchRange = true;
+        if (dObj) {
+            if (fromDateObj && dObj < fromDateObj) matchRange = false;
+            if (toDateObj && dObj > toDateObj) matchRange = false;
         }
+
+        return matchText && matchEstatus && matchYearMonth && matchRange;
+    });
+}
+
+function filterReportTable() {
+    const tbody = document.getElementById('tbody-report-invoices');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    const filteredList = getFilteredInvoicesList();
+
+    const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
+    const expedientesRestantes = (state.expedientes || []).filter(e => !facturaFolios.has(e.folio));
+    const totalCount = (state.facturas || []).length + expedientesRestantes.length;
+
+    filteredList.forEach(f => {
+        const folio = f.folioInterno || f.folio || '';
+        const uuid = f.uuid || f.cfdiUuid || '';
+        const cliente = f.cliente || f.receptorNombre || '';
+        const rfc = f.rfc || f.receptorRfc || '';
+        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
+        const total = parseFloat(f.importe || f.cfdiTotal || 0);
+
+        const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
+        const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
+        const badgeClass = isTimbrada ? 'badge-success' : (isCancelada ? 'badge-danger' : 'badge-info');
+        const displayEstatus = isTimbrada ? 'TIMBRADA' : estatus;
+        const facturamaId = f.facturamaId || '';
+
+        const dObj = parseInvoiceDate(f);
+        const fechaStr = dObj ? dObj.toLocaleDateString('es-MX') : (f.fecha || '—');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight:700;color:#1B365D;">${folio}</td>
+            <td style="font-family:monospace;font-size:0.75rem;color:#495057;">${uuid ? uuid.substring(0, 18) + '...' : '—'}</td>
+            <td class="col-cliente">${cliente}</td>
+            <td style="font-family:monospace;font-weight:600;">${rfc}</td>
+            <td style="color:#6c757d;">${fechaStr}</td>
+            <td style="text-align:right;font-weight:700;color:#1B365D;">$${total.toFixed(2)}</td>
+            <td style="text-align:center;">
+                <span class="badge ${badgeClass}">
+                    <svg class="badge-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                    ${displayEstatus}
+                </span>
+            </td>
+            <td style="text-align:center;">
+                <div class="action-icon-group">
+                    ${isTimbrada ? `
+                        <button class="action-icon-btn btn-view" onclick="openPdfViewer('${facturamaId}')" title="Ver PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                        <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${facturamaId}', 'pdf')" title="Descargar PDF"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                        <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${facturamaId}', 'xml')" title="Descargar XML"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                        <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                    ` : `
+                        <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
+                    `}
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
     });
 
-    if (matchesCount === 0) {
+    if (filteredList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="empty-table-cell" style="text-align:center;padding:30px;color:#868e96;">No se encontraron facturas con los filtros seleccionados.</td></tr>';
     }
 
     const showingText = document.getElementById('showing-results-text');
-    if (showingText) showingText.textContent = `Mostrando ${matchesCount} de ${list.length} facturas`;
+    if (showingText) showingText.textContent = `Mostrando ${filteredList.length} de ${totalCount} facturas`;
 }
 
 function renderReportTable() {
@@ -3708,32 +3820,135 @@ function renderReportTable() {
 
 async function exportReportToExcel() {
     const estatus = document.getElementById('report-status-filter')?.value || 'TODOS';
+    const anio = document.getElementById('report-filter-year')?.value || 'TODOS';
+    const mes = document.getElementById('report-filter-month')?.value || 'TODOS';
     const desde = document.getElementById('report-date-from')?.value || '';
     const hasta = document.getElementById('report-date-to')?.value || '';
     const busqueda = document.getElementById('search-report')?.value || '';
 
-    showToast('Generando archivo Excel oficial (.xlsx)...', 'info');
+    const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    let filenameSuffix = '';
+    if (anio !== 'TODOS') {
+        filenameSuffix += `_${anio}`;
+        if (mes !== 'TODOS') {
+            filenameSuffix += `_${mesesNombres[parseInt(mes, 10) - 1] || mes}`;
+        }
+    } else {
+        filenameSuffix += `_${new Date().toISOString().slice(0, 10)}`;
+    }
+    const finalFilename = `Reporte_Facturacion_COEPRISS${filenameSuffix}.xlsx`;
+
+    showToast('Generando archivo Excel (.xlsx) con datos completos...', 'info');
     try {
         const token = getJwtToken();
-        const params = new URLSearchParams({ estatus, desde, hasta, busqueda });
-        const res = await fetch(`/api/reportes/excel?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const params = new URLSearchParams();
+        if (estatus) params.append('estatus', estatus);
+        if (anio && anio !== 'TODOS') params.append('anio', anio);
+        if (mes && mes !== 'TODOS') params.append('mes', mes);
+        if (desde) params.append('desde', desde);
+        if (hasta) params.append('hasta', hasta);
+        if (busqueda) params.append('busqueda', busqueda);
 
-        const blob = await res.blob();
+        const res = await fetch(`/api/reportes/excel?${params.toString()}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+
+        if (res.ok) {
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = finalFilename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast(`✓ Archivo ${finalFilename} descargado exitosamente.`, 'success');
+            addSecurityLog('Exportación Excel', `Reporte exportado con filtros: Año=${anio}, Mes=${mes}, Estatus=${estatus}, Búsqueda=${busqueda || 'Ninguna'}`);
+            return;
+        }
+        throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+        console.warn('[EXCEL API FALLBACK]', e.message);
+        generateClientSideExcel(finalFilename);
+    }
+}
+
+function generateClientSideExcel(filename) {
+    const filteredList = getFilteredInvoicesList();
+    if (filteredList.length === 0) {
+        showToast('No hay facturas que coincidan con los filtros seleccionados para exportar.', 'warning');
+        return;
+    }
+
+    const rows = filteredList.map(f => {
+        const folio = f.folioInterno || f.folio || '';
+        const uuid = f.uuid || f.cfdiUuid || '';
+        const total = parseFloat(f.importe || f.cfdiTotal || 0);
+        const subtotal = f.cfdiSubtotal ? parseFloat(f.cfdiSubtotal) : parseFloat((total / 1.16).toFixed(2));
+        const iva = f.cfdiIva ? parseFloat(f.cfdiIva) : parseFloat((total - subtotal).toFixed(2));
+        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
+        const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
+
+        const dObj = parseInvoiceDate(f);
+        const fechaStr = dObj ? dObj.toLocaleString('es-MX') : (f.fecha || '');
+
+        return {
+            'Folio Interno': folio,
+            'Folio Fiscal (UUID SAT)': uuid || 'Sin timbrar',
+            'Fecha de Timbrado': isTimbrada ? fechaStr : 'Pendiente',
+            'Fecha de Registro': fechaStr,
+            'Estatus': isTimbrada ? 'TIMBRADA' : estatus,
+            'RFC Receptor': (f.rfc || f.receptorRfc || '').toUpperCase(),
+            'Nombre / Razón Social': f.cliente || f.receptorNombre || '',
+            'Régimen Fiscal': f.regimenFiscal || f.receptorRegimenFiscal || '',
+            'Código Postal': f.codigoPostal || f.receptorCodigoPostal || '',
+            'Uso CFDI': f.usoCfdi || f.receptorUsoCfdi || 'G03',
+            'Forma de Pago': f.formaPago || f.cfdiFormaPago || '03',
+            'Método de Pago': f.metodoPago || f.cfdiMetodoPago || 'PUE',
+            'Moneda': f.moneda || f.cfdiMoneda || 'MXN',
+            'Concepto / Descripción': f.concepto || f.cfdiConcepto || '',
+            'Subtotal ($ MXN)': Number(subtotal.toFixed(2)),
+            'IVA 16% ($ MXN)': Number(iva.toFixed(2)),
+            'Total ($ MXN)': Number(total.toFixed(2)),
+            'Correo Receptor': f.correo || f.receptorEmail || '',
+            'No. Certificado SAT': f.noCertificadoSat || f.cfdiNoCertificado || '',
+            'ID Facturama': f.facturamaId || '',
+            'Usuario que Registró': f.usuario || 'Sistema',
+            'Banco': f.banco || f.pagoBanco || '',
+            'Referencia de Pago': f.referencia || f.pagoReferencia || '',
+            'Fecha de Pago': f.fechaRecibo || f.pagoFecha || ''
+        };
+    });
+
+    if (typeof XLSX !== 'undefined') {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const keys = Object.keys(rows[0] || {});
+        ws['!cols'] = keys.map(k => {
+            const maxVal = Math.max(k.length, ...rows.map(r => String(r[k] || '').length));
+            return { wch: Math.min(Math.max(maxVal + 3, 12), 45) };
+        });
+        XLSX.utils.book_append_sheet(wb, ws, 'Historial Facturación');
+        XLSX.writeFile(wb, filename);
+        showToast(`✓ Archivo ${filename} descargado exitosamente.`, 'success');
+    } else {
+        let csv = '\uFEFF';
+        const headers = Object.keys(rows[0]);
+        csv += headers.map(h => `"${h}"`).join(',') + '\r\n';
+        rows.forEach(r => {
+            csv += headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(',') + '\r\n';
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Reporte_Facturacion_COEPRISS_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.download = filename.replace('.xlsx', '.csv');
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast('✓ Reporte Excel descargado exitosamente.', 'success');
-        addSecurityLog('Exportación Excel', `Reporte exportado con filtros: Estatus=${estatus}, Desde=${desde}, Hasta=${hasta}`);
-    } catch (e) {
-        showToast('Error al exportar a Excel: ' + e.message, 'error');
+        showToast(`✓ Reporte descargado exitosamente.`, 'success');
     }
 }
 
