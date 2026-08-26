@@ -574,29 +574,54 @@ app.post('/api/excel/importar', autenticarToken, upload.single('archivo'), async
 // ─────────────────────────────────────────────
 
 /**
- * Helper para enviar correo transaccional con la API REST de Brevo.
+ * Helper para enviar correo transaccional con la API REST de Brevo (Sendinblue).
  */
 async function enviarCorreoBrevo({ destinatario, nombreDestinatario, asunto, cuerpoHtml, adjuntos = [] }) {
-    const apiKey = process.env.BREVO_API_KEY;
+    const apiKey = (process.env.BREVO_API_KEY || process.env.SIB_API_KEY || process.env.SENDINBLUE_API_KEY || '').trim();
     if (!apiKey) {
-        throw new Error('BREVO_API_KEY no configurada en las variables de entorno de Render.');
+        throw new Error('BREVO_API_KEY no configurada en las variables de entorno de Render. Agrega tu API Key de Brevo en el panel de Render.');
     }
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'coepriss1@gmail.com';
-    const senderName  = process.env.BREVO_SENDER_NAME  || 'COEPRISS Sinaloa - Facturación';
+    const senderEmail = (process.env.BREVO_SENDER_EMAIL || process.env.SENDER_EMAIL || process.env.EMAIL_FROM || 'coepriss1@gmail.com').trim();
+    const senderName  = (process.env.BREVO_SENDER_NAME  || process.env.SENDER_NAME  || 'COEPRISS Sinaloa - Facturación').trim();
+
+    const emailLimpio = String(destinatario || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailLimpio)) {
+        throw new Error(`La dirección de correo destinatario "${destinatario}" no tiene un formato válido.`);
+    }
+
+    const clientName = String(nombreDestinatario || emailLimpio).trim().replace(/[\r\n\t]/g, ' ').slice(0, 70);
 
     const payload = {
         sender: { name: senderName, email: senderEmail },
-        to: [{ email: destinatario, name: nombreDestinatario || destinatario }],
-        subject: asunto,
+        to: [{ email: emailLimpio, name: clientName || emailLimpio }],
+        subject: String(asunto || 'Comprobante Fiscal Digital - COEPRISS Sinaloa').trim().replace(/[\r\n]/g, ' '),
         htmlContent: cuerpoHtml,
     };
 
-    if (adjuntos && adjuntos.length > 0) {
-        payload.attachment = adjuntos.map(a => ({
-            name: a.name,
-            content: String(a.content || '').replace(/^data:[^;]+;base64,/, '').trim()
-        }));
+    if (Array.isArray(adjuntos) && adjuntos.length > 0) {
+        const validAttachments = [];
+        for (const a of adjuntos) {
+            if (!a || !a.name) continue;
+            let cleanContent = '';
+            if (Buffer.isBuffer(a.content)) {
+                cleanContent = a.content.toString('base64');
+            } else if (typeof a.content === 'string') {
+                cleanContent = a.content.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '').trim();
+            }
+            if (cleanContent && cleanContent.length > 10) {
+                validAttachments.push({
+                    name: String(a.name).replace(/[^a-zA-Z0-9._-]/g, '_'),
+                    content: cleanContent
+                });
+            }
+        }
+        if (validAttachments.length > 0) {
+            payload.attachment = validAttachments;
+        }
     }
+
+    console.log(`[BREVO API] Enviando correo a: ${emailLimpio} | Remitente: ${senderEmail} | Adjuntos: ${payload.attachment ? payload.attachment.length : 0}`);
 
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -610,10 +635,97 @@ async function enviarCorreoBrevo({ destinatario, nombreDestinatario, asunto, cue
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-        throw new Error(data.message || data.error || `Error en Brevo API (HTTP ${res.status})`);
+        console.error('[BREVO API ERROR RESPONSE]', res.status, data);
+        let errMsg = data.message || data.error || `HTTP ${res.status}`;
+        if (data.code === 'unauthorized' || res.status === 401) {
+            errMsg = 'Clave de API de Brevo (BREVO_API_KEY) inválida o no autorizada.';
+        } else if (data.code === 'invalid_parameter' && (errMsg.toLowerCase().includes('sender') || errMsg.toLowerCase().includes('from'))) {
+            errMsg = `El correo remitente (${senderEmail}) no está verificado en tu cuenta de Brevo. Ve al panel de Brevo -> Senders & IP -> Senders y valida la dirección ${senderEmail}.`;
+        } else if (data.code === 'permission_denied') {
+            errMsg = 'Tu cuenta de Brevo no tiene permisos para enviar correos transaccionales o se encuentra en revisión/bloqueada.';
+        }
+        throw new Error(errMsg);
     }
     return data;
 }
+
+app.get('/api/correo/estado', autenticarToken, async (req, res) => {
+    const apiKey = (process.env.BREVO_API_KEY || process.env.SIB_API_KEY || process.env.SENDINBLUE_API_KEY || '').trim();
+    const senderEmail = (process.env.BREVO_SENDER_EMAIL || process.env.SENDER_EMAIL || process.env.EMAIL_FROM || 'coepriss1@gmail.com').trim();
+    const senderName  = (process.env.BREVO_SENDER_NAME  || process.env.SENDER_NAME  || 'COEPRISS Sinaloa - Facturación').trim();
+
+    if (!apiKey) {
+        return res.json({
+            success: false,
+            configurado: false,
+            proveedor: 'Brevo API',
+            remitente: senderEmail,
+            error: 'BREVO_API_KEY no está configurada en las variables de entorno de Render.'
+        });
+    }
+
+    try {
+        const checkRes = await fetch('https://api.brevo.com/v3/account', {
+            headers: { 'api-key': apiKey, 'Accept': 'application/json' }
+        });
+        const checkData = await checkRes.json().catch(() => ({}));
+        if (checkRes.ok) {
+            return res.json({
+                success: true,
+                configurado: true,
+                proveedor: 'Brevo API',
+                remitente: senderEmail,
+                nombreRemitente: senderName,
+                cuentaEmail: checkData.email || 'Conectado',
+                plan: checkData.plan?.[0]?.type || 'Activo',
+                creditosDisponibles: checkData.plan?.[0]?.credits ?? 'Disponibles'
+            });
+        } else {
+            return res.json({
+                success: false,
+                configurado: false,
+                proveedor: 'Brevo API',
+                remitente: senderEmail,
+                error: checkData.message || `Error de autenticación con Brevo (HTTP ${checkRes.status})`
+            });
+        }
+    } catch (err) {
+        return res.json({
+            success: false,
+            configurado: false,
+            proveedor: 'Brevo API',
+            remitente: senderEmail,
+            error: err.message
+        });
+    }
+});
+
+app.post('/api/correo/test', autenticarToken, async (req, res) => {
+    const { destinatario } = req.body || {};
+    if (!destinatario || !destinatario.includes('@')) {
+        return res.status(400).json({ success: false, error: 'Ingresa un correo destinatario válido.' });
+    }
+    try {
+        const result = await enviarCorreoBrevo({
+            destinatario: destinatario.trim(),
+            nombreDestinatario: 'Usuario de Prueba COEPRISS',
+            asunto: 'Prueba de Conexión de Correo - COEPRISS Sinaloa',
+            cuerpoHtml: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                    <h2 style="color: #1B365D; margin-top: 0;">Prueba de Envío Exitosa ⚡</h2>
+                    <p>Este es un correo de prueba enviado desde el <strong>Sistema de Facturación COEPRISS Sinaloa</strong>.</p>
+                    <p style="color: #28a745; font-weight: bold;">✓ El servicio de correo (Brevo API) está correctamente configurado y funcionando.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <small style="color: #888;">Fecha y hora: ${new Date().toLocaleString('es-MX')}</small>
+                </div>
+            `,
+            adjuntos: []
+        });
+        res.json({ success: true, message: 'Correo de prueba enviado exitosamente.', messageId: result.messageId });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 app.get('/api/correos', autenticarToken, async (req, res) => {
     const { page = 1, limit = 50 } = req.query;
@@ -645,7 +757,7 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
     } = req.body || {};
 
     if (!destinatario || !destinatario.includes('@')) {
-        return res.status(400).json({ error: 'Dirección de correo electrónico inválida.' });
+        return res.status(400).json({ success: false, error: 'Dirección de correo electrónico inválida.' });
     }
 
     try {
@@ -655,26 +767,37 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
             expediente = await prisma.expediente.findFirst({
                 where: { OR: [{ folio: String(expedienteId) }, { id: parseInt(expedienteId) || 0 }] },
                 include: { facturas: { orderBy: { createdAt: 'desc' }, take: 1 } }
-            });
-            if (expediente && expediente.facturas.length > 0) {
+            }).catch(() => null);
+            if (expediente && expediente.facturas && expediente.facturas.length > 0) {
                 factura = expediente.facturas[0];
             }
         }
 
-        const effectiveFacturamaId = facturamaId || factura?.facturamaId || null;
         const effectiveUuid = uuid || factura?.uuid || expediente?.cfdiUuid || 'N/A';
+        const effectiveFacturamaId = facturamaId || factura?.facturamaId || null;
         const clientName = nombreDestinatario || expediente?.receptorNombre || 'Contribuyente';
+
+        if (!factura && (effectiveUuid !== 'N/A' || expedienteId)) {
+            factura = await prisma.factura.findFirst({
+                where: {
+                    OR: [
+                        ...(effectiveUuid && effectiveUuid !== 'N/A' ? [{ uuid: effectiveUuid }] : []),
+                        ...(expedienteId ? [{ folio: String(expedienteId) }] : [])
+                    ]
+                }
+            }).catch(() => null);
+        }
 
         const adjuntos = [];
 
         // Obtener XML
         if (incluirXml) {
             let xmlData = xmlBase64;
-            if (!xmlData && effectiveFacturamaId) {
-                xmlData = await facturama.descargarArchivo(effectiveFacturamaId, 'xml').catch(() => null);
-            }
             if (!xmlData && factura?.xmlContent) {
                 xmlData = Buffer.from(factura.xmlContent, 'utf-8').toString('base64');
+            }
+            if (!xmlData && effectiveFacturamaId) {
+                xmlData = await facturama.descargarArchivo(effectiveFacturamaId, 'xml').catch(() => null);
             }
             if (xmlData) {
                 adjuntos.push({
@@ -698,7 +821,7 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
             }
         }
 
-        const emailSubject = asunto || `Comprobante Fiscal Digital (CFDI) - COEPRISS Sinaloa - Folio ${expedienteId || ''}`;
+        const emailSubject = asunto || `Comprobante Fiscal Digital (CFDI 4.0) - COEPRISS Sinaloa - Folio ${expediente?.folio || expedienteId || ''}`;
         const emailHtml = `
             <div style="font-family: Arial, sans-serif; max-width: 650px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #ffffff;">
                 <div style="background: #1B365D; color: #ffffff; padding: 24px; text-align: center;">
@@ -743,12 +866,12 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
             data: {
                 expedienteId: expediente?.id || null,
                 usuarioId:    req.user.id,
-                destinatario,
+                destinatario: destinatario.trim(),
                 asunto:       emailSubject,
                 cuerpo:       mensaje || `Envío CFDI (${adjuntos.length} adjuntos)`,
                 estatus:      'ENVIADO'
             }
-        });
+        }).catch(() => null);
 
         await registrarBitacora(
             req.user.id,
@@ -756,13 +879,13 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
             `Destinatario: ${destinatario} | Folio: ${expedienteId || 'N/A'} | Adjuntos: ${adjuntos.length} | BrevoId: ${brevoResult.messageId || 'OK'}`,
             req.ip,
             'EXITOSO'
-        );
+        ).catch(() => {});
 
         res.json({
             success: true,
             message: 'Correo enviado exitosamente vía Brevo.',
             messageId: brevoResult.messageId || null,
-            registroId: registroCorreo.id,
+            registroId: registroCorreo?.id || null,
             adjuntosEnviados: adjuntos.map(a => a.name)
         });
 

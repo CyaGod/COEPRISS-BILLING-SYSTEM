@@ -550,10 +550,6 @@ function resumeFlowAtStep(wizardStep, folio) {
     }
 }
 
-function resendEmail(email, folio) {
-    showToast('Envío de correo no configurado: no se envió ningún mensaje.', 'warning');
-}
-
 // Global panel switching (handles general views and wizard views)
 function goToPanel(panelId) {
     // Hide all panels
@@ -3526,7 +3522,9 @@ async function handleSendInvoiceEmail(event) {
                 adjuntarXml,
                 adjuntarPdf,
                 facturamaId: effectiveFacturamaId,
-                uuid: effectiveUuid
+                uuid: effectiveUuid,
+                xmlBase64: _lastStampResult?.xmlBase64 || activeExp?.xmlBase64 || null,
+                pdfBase64: _lastStampResult?.pdfBase64 || activeExp?.pdfBase64 || null
             })
         });
         const data = await res.json();
@@ -3535,14 +3533,24 @@ async function handleSendInvoiceEmail(event) {
             showToast(`✅ Factura enviada con éxito a ${destinatario} (Brevo ID: ${data.messageId || 'OK'})`, 'success');
             closeModal('modal-enviar-correo');
 
-            // Agregar al historial de correos
-            state.historialCorreos.unshift({
-                fecha: new Date().toLocaleString('es-MX'),
-                destinatario,
-                folio: _currentEmailExpedienteId,
-                adjuntos: `${adjuntarXml ? 'XML ' : ''}${adjuntarPdf ? 'PDF' : ''}`.trim() || 'Sin adjuntos',
-                estatus: 'Enviado'
-            });
+            // Actualizar historial de correos desde backend
+            try {
+                const hRes = await apiFetch('/api/correos');
+                const hData = await hRes.json();
+                if (hData.success && Array.isArray(hData.data)) {
+                    state.historialCorreos = hData.data;
+                } else {
+                    throw new Error();
+                }
+            } catch (e) {
+                state.historialCorreos.unshift({
+                    fecha: new Date().toLocaleString('es-MX'),
+                    destinatario,
+                    folio: _currentEmailExpedienteId,
+                    adjuntos: `${adjuntarXml ? 'XML ' : ''}${adjuntarPdf ? 'PDF' : ''}`.trim() || 'Sin adjuntos',
+                    estatus: 'Enviado'
+                });
+            }
             renderCorreosTable();
             updateDashboardCounts();
         } else {
