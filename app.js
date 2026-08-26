@@ -470,10 +470,6 @@ function initNavigation() {
                 item.classList.add('active');
                 renderCorreosTable();
                 goToPanel('panel-correos');
-            } else if (id === 'nav-reportes') {
-                item.classList.add('active');
-                renderReportTable();
-                goToStep(7); // Wizard step 7 is the general report
             } else if (id === 'nav-clientes') {
                 item.classList.add('active');
                 renderClientesTable();
