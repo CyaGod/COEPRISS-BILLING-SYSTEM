@@ -1691,7 +1691,9 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
 
 /**
  * GET /api/facturama/descargar/:facturamaId/:formato
- * Descarga el XML o PDF de una factura directamente desde Facturama.
+ * Descarga el XML o PDF de una factura desde Facturama.
+ * Si Facturama no responde (sandbox expirado, red, etc.) usa el contenido
+ * guardado en la base de datos como respaldo automático.
  * :formato = 'xml' | 'pdf'
  */
 app.get('/api/facturama/descargar/:facturamaId/:formato', autenticarToken, async (req, res) => {
@@ -1699,19 +1701,85 @@ app.get('/api/facturama/descargar/:facturamaId/:formato', autenticarToken, async
     if (!['xml', 'pdf'].includes(formato)) {
         return res.status(400).json({ error: 'Formato debe ser xml o pdf.' });
     }
+
+    const contentType = formato === 'pdf' ? 'application/pdf' : 'application/xml';
+    const filename    = `COEPRISS_${facturamaId}.${formato}`;
+
+    // 1. Intentar descarga directa desde Facturama
     try {
         const base64 = await facturama.descargarArchivo(facturamaId, formato);
         const buffer = Buffer.from(base64, 'base64');
-
-        const contentType = formato === 'pdf' ? 'application/pdf' : 'application/xml';
-        const filename    = `COEPRISS_${facturamaId}.${formato}`;
-
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.send(buffer);
-    } catch (err) {
-        console.error('[FACTURAMA/DESCARGAR]', err);
-        res.status(500).json({ error: err.message });
+        return res.send(buffer);
+    } catch (pacErr) {
+        console.warn(`[FACTURAMA/DESCARGAR] PAC falló (${pacErr.message}). Intentando respaldo desde BD...`);
+    }
+
+    // 2. Respaldo: buscar en BD por facturamaId o uuid
+    try {
+        const facturaDB = await prisma.factura.findFirst({
+            where: {
+                OR: [
+                    { facturamaId: facturamaId },
+                    { uuid: facturamaId }
+                ]
+            }
+        });
+
+        if (!facturaDB) {
+            return res.status(404).json({ error: 'Factura no encontrada en Facturama ni en la base de datos.' });
+        }
+
+        if (formato === 'xml') {
+            if (!facturaDB.xmlContent) {
+                return res.status(404).json({ error: 'El XML de esta factura no está disponible en la base de datos.' });
+            }
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            return res.send(Buffer.from(facturaDB.xmlContent, 'utf-8'));
+        }
+
+        if (formato === 'pdf') {
+            // Si hay xmlContent, generar una respuesta HTML simple con los datos fiscales del CFDI
+            if (facturaDB.xmlContent) {
+                // Extraer datos básicos del XML para mostrar en HTML→PDF
+                const xmlStr = facturaDB.xmlContent;
+                const uuidMatch = xmlStr.match(/UUID="([^"]+)"/i);
+                const rfcEmisorMatch = xmlStr.match(/RfcEmisor="([^"]+)"/i) || xmlStr.match(/Rfc="([^"]+)"/i);
+                const rfcReceptorMatch = xmlStr.match(/RfcReceptor="([^"]+)"/i);
+                const totalMatch = xmlStr.match(/Total="([^"]+)"/i);
+                const fechaMatch = xmlStr.match(/Fecha="([^"]+)"/i);
+                const uuid = uuidMatch ? uuidMatch[1] : facturaDB.uuid || '';
+                const rfcEmisor = rfcEmisorMatch ? rfcEmisorMatch[1] : '';
+                const rfcReceptor = rfcReceptorMatch ? rfcReceptorMatch[1] : '';
+                const total = totalMatch ? totalMatch[1] : '0.00';
+                const fecha = fechaMatch ? fechaMatch[1] : '';
+                const htmlContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CFDI ${uuid}</title>
+<style>body{font-family:Arial,sans-serif;padding:40px;color:#333;}h1{color:#1B365D;font-size:1.3rem;}table{width:100%;border-collapse:collapse;margin-top:20px;}td,th{padding:8px 12px;border:1px solid #ddd;font-size:0.85rem;}th{background:#1B365D;color:#fff;text-align:left;}.uuid{font-family:monospace;font-size:0.75rem;word-break:break-all;background:#f8f9fa;padding:8px;border-radius:4px;margin-top:16px;}.aviso{margin-top:24px;padding:12px;background:#fff3cd;border-left:4px solid #ffc107;font-size:0.8rem;}</style>
+</head><body>
+<h1>📄 Comprobante Fiscal Digital (CFDI 4.0)</h1>
+<table>
+<tr><th>Campo</th><th>Valor</th></tr>
+<tr><td>Folio</td><td>${facturaDB.folio}</td></tr>
+<tr><td>RFC Emisor</td><td>${rfcEmisor}</td></tr>
+<tr><td>RFC Receptor</td><td>${rfcReceptor}</td></tr>
+<tr><td>Total</td><td>$${total} MXN</td></tr>
+<tr><td>Fecha Emisión</td><td>${fecha}</td></tr>
+<tr><td>Estatus</td><td>${facturaDB.estatus}</td></tr>
+</table>
+<div class="uuid"><strong>Folio Fiscal (UUID):</strong><br>${uuid}</div>
+<div class="aviso">⚠️ Este PDF fue generado desde los datos almacenados localmente porque el archivo original en Facturama no está disponible (modo sandbox o tiempo expirado). Descarga el XML para el documento oficial.</div>
+</body></html>`;
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                res.setHeader('Content-Disposition', `inline; filename="${filename.replace('.pdf','.html')}"`);
+                return res.send(Buffer.from(htmlContent, 'utf-8'));
+            }
+            return res.status(404).json({ error: 'El PDF de esta factura no está disponible.' });
+        }
+    } catch (dbErr) {
+        console.error('[FACTURAMA/DESCARGAR/BD]', dbErr);
+        return res.status(500).json({ error: 'Error al recuperar la factura desde la base de datos: ' + dbErr.message });
     }
 });
 
