@@ -198,12 +198,20 @@ app.get('/api/auth/me', autenticarToken, async (req, res) => {
     try {
         const usuario = await prisma.usuario.findUnique({
             where: { id: req.user.id },
-            include: { rol: { include: { permisos: true } } },
-            omit: { passwordHash: true }
+            include: { rol: { include: { permisos: true } } }
         });
-        res.json({ success: true, user: usuario });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        const { passwordHash, ...userSinPassword } = usuario;
+        res.json({
+            success: true,
+            user: {
+                ...userSinPassword,
+                nombre: userSinPassword.nombreCompleto,
+                rol: userSinPassword.rol?.nombre || 'Administrador'
+            }
+        });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

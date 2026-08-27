@@ -43,11 +43,33 @@ let inactivityListenersAttached = false;
 let inactivityResetHandler = null;
 
 // ── RENDER POSTGRESQL / JWT AUTH ENGINE ──
-function getJwtToken() { return sessionStorage.getItem('coepriss_jwt') || null; }
-function setJwtToken(t) { sessionStorage.setItem('coepriss_jwt', t); }
-function clearJwtToken() { sessionStorage.removeItem('coepriss_jwt'); sessionStorage.removeItem('coepriss_user'); }
-function getStoredUser() { try { return JSON.parse(sessionStorage.getItem('coepriss_user')); } catch { return null; } }
-function storeUser(u) { sessionStorage.setItem('coepriss_user', JSON.stringify(u)); }
+function getJwtToken() { return localStorage.getItem('coepriss_jwt') || sessionStorage.getItem('coepriss_jwt') || null; }
+function setJwtToken(t) {
+    if (t) {
+        localStorage.setItem('coepriss_jwt', t);
+        sessionStorage.setItem('coepriss_jwt', t);
+    }
+}
+function clearJwtToken() {
+    localStorage.removeItem('coepriss_jwt');
+    localStorage.removeItem('coepriss_user');
+    sessionStorage.removeItem('coepriss_jwt');
+    sessionStorage.removeItem('coepriss_user');
+}
+function getStoredUser() {
+    try {
+        const raw = localStorage.getItem('coepriss_user') || sessionStorage.getItem('coepriss_user');
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+function storeUser(u) {
+    if (u) {
+        localStorage.setItem('coepriss_user', JSON.stringify(u));
+        sessionStorage.setItem('coepriss_user', JSON.stringify(u));
+    }
+}
 function apiFetch(url, options = {}) {
     const token = getJwtToken();
     return fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) } });
@@ -136,13 +158,26 @@ function checkAuthSession() {
     const token = getJwtToken();
     const user = getStoredUser();
     if (token && user) {
+        // Activar inmediatamente la sesión guardada para evitar parpadeo o redirección al recargar
+        activateAuthenticatedSession(user);
+        
         apiFetch('/api/auth/me')
-            .then(res => res.json())
             .then(res => {
-                if (res.success) { activateAuthenticatedSession({ ...user, ...res.user }); }
-                else { clearJwtToken(); showLoginUi(); }
+                if (res.status === 401 || res.status === 403) {
+                    clearJwtToken();
+                    showLoginUi();
+                    return null;
+                }
+                return res.json();
             })
-            .catch(() => activateAuthenticatedSession(user));
+            .then(data => {
+                if (data && data.success && data.user) {
+                    activateAuthenticatedSession({ ...user, ...data.user });
+                }
+            })
+            .catch(err => {
+                console.info('[Auth] Validación en segundo plano diferida:', err.message);
+            });
         return true;
     }
     showLoginUi();
