@@ -3384,51 +3384,110 @@ function copyToClipboard(text) {
 
 let _currentPdfViewerBlobUrl = null;
 
-async function openPdfViewer(pdfBase64OrFacturamaId, title = 'Vista Previa de Factura CFDI 4.0 (PDF)') {
+async function openPdfViewer(pdfBase64OrFacturamaId, title = 'Vista Previa de Factura CFDI 4.0') {
     const modal = document.getElementById('modal-pdf-viewer');
     const frame = document.getElementById('pdf-viewer-frame');
     const titleEl = document.getElementById('pdf-viewer-title');
-    if (!modal || !frame) return;
+    const modalBody = frame ? frame.parentElement : null;
+    if (!modal || !frame || !modalBody) return;
 
     if (titleEl) titleEl.textContent = title;
 
+    // Limpiar recursos previos
     if (_currentPdfViewerBlobUrl) {
         URL.revokeObjectURL(_currentPdfViewerBlobUrl);
         _currentPdfViewerBlobUrl = null;
     }
 
-    if (pdfBase64OrFacturamaId && pdfBase64OrFacturamaId.length > 50) {
-        // Base64 string
-        frame.src = `data:application/pdf;base64,${pdfBase64OrFacturamaId}`;
-    } else if (pdfBase64OrFacturamaId) {
-        // Facturama ID -> fetch as blob
-        frame.src = 'about:blank';
-        try {
-            const token = getJwtToken();
-            const res = await fetch(`/api/facturama/descargar/${pdfBase64OrFacturamaId}/pdf`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const blob = await res.blob();
-                _currentPdfViewerBlobUrl = URL.createObjectURL(blob);
-                frame.src = _currentPdfViewerBlobUrl;
-            } else {
-                showToast('No se pudo cargar el PDF desde Facturama.', 'error');
-                return;
-            }
-        } catch (e) {
-            showToast('Error al obtener el PDF: ' + e.message, 'error');
+    // Quitar cualquier visor inline anterior
+    const prevInline = document.getElementById('pdf-viewer-inline');
+    if (prevInline) prevInline.remove();
+    frame.style.display = 'none';
+
+    // Mostrar spinner mientras carga
+    const spinner = document.createElement('div');
+    spinner.id = 'pdf-viewer-spinner';
+    spinner.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:1rem;gap:12px;';
+    spinner.innerHTML = '<svg style="width:28px;height:28px;animation:spin 1s linear infinite" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 018-8v4l3-3-3-3v4A10 10 0 002 12h2z"/></svg> Cargando...';
+    modalBody.appendChild(spinner);
+    modal.classList.add('open');
+
+    const removeSpinner = () => {
+        const s = document.getElementById('pdf-viewer-spinner');
+        if (s) s.remove();
+    };
+
+    const showError = (msg) => {
+        removeSpinner();
+        const err = document.createElement('div');
+        err.id = 'pdf-viewer-inline';
+        err.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:0.9rem;text-align:center;padding:24px;';
+        err.innerHTML = `<div><svg style="width:40px;height:40px;margin-bottom:12px;opacity:0.6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.73-3L13.73 4a2 2 0 00-3.46 0L3.27 16A2 2 0 005.07 19z"/></svg><br>${msg}</div>`;
+        modalBody.appendChild(err);
+    };
+
+    try {
+        // Caso 1: es base64 puro (cadena larga > 50 chars sin guiones que parece UUID)
+        const looksLikeBase64 = pdfBase64OrFacturamaId && pdfBase64OrFacturamaId.length > 100 && !/^[0-9a-f-]{30,40}$/i.test(pdfBase64OrFacturamaId);
+        if (looksLikeBase64) {
+            removeSpinner();
+            frame.style.display = 'block';
+            frame.src = `data:application/pdf;base64,${pdfBase64OrFacturamaId}`;
             return;
         }
-    } else if (_lastStampResult?.facturamaId) {
-        return openPdfViewer(_lastStampResult.facturamaId, title);
-    } else {
-        showToast('No hay PDF timbrado disponible para mostrar.', 'warning');
-        return;
-    }
 
-    modal.classList.add('open');
+        // Caso 2: usar _lastStampResult si no hay ID
+        if (!pdfBase64OrFacturamaId && _lastStampResult?.facturamaId) {
+            removeSpinner();
+            return openPdfViewer(_lastStampResult.facturamaId, title);
+        }
+
+        if (!pdfBase64OrFacturamaId) {
+            showError('No hay PDF disponible para mostrar.');
+            return;
+        }
+
+        // Caso 3: descargar desde el servidor
+        const token = getJwtToken();
+        const res = await fetch(`/api/facturama/descargar/${pdfBase64OrFacturamaId}/pdf`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!res.ok) {
+            showError(`No se pudo cargar la vista previa (HTTP ${res.status}).`);
+            return;
+        }
+
+        const contentType = res.headers.get('content-type') || '';
+        const blob = await res.blob();
+
+        if (contentType.includes('pdf')) {
+            // Es un PDF real → mostrarlo en el iframe
+            removeSpinner();
+            _currentPdfViewerBlobUrl = URL.createObjectURL(blob);
+            frame.style.display = 'block';
+            frame.src = _currentPdfViewerBlobUrl;
+        } else {
+            // Es HTML (fallback de BD) → renderizar inline dentro del modal
+            removeSpinner();
+            const htmlText = await blob.text();
+            const inlineDiv = document.createElement('div');
+            inlineDiv.id = 'pdf-viewer-inline';
+            inlineDiv.style.cssText = 'width:100%;height:100%;overflow:auto;background:#fff;';
+            // Usar srcdoc en un iframe para aislar el HTML
+            const inlineFrame = document.createElement('iframe');
+            inlineFrame.style.cssText = 'width:100%;height:100%;border:none;';
+            inlineFrame.srcdoc = htmlText;
+            inlineDiv.appendChild(inlineFrame);
+            modalBody.appendChild(inlineDiv);
+            // Almacenar blob por si el usuario quiere descargar
+            _currentPdfViewerBlobUrl = URL.createObjectURL(blob);
+        }
+    } catch (e) {
+        showError('Error al obtener la vista previa: ' + e.message);
+    }
 }
+
 
 function downloadPdfFromViewer() {
     if (_lastStampResult?.facturamaId) {
@@ -4315,6 +4374,19 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('open');
+    }
+    // Limpiar elementos del visor PDF al cerrar
+    if (modalId === 'modal-pdf-viewer') {
+        const spinner = document.getElementById('pdf-viewer-spinner');
+        if (spinner) spinner.remove();
+        const inline = document.getElementById('pdf-viewer-inline');
+        if (inline) inline.remove();
+        const frame = document.getElementById('pdf-viewer-frame');
+        if (frame) { frame.style.display = 'none'; frame.src = 'about:blank'; }
+        if (_currentPdfViewerBlobUrl) {
+            URL.revokeObjectURL(_currentPdfViewerBlobUrl);
+            _currentPdfViewerBlobUrl = null;
+        }
     }
 }
 

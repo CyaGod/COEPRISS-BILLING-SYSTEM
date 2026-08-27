@@ -2999,3 +2999,12 @@ body {
     }
 }
 
+/* PDF Viewer spinner animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+#pdf-viewer-frame {
+    display: none; /* shown only when a real PDF blob is loaded */
+}
