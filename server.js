@@ -445,8 +445,8 @@ app.delete('/api/facturas/:id', autenticarToken, async (req, res) => {
 
 app.post('/api/facturas/limpiar-falsas', autenticarToken, async (req, res) => {
     try {
-        const resultado = await limpiarFacturasFalsas();
-        await registrarBitacora(req.user?.id || 1, 'LIMPIEZA_PRUEBAS', 'Se eliminaron facturas falsas/pruebas dejando solo las 2 reales', req.ip);
+        const resultado = await vaciarFacturasYExpedientesPrueba();
+        await registrarBitacora(req.user?.id || 1, 'LIMPIEZA_TOTAL_PRUEBAS', 'Se vaciaron todas las facturas y expedientes de prueba para iniciar en blanco', req.ip);
         res.json({ success: true, data: resultado });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1969,38 +1969,19 @@ async function autoSeedDatabase() {
     }
 }
 
-async function limpiarFacturasFalsas() {
+async function vaciarFacturasYExpedientesPrueba() {
     try {
-        const facturas = await prisma.factura.findMany({
-            orderBy: { createdAt: 'desc' },
-            include: { expediente: true }
-        });
-
-        if (facturas.length > 2) {
-            const conservar = facturas.slice(0, 2);
-            const eliminar = facturas.slice(2);
-            const idsEliminar = eliminar.map(f => f.id);
-            const expIdsEliminar = eliminar.map(f => f.expedienteId).filter(Boolean);
-            const expIdsConservar = new Set(conservar.map(f => f.expedienteId).filter(Boolean));
-
-            console.log(`[LIMPIEZA] Conservando las 2 facturas reales (${conservar.map(f => f.folio).join(', ')}). Eliminando ${idsEliminar.length} facturas de prueba...`);
-
-            await prisma.factura.deleteMany({
-                where: { id: { in: idsEliminar } }
-            });
-
-            const expIdsBorrar = expIdsEliminar.filter(id => !expIdsConservar.has(id));
-            if (expIdsBorrar.length > 0) {
-                await prisma.expediente.deleteMany({
-                    where: { id: { in: expIdsBorrar } }
-                }).catch(() => {});
-            }
-            console.log(`[LIMPIEZA] ✅ Limpieza completada: Solo quedaron las 2 facturas reales.`);
-            return { eliminadas: idsEliminar.length, conservadas: conservar.length, folios: conservar.map(f => f.folio) };
+        const countFac = await prisma.factura.count().catch(() => 0);
+        const countExp = await prisma.expediente.count().catch(() => 0);
+        if (countFac > 0 || countExp > 0) {
+            console.log(`[LIMPIEZA] Eliminando ${countFac} facturas y ${countExp} expedientes de prueba...`);
+            await prisma.factura.deleteMany({});
+            await prisma.expediente.deleteMany({});
+            console.log(`[LIMPIEZA] ✅ Base de datos vaciada al 100%. Lista desde cero para facturación oficial.`);
         }
-        return { eliminadas: 0, conservadas: facturas.length, folios: facturas.map(f => f.folio) };
+        return { success: true, facturasEliminadas: countFac, expedientesEliminados: countExp };
     } catch (err) {
-        console.warn('[LIMPIEZA] Error en limpieza de facturas:', err.message);
+        console.warn('[LIMPIEZA] Error al vaciar base de datos:', err.message);
         return { error: err.message };
     }
 }
@@ -2012,7 +1993,7 @@ async function startServer() {
             dbEngine = 'PostgreSQL (Render)';
             console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
             await autoSeedDatabase();
-            await limpiarFacturasFalsas();
+            await vaciarFacturasYExpedientesPrueba();
         } catch (err) {
             console.warn('⚠️ No se pudo conectar a PostgreSQL:', err.message);
             console.log('👉 Ejecutando con Motor de Almacenamiento Local de Render.');
@@ -2031,4 +2012,5 @@ async function startServer() {
 }
 
 startServer();
+
 
