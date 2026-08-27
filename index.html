@@ -269,46 +269,84 @@
                         </div>
                     </div>
 
-                    <div class="grid-3" style="margin-bottom: 20px;">
-                        <div class="app-card" style="border-left: 5px solid var(--primary-color);">
-                            <span class="form-label">Facturas Timbradas</span>
-                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--primary-color); margin: 10px 0;" id="dash-timbradas-count">0</div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">Se calcula con los datos autorizados</span>
+                    <!-- TOP METRICS: 4 EXECUTIVE CARDS -->
+                    <div class="grid-4" style="margin-bottom: 20px;">
+                        <div class="app-card" style="border-left: 5px solid #28a745; padding: 18px 20px;">
+                            <span class="form-label" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; font-weight: 700;">Total Facturado (MXN)</span>
+                            <div style="font-size: 1.75rem; font-weight: 800; color: #155724; margin: 6px 0;" id="dash-total-monto">$0.00</div>
+                            <span style="font-size: 0.72rem; color: #28a745; font-weight: 600;">✓ Comprobantes CFDI 4.0</span>
                         </div>
-                        <div class="app-card" style="border-left: 5px solid var(--warning-color);">
-                            <span class="form-label">Solicitudes en Proceso</span>
-                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--warning-color); margin: 10px 0;" id="dash-proc-count">0</div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">Requieren atención</span>
+                        <div class="app-card" style="border-left: 5px solid var(--primary-color); padding: 18px 20px;">
+                            <span class="form-label" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; font-weight: 700;">Facturas Timbradas</span>
+                            <div style="font-size: 1.75rem; font-weight: 800; color: var(--primary-color); margin: 6px 0;" id="dash-timbradas-count">0</div>
+                            <span style="font-size: 0.72rem; color: #6c757d;">Emitidas ante el SAT</span>
                         </div>
-                        <div class="app-card" style="border-left: 5px solid var(--info-color);">
-                            <span class="form-label">Correos Enviados</span>
-                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--info-color); margin: 10px 0;" id="dash-correos-count">0</div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">Requiere un backend de correo</span>
+                        <div class="app-card" style="border-left: 5px solid var(--warning-color); padding: 18px 20px;">
+                            <span class="form-label" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; font-weight: 700;">En Proceso</span>
+                            <div style="font-size: 1.75rem; font-weight: 800; color: var(--warning-color); margin: 6px 0;" id="dash-proc-count">0</div>
+                            <span style="font-size: 0.72rem; color: #6c757d;">Pendientes de timbrado</span>
+                        </div>
+                        <div class="app-card" style="border-left: 5px solid var(--info-color); padding: 18px 20px;">
+                            <span class="form-label" style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; font-weight: 700;">Correos Enviados</span>
+                            <div style="font-size: 1.75rem; font-weight: 800; color: var(--info-color); margin: 6px 0;" id="dash-correos-count">0</div>
+                            <span style="font-size: 0.72rem; color: #6c757d;">Entrega de XML y PDF</span>
                         </div>
                     </div>
 
-                    <div class="grid-2">
-                        <div class="app-card">
-                            <h3 class="form-label" style="margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Accesos Rápidos</h3>
-                            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
-                                <button class="btn btn-primary" onclick="restartProcess()" style="width: 100%; justify-content: flex-start;">
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                                    Iniciar Nueva Solicitud de Factura
-                                </button>
-                                <button class="btn btn-secondary" onclick="goToStep(7)" style="width: 100%; justify-content: flex-start;">
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px; color: var(--primary-color);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    Ver Historial de Facturas Timbradas
-                                </button>
+                    <!-- MAIN DASHBOARD CONTENT: 2 COLUMNS (ACTIONS & RECENT ACTIVITY) -->
+                    <div style="display: grid; grid-template-columns: minmax(280px, 340px) 1fr; gap: 20px; align-items: start;">
+                        <!-- LEFT COLUMN: SHORTCUTS & SYSTEM STATUS -->
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div class="app-card" style="padding: 20px;">
+                                <h3 class="form-label" style="margin-bottom: 14px; font-size: 0.85rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Accesos Rápidos</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <button class="btn btn-primary" onclick="restartProcess()" style="width: 100%; justify-content: flex-start; padding: 10px 14px; font-size: 0.82rem; font-weight: 600;">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                        Iniciar Nueva Solicitud
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="triggerSidebarClick('nav-timbradas')" style="width: 100%; justify-content: flex-start; padding: 10px 14px; font-size: 0.82rem;">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 17px; height: 17px; color: var(--primary-color);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        Historial de Facturas
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="triggerSidebarClick('nav-clientes')" style="width: 100%; justify-content: flex-start; padding: 10px 14px; font-size: 0.82rem;">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 17px; height: 17px; color: var(--secondary-color);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                                        Directorio de Clientes
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="app-card" style="padding: 18px 20px;">
+                                <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.82rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Estado de Conexión</h3>
+                                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.78rem;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #6c757d;">PAC Facturama:</span>
+                                        <span id="dash-status-pac" class="badge badge-success" style="font-size: 0.7rem; padding: 2px 7px;">Conectado</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #6c757d;">Base de Datos:</span>
+                                        <span class="badge badge-success" style="font-size: 0.7rem; padding: 2px 7px;">PostgreSQL Activa</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #6c757d;">Motor de Correo:</span>
+                                        <span class="badge badge-info" style="font-size: 0.7rem; padding: 2px 7px;">Brevo API</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="app-card" style="display: flex; flex-direction: column;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
-                                <h3 class="form-label" style="margin: 0; font-size: 0.9rem; font-weight: 700; color: var(--primary-color);">Actividad Reciente</h3>
-                                <span style="font-size: 0.72rem; color: var(--text-muted);">Últimos movimientos</span>
+                        <!-- RIGHT COLUMN: EXPANDED RECENT ACTIVITY FEED -->
+                        <div class="app-card" style="padding: 20px; display: flex; flex-direction: column;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                                <div>
+                                    <h3 class="form-label" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--primary-color);">Actividad Reciente y Facturas Emitidas</h3>
+                                    <span style="font-size: 0.74rem; color: var(--text-muted);">Movimientos fiscales en tiempo real con accesos directos</span>
+                                </div>
+                                <button onclick="triggerSidebarClick('nav-timbradas')" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
+                                    Ver todas &rarr;
+                                </button>
                             </div>
-                            <div id="dash-actividad-reciente-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 2px;">
-                                <p style="font-size: 0.8rem; color: var(--text-muted); padding-top: 5px; margin: 0;">No hay actividad real cargada aún.</p>
+                            <div id="dash-actividad-reciente-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 480px; overflow-y: auto; padding-right: 4px;">
+                                <p style="font-size: 0.8rem; color: var(--text-muted); padding: 15px 0; margin: 0; text-align: center;">Cargando actividad...</p>
                             </div>
                         </div>
                     </div>
