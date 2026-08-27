@@ -174,8 +174,8 @@
                     </li>
                     <li class="nav-item" id="nav-config">
                         <a href="#">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                            Configuración
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            Auditoría
                         </a>
                     </li>
                 </ul>
@@ -380,76 +380,55 @@
                     </div>
                 </section>
 
-                <!-- SIDEBAR MENU: 5. CONFIGURACION PANEL -->
+                <!-- SIDEBAR MENU: 5. AUDITORÍA Y SEGURIDAD PANEL -->
                 <section class="step-panel" id="panel-config">
                     <div class="step-header-banner">
-                        <div class="step-header-badge" style="background-color: var(--primary-color);">C</div>
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">A</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Configuración del Sistema</h2>
-                            <p class="step-header-desc">Ajustes generales, credenciales del SAT y servidores de correo.</p>
+                            <h2 class="step-header-title">Bitácora de Auditoría y Seguridad</h2>
+                            <p class="step-header-desc">Registro inmutable de accesos, timbrados fiscales, descargas y eventos del sistema.</p>
                         </div>
                     </div>
 
-                    <div class="app-card grid-2">
-                        <div>
-                            <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Datos del Emisor</h3>
-                            <div class="form-group" style="margin-bottom: 10px;">
-                                <label class="form-label">RFC Emisor</label>
-                                <input type="text" class="form-control" value="CEP050915XXX" readonly>
-                            </div>
-                            <div class="form-group" style="margin-bottom: 10px;">
-                                <label class="form-label">Razón Social</label>
-                                <input type="text" class="form-control" value="COMISION ESTATAL PARA LA PROTECCION CONTRA RIESGOS SANITARIOS DE SINALOA" readonly>
-                            </div>
+                    <!-- Informative Summary Cards -->
+                    <div class="grid-3" style="margin-bottom: 20px;">
+                        <div class="app-card" style="padding: 16px 20px; border-left: 4px solid var(--primary-color);">
+                            <span class="form-label" style="font-size: 0.72rem; color: #6c757d; font-weight: 700; text-transform: uppercase;">Usuario Activo</span>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #212529; margin: 4px 0;" id="config-user-name">Administrador del Sistema</div>
+                            <span style="font-size: 0.72rem; color: #28a745; font-weight: 600;">● Sesión activa (JWT)</span>
                         </div>
-                        <div>
-                            <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Administrar CSD (Sello Digital)</h3>
-                            <div class="form-group" style="margin-bottom: 10px;">
-                                <label class="form-label">Archivo de Certificado (.cer)</label>
-                                <input type="file" class="form-control" id="csd-cer-file" style="font-size: 0.75rem; padding: 6px 10px;">
-                            </div>
-                            <div class="form-group" style="margin-bottom: 10px;">
-                                <label class="form-label">Clave Privada (.key)</label>
-                                <input type="file" class="form-control" id="csd-key-file" style="font-size: 0.75rem; padding: 6px 10px;">
-                            </div>
-                            <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;" id="csd-status">
-                                CSD no configurado. Nunca cargues la llave privada en esta página estática.
-                            </div>
+                        <div class="app-card" style="padding: 16px 20px; border-left: 4px solid var(--secondary-color);">
+                            <span class="form-label" style="font-size: 0.72rem; color: #6c757d; font-weight: 700; text-transform: uppercase;">Emisor Fiscal Oficial</span>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #212529; margin: 4px 0;">CEP130206LC4</div>
+                            <span style="font-size: 0.72rem; color: #6c757d;">COEPRISS Sinaloa</span>
+                        </div>
+                        <div class="app-card" style="padding: 16px 20px; border-left: 4px solid #0d6efd;">
+                            <span class="form-label" style="font-size: 0.72rem; color: #6c757d; font-weight: 700; text-transform: uppercase;">Ambiente PAC Facturama</span>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #0d6efd; margin: 4px 0;" id="config-pac-mode">CFDI 4.0 SAT</div>
+                            <span style="font-size: 0.72rem; color: #6c757d;">PAC Autorizado</span>
                         </div>
                     </div>
 
-                    <div class="app-card grid-2" style="margin-top: 15px;">
-                        <div>
-                            <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Acceso y permisos</h3>
-                            <div class="form-group">
-                                <label class="form-label">Usuario activo</label>
-                                <input type="text" class="form-control" value="Se obtiene desde Firebase Authentication" readonly>
+                    <!-- Main Audit Logs Table Card -->
+                    <div class="app-card" style="padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h3 class="panel-title" style="font-size: 1.05rem; font-weight: 700; margin: 0; color: #1B365D;">Eventos de Auditoría Registrados</h3>
+                                <p style="font-size: 0.75rem; color: #6c757d; margin: 2px 0 0 0;">Historial inmutable de operaciones realizadas en la plataforma.</p>
                             </div>
-                            <p style="font-size: 0.72rem; color: #6c757d; margin-top: 8px;">Los permisos deben definirse en Firebase; no se pueden cambiar desde el navegador.</p>
-                        </div>
-                        <div>
-                            <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Configuración SMTP</h3>
-                            <div class="form-group" style="margin-bottom: 10px;">
-                                <label class="form-label">Servidor SMTP</label>
-                                <input type="text" class="form-control" id="smtp-host" placeholder="Se configura únicamente en el backend">
-                            </div>
-                            <div class="form-group" style="margin-bottom: 10px;">
-                                <label class="form-label">Puerto</label>
-                                <input type="text" class="form-control" id="smtp-port" placeholder="Puerto del backend SMTP">
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="search-bitacora" placeholder="Buscar por acción o usuario..." oninput="filterBitacoraTable()" style="padding: 7px 14px; font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px; width: 260px;">
                             </div>
                         </div>
-                    </div>
 
-                    <div class="app-card" style="margin-top: 15px;">
-                        <h3 class="form-label" style="margin-bottom: 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Bitácora de Auditoría y Seguridad</h3>
-                        <div class="report-table-wrapper" style="max-height: 250px; overflow-y: auto;">
-                            <table class="report-table" style="font-size: 0.75rem;">
+                        <div class="report-table-wrapper" style="max-height: 520px; overflow-y: auto;">
+                            <table class="report-table" style="font-size: 0.82rem;">
                                 <thead>
                                     <tr>
-                                        <th>Fecha y Hora</th>
-                                        <th>Usuario</th>
-                                        <th>Acción Realizada</th>
-                                        <th>Detalles</th>
+                                        <th style="width: 170px;">Fecha y Hora</th>
+                                        <th style="width: 160px;">Usuario</th>
+                                        <th style="width: 180px;">Acción</th>
+                                        <th>Detalles del Evento</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tbody-bitacora">
@@ -457,10 +436,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-
-                    <div class="btn-container" style="border-top: none; padding-top: 10px; justify-content: flex-end;">
-                        <button class="btn btn-primary" onclick="saveConfiguration()">Guardar Configuración</button>
                     </div>
                 </section>
 

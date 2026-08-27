@@ -648,7 +648,7 @@ function updateBreadcrumb(panelId) {
     } else if (panelId === 'panel-clientes') {
         path = 'Inicio › <strong>Clientes</strong>';
     } else if (panelId === 'panel-config') {
-        path = 'Inicio › <strong>Configuración</strong>';
+        path = 'Inicio › <strong>Auditoría y Seguridad</strong>';
     } else if (panelId.startsWith('step-panel-')) {
         const stepNum = panelId.split('-').pop();
         const stepNames = {
@@ -4512,25 +4512,84 @@ function renderCorreosTable() {
     });
 }
 
-function renderBitacoraTable() {
+function renderBitacoraTable(filteredLogs = null) {
     const tbody = document.getElementById('tbody-bitacora');
     if (!tbody) return;
 
+    // Actualizar datos del usuario y estado PAC en las tarjetas superiores
+    const userNameEl = document.getElementById('config-user-name');
+    if (userNameEl) userNameEl.textContent = state.currentUser?.name || 'Administrador del Sistema';
+
+    const pacModeEl = document.getElementById('config-pac-mode');
+    if (pacModeEl) {
+        apiFetch('/api/facturama/estado').then(r => r.json()).then(data => {
+            if (data.sandbox) {
+                pacModeEl.textContent = '🧪 Sandbox (Pruebas PAC)';
+                pacModeEl.style.color = '#b45309';
+            } else {
+                pacModeEl.textContent = '✅ Producción (SAT Oficial)';
+                pacModeEl.style.color = '#15803d';
+            }
+        }).catch(() => {});
+    }
+
+    const logs = filteredLogs !== null ? filteredLogs : (state.bitacoraSeguridad || []);
+
     tbody.innerHTML = '';
-    if (!state.bitacoraSeguridad || state.bitacoraSeguridad.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-table-cell" style="text-align:center; padding:24px; color:#868e96;">Sin eventos de seguridad registrados.</td></tr>';
+    if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-table-cell" style="text-align:center; padding:28px; color:#868e96;">Sin eventos de seguridad registrados.</td></tr>';
         return;
     }
-    state.bitacoraSeguridad.forEach(log => {
+
+    logs.forEach(log => {
+        const actionStr = (log.accion || log.action || 'EVENTO').toUpperCase();
+        let badgeBg = '#e2e8f0';
+        let badgeColor = '#334155';
+
+        if (actionStr.includes('TIMBRADO') || actionStr.includes('EXITO') || actionStr.includes('CREAD')) {
+            badgeBg = '#dcfce7';
+            badgeColor = '#15803d';
+        } else if (actionStr.includes('LOGIN') || actionStr.includes('ACCESO') || actionStr.includes('CORREO')) {
+            badgeBg = '#dbeafe';
+            badgeColor = '#1d4ed8';
+        } else if (actionStr.includes('CANCEL') || actionStr.includes('ERROR') || actionStr.includes('ELIMIN')) {
+            badgeBg = '#fee2e2';
+            badgeColor = '#b91c1c';
+        } else if (actionStr.includes('EDIT') || actionStr.includes('MODIF')) {
+            badgeBg = '#fef3c7';
+            badgeColor = '#b45309';
+        }
+
+        const fechaDisplay = log.fecha || (log.createdAt ? new Date(log.createdAt).toLocaleString('es-MX') : '—');
+        const usuarioDisplay = log.usuario || log.usuarioNombre || (log.usuarioRel?.username || 'Sistema');
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td style="color: #6c757d;">${log.fecha || (log.createdAt ? new Date(log.createdAt).toLocaleString('es-MX') : '—')}</td>
-            <td style="font-weight: 600;">${log.usuario || log.usuarioNombre || 'Sistema'}</td>
-            <td><span class="badge badge-pending">${log.accion || log.action || 'Acción'}</span></td>
-            <td style="color: #495057;">${log.detalles || '—'}</td>
+            <td style="color: #64748b; font-size: 0.8rem; font-family: monospace;">${fechaDisplay}</td>
+            <td style="font-weight: 700; color: #1e293b;">${usuarioDisplay}</td>
+            <td><span style="background: ${badgeBg}; color: ${badgeColor}; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; display: inline-block;">${actionStr}</span></td>
+            <td style="color: #334155; font-size: 0.8rem;">${log.detalles || '—'}</td>
         `;
         tbody.appendChild(tr);
     });
+}
+
+function filterBitacoraTable() {
+    const query = (document.getElementById('search-bitacora')?.value || '').toLowerCase().trim();
+    if (!query) {
+        renderBitacoraTable();
+        return;
+    }
+
+    const filtered = (state.bitacoraSeguridad || []).filter(log => {
+        const accion = (log.accion || log.action || '').toLowerCase();
+        const usuario = (log.usuario || log.usuarioNombre || '').toLowerCase();
+        const detalles = (log.detalles || '').toLowerCase();
+        const fecha = (log.fecha || '').toLowerCase();
+        return accion.includes(query) || usuario.includes(query) || detalles.includes(query) || fecha.includes(query);
+    });
+
+    renderBitacoraTable(filtered);
 }
 
 function facturarACliente(rfc) {
