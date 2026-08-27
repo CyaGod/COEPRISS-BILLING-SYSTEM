@@ -3182,6 +3182,16 @@ async function initStep4FacturamaBadge() {
         badgeEl.style.background = '#f8d7da';
         badgeEl.style.color = '#721c24';
     }
+
+    const btnTimbrar = document.getElementById('btn-pac-stamp');
+    const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
+    if (isFacturaTimbrada()) {
+        if (btnTimbrar) btnTimbrar.style.display = 'none';
+        if (btnRegresar) btnRegresar.style.display = 'none';
+    } else {
+        if (btnTimbrar) btnTimbrar.style.display = 'inline-flex';
+        if (btnRegresar) btnRegresar.style.display = 'inline-flex';
+    }
 }
 
 let _isStampingActive = false;
@@ -3382,6 +3392,14 @@ function _mostrarModalConfirmacionProduccion(resumen) {
 function _mostrarResultadoTimbrado(data, isSandbox) {
     const box = document.getElementById('pac-resultado-timbrado');
     if (!box) return;
+
+    // Ocultar botón de timbrar porque la factura ya fue emitida
+    const btnTimbrar = document.getElementById('btn-pac-stamp');
+    if (btnTimbrar) btnTimbrar.style.display = 'none';
+
+    // Ocultar botón de regresar a formulario porque el CFDI ya fue sellado
+    const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
+    if (btnRegresar) btnRegresar.style.display = 'none';
 
     const fmt = n => n != null ? `$${parseFloat(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—';
     const sandboxBadge = isSandbox
@@ -4613,6 +4631,14 @@ function restartProcess() {
 
     const resultadoTimbrado = document.getElementById('pac-resultado-timbrado');
     if (resultadoTimbrado) resultadoTimbrado.style.display = 'none';
+
+    const btnTimbrar = document.getElementById('btn-pac-stamp');
+    if (btnTimbrar) {
+        btnTimbrar.style.display = 'inline-flex';
+        btnTimbrar.disabled = false;
+    }
+    const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
+    if (btnRegresar) btnRegresar.style.display = 'inline-flex';
 
     _lastStampResult = null;
 
