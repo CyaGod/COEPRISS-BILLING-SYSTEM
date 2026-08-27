@@ -304,11 +304,76 @@ async function listarFacturas(pagina = 0, tamanio = 50) {
     return facturamaRequest('GET', `/cfdi?type=issued&page=${pagina}&pageSize=${tamanio}`);
 }
 
+/**
+ * Busca si un CFDI ya fue emitido en Facturama recientemente para el mismo expediente/receptor
+ * para reconciliar en caso de fallas de red o timeouts y evitar doble timbrado ante el SAT.
+ */
+async function reconciliarFacturaConPAC(expediente) {
+    try {
+        const rfc = (expediente.receptorRfc || expediente.rfc || '').toUpperCase().trim();
+        const total = parseFloat(expediente.cfdiTotal || expediente.importe || 0);
+
+        if (!rfc) return null;
+
+        // Consultar los CFDIs emitidos más recientes (primeros 20)
+        let lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=20&keyword=${encodeURIComponent(rfc)}`).catch(() => null);
+        if (!lista || !Array.isArray(lista) || lista.length === 0) {
+            lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=20`).catch(() => null);
+        }
+
+        if (!lista || !Array.isArray(lista)) return null;
+
+        const ahora = Date.now();
+        const MAX_DIFF_MS = 60 * 60 * 1000; // Ventana de coincidencia de 1 hora
+
+        for (const cfdi of lista) {
+            const cfdiRfc = (cfdi.Receiver?.Rfc || cfdi.Rfc || '').toUpperCase().trim();
+            const cfdiTotal = parseFloat(cfdi.Total || 0);
+            const cfdiFecha = cfdi.Date ? new Date(cfdi.Date).getTime() : 0;
+
+            const rfcMatch = cfdiRfc === rfc || rfc === 'XAXX010101000';
+            const totalMatch = Math.abs(cfdiTotal - total) < 0.05;
+            const tiempoMatch = !cfdiFecha || Math.abs(ahora - cfdiFecha) < MAX_DIFF_MS;
+
+            if (rfcMatch && totalMatch && tiempoMatch) {
+                const uuid = cfdi.Complement?.TaxStamp?.Uuid || cfdi.Uuid || null;
+                console.log(`[PAC RECONCILIACION] CFDI previo detectado en Facturama: ID=${cfdi.Id}, Folio=${cfdi.Folio}, UUID=${uuid}`);
+                
+                const [xmlData, pdfData] = await Promise.all([
+                    descargarArchivo(cfdi.Id, 'xml').catch(() => null),
+                    descargarArchivo(cfdi.Id, 'pdf').catch(() => null),
+                ]);
+
+                return {
+                    id:         cfdi.Id,
+                    uuid:       uuid,
+                    folio:      cfdi.Folio,
+                    serie:      cfdi.Serie,
+                    fecha:      cfdi.Date,
+                    subtotal:   cfdi.Subtotal,
+                    total:      cfdi.Total,
+                    estatus:    cfdi.Status || 'active',
+                    xmlBase64:  xmlData,
+                    pdfBase64:  pdfData,
+                    sandbox:    SANDBOX,
+                    reconciliado: true,
+                    datos:      cfdi,
+                };
+            }
+        }
+        return null;
+    } catch (err) {
+        console.warn('[PAC RECONCILIACION ERROR]', err.message);
+        return null;
+    }
+}
+
 module.exports = {
     getConfig,
     verificarConexion,
     validarExpediente,
     timbrarCFDI,
+    reconciliarFacturaConPAC,
     descargarArchivo,
     obtenerCFDI,
     cancelarCFDI,

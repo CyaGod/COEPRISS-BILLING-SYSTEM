@@ -3107,9 +3107,27 @@ async function initStep4FacturamaBadge() {
     }
 }
 
+let _isStampingActive = false;
+
 async function stampInvoiceViaPAC() {
+    if (_isStampingActive) {
+        console.warn('[STAMP] Clic duplicado ignorado: el timbrado ya se encuentra en ejecución.');
+        return;
+    }
+
     if (!state.activeExpediente) {
         showToast('Primero carga y procesa un documento para obtener el expediente.', 'warning');
+        return;
+    }
+
+    // ── CAPA DE FRONTEND: Si ya tiene UUID o estatus TIMBRADA, no re-enviar al PAC ──
+    if (state.activeExpediente.uuid || state.activeExpediente.estatus === 'TIMBRADA') {
+        const uuidExistente = state.activeExpediente.uuid || 'Registrado';
+        showToast(`Este expediente ya cuenta con comprobante fiscal oficial (UUID: ${uuidExistente}).`, 'info');
+        if (_lastStampResult) {
+            _mostrarResultadoTimbrado(_lastStampResult, badgeEl?.dataset?.sandbox === 'true');
+        }
+        goToStep(6);
         return;
     }
 
@@ -3134,6 +3152,8 @@ async function stampInvoiceViaPAC() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (btn) btn.disabled = false;
     }
+
+    _isStampingActive = true;
 
     try {
         setLoading('Validando datos fiscales con Facturama...', 'Verificando RFC, clave SAT e importes.');
@@ -3183,32 +3203,39 @@ async function stampInvoiceViaPAC() {
         state.activeExpediente.facturamaId = stampData.facturamaId;
         state.activeExpediente.estatus = 'TIMBRADA';
 
-        // Agregar a la lista de facturas
-        const newFactura = {
-            id: stampData.facturaId,
-            folioInterno: folio,
-            folioRecibo: stampData.folio || folio,
-            cliente: state.activeExpediente.cliente,
-            rfc: state.activeExpediente.rfc,
-            fecha: new Date().toLocaleDateString('es-MX'),
-            importe: parseFloat(stampData.total || state.activeExpediente.importe || 0),
-            uuid: stampData.uuid,
-            estatus: 'TIMBRADA',
-            facturamaId: stampData.facturamaId,
-            correo: state.activeExpediente.correo
-        };
-        state.facturas.unshift(newFactura);
+        // Agregar a la lista de facturas si no existe ya
+        const yaEnLista = state.facturas.some(f => (stampData.uuid && f.uuid === stampData.uuid) || (f.folioInterno === folio));
+        if (!yaEnLista) {
+            const newFactura = {
+                id: stampData.facturaId,
+                folioInterno: folio,
+                folioRecibo: stampData.folio || folio,
+                cliente: state.activeExpediente.cliente,
+                rfc: state.activeExpediente.rfc,
+                fecha: new Date().toLocaleDateString('es-MX'),
+                importe: parseFloat(stampData.total || state.activeExpediente.importe || 0),
+                uuid: stampData.uuid,
+                estatus: 'TIMBRADA',
+                facturamaId: stampData.facturamaId,
+                correo: state.activeExpediente.correo
+            };
+            state.facturas.unshift(newFactura);
+        }
 
         // Recargar directorio de clientes para incluir al nuevo
-        await loadClientes();
+        await loadClientes().catch(() => {});
 
         clearLoading();
         _mostrarResultadoTimbrado(stampData, isSandbox);
         renderReportTable();
         updateDashboardCounts();
 
-        const modoStr = isSandbox ? '🧪 (SANDBOX)' : '✅ (PRODUCCIÓN)';
-        showToast(`${modoStr} ¡CFDI 4.0 timbrado exitosamente! UUID: ${stampData.uuid}`, 'success');
+        if (stampData.yaEstabaTimbrada) {
+            showToast(`✓ Comprobante fiscal oficial recuperado (UUID: ${stampData.uuid}).`, 'info');
+        } else {
+            const modoStr = isSandbox ? '🧪 (SANDBOX)' : '✅ (PRODUCCIÓN)';
+            showToast(`${modoStr} ¡CFDI 4.0 timbrado exitosamente! UUID: ${stampData.uuid}`, 'success');
+        }
         
         if (stampData.correoEnviado && stampData.correoDestinatario) {
             state.historialCorreos.unshift({
@@ -3230,6 +3257,8 @@ async function stampInvoiceViaPAC() {
         clearLoading();
         console.error('[STAMP EXCEPTION]', err);
         showToast(`❌ Error de conexión: ${err.message}`, 'error');
+    } finally {
+        _isStampingActive = false;
     }
 }
 

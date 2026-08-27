@@ -1297,9 +1297,12 @@ app.post('/api/facturama/test', autenticarToken, async (req, res) => {
     }
 });
 
+// Candado de exclusión mutua para evitar timbrados concurrentes del mismo expediente
+const stampingLocks = new Map();
+
 /**
  * POST /api/facturama/timbrar
- * Timbra el CFDI y guarda el resultado en la base de datos.
+ * Timbra el CFDI y guarda el resultado en la base de datos con blindaje anti-duplicados e idempotencia.
  * Body: { expedienteId: string, confirmarProduccion?: boolean }
  *
  * ⚠️ En modo PRODUCCIÓN requiere confirmarProduccion: true
@@ -1316,6 +1319,16 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
     }
 
     if (!expedienteId) return res.status(400).json({ error: 'Se requiere expedienteId.' });
+
+    // ── CAPA DE CONCURRENCIA: Bloqueo de solicitudes en vuelo para el mismo expediente ──
+    const existingLockTime = stampingLocks.get(expedienteId);
+    if (existingLockTime && (Date.now() - existingLockTime < 180000)) { // 3 min safety
+        return res.status(409).json({
+            error: 'El timbrado de este expediente ya se encuentra en proceso. Por favor espera unos segundos.',
+            enProceso: true,
+        });
+    }
+    stampingLocks.set(expedienteId, Date.now());
 
     try {
         // Buscar expediente en BD
@@ -1361,21 +1374,60 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
 
         if (!expediente) return res.status(404).json({ error: `Expediente ${expedienteId} no encontrado.` });
 
-        // Verificar que no tenga ya una factura timbrada
+        // ── CAPA AUTORITATIVA EN BASE DE DATOS: Verificar si ya cuenta con factura timbrada ──
         const facturaExistente = await prisma.factura.findFirst({
             where: { expedienteId: expediente.id, estatus: 'TIMBRADA' }
         });
-        if (facturaExistente) {
-            return res.status(409).json({
-                error: `Este expediente ya tiene una factura timbrada: UUID ${facturaExistente.uuid}`,
-                uuid: facturaExistente.uuid,
+
+        if (facturaExistente || (expediente.estatus === 'TIMBRADO' && expediente.cfdiUuid)) {
+            const uuidExistente = facturaExistente?.uuid || expediente.cfdiUuid;
+            const facturamaIdExistente = facturaExistente?.facturamaId;
+            console.log(`[FACTURAMA/TIMBRAR] Expediente ${expedienteId} ya estaba timbrado previamente (UUID: ${uuidExistente}). Retornando comprobante existente sin llamar al PAC.`);
+
+            let xmlB64 = facturaExistente?.xmlContent ? Buffer.from(facturaExistente.xmlContent, 'utf-8').toString('base64') : null;
+            let pdfB64 = null;
+            if (facturamaIdExistente && (!xmlB64 || !pdfB64)) {
+                if (!xmlB64) xmlB64 = await facturama.descargarArchivo(facturamaIdExistente, 'xml').catch(() => null);
+                pdfB64 = await facturama.descargarArchivo(facturamaIdExistente, 'pdf').catch(() => null);
+            }
+
+            return res.json({
+                success:           true,
+                yaEstabaTimbrada:  true,
+                sandbox:           facturama.SANDBOX,
+                facturaId:         facturaExistente?.id || null,
+                facturamaId:       facturamaIdExistente || null,
+                uuid:              uuidExistente,
+                folio:             facturaExistente?.folio || expedienteId,
+                serie:             expediente.cfdiSerie || null,
+                fecha:             facturaExistente?.fechaTimbrado || new Date(),
+                subtotal:          expediente.cfdiSubtotal,
+                total:             expediente.cfdiTotal,
+                xmlBase64:         xmlB64,
+                pdfBase64:         pdfB64,
+                correoEnviado:     false,
+                correoDestinatario: expediente.receptorEmail || null
             });
         }
 
-        console.log(`[FACTURAMA/TIMBRAR] Iniciando timbrado para expediente ${expedienteId} (sandbox=${facturama.SANDBOX})`);
+        console.log(`[FACTURAMA/TIMBRAR] Iniciando timbrado oficial para expediente ${expedienteId} (sandbox=${facturama.SANDBOX})`);
 
-        // Timbrar vía Facturama
-        const resultado = await facturama.timbrarCFDI(expediente);
+        // ── LLAMADA AL PAC CON RECONCILIACIÓN ANTE TIMEOUT O FALLO DE RED ──
+        let resultado = null;
+        try {
+            resultado = await facturama.timbrarCFDI(expediente);
+        } catch (pacErr) {
+            console.warn(`[FACTURAMA/TIMBRAR] Error en llamada al PAC (${pacErr.message}). Ejecutando reconciliación previa para evitar duplicados...`);
+            
+            // Intentar reconciliar por si el PAC timbró exitosamente antes del corte de red o timeout
+            const reconciliado = await facturama.reconciliarFacturaConPAC(expediente);
+            if (reconciliado && reconciliado.uuid) {
+                console.log(`[FACTURAMA/TIMBRAR] ¡Reconciliación exitosa! Comprobante emitido recuperado: UUID=${reconciliado.uuid}`);
+                resultado = reconciliado;
+            } else {
+                throw pacErr;
+            }
+        }
 
         // Guardar en base de datos
         const factura = await prisma.factura.create({
@@ -1552,6 +1604,8 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
             error:   err.message,
             detalles: err.data || null,
         });
+    } finally {
+        stampingLocks.delete(expedienteId);
     }
 });
 
