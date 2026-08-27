@@ -518,10 +518,6 @@ function initNavigation() {
             } else if (id === 'nav-solicitud') {
                 item.classList.add('active-pulse');
                 restartProcess();
-            } else if (id === 'nav-proceso') {
-                item.classList.add('active');
-                renderProcesoTable();
-                goToPanel('panel-proceso');
             } else if (id === 'nav-timbradas') {
                 item.classList.add('active');
                 renderReportTable();
@@ -645,8 +641,6 @@ function updateBreadcrumb(panelId) {
     let path = 'Inicio';
     if (panelId === 'panel-inicio') {
         path = 'Inicio › <strong>Panel General</strong>';
-    } else if (panelId === 'panel-proceso') {
-        path = 'Inicio › <strong>En proceso</strong>';
     } else if (panelId === 'panel-timbradas' || panelId === 'step-panel-7') {
         path = 'Inicio › <strong>Facturas timbradas</strong>';
     } else if (panelId === 'panel-correos') {
@@ -4727,16 +4721,12 @@ function openInvoicePreviewModal(folio = '', clientName = '', totalVal = '') {
 
 function updateDashboardCounts() {
     const timbradasEl = document.getElementById('dash-timbradas-count');
-    const procEl = document.getElementById('dash-proc-count');
+    const clientesEl = document.getElementById('dash-clientes-count');
     const correosEl = document.getElementById('dash-correos-count');
 
-    if (timbradasEl) timbradasEl.textContent = state.facturas.length;
-    if (procEl) {
-        // Dossiers in process are those not Timbrado or Entregado
-        const procCount = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado' && e.estatus !== 'TIMBRADO' && e.estatus !== 'TIMBRADA').length;
-        procEl.textContent = procCount;
-    }
-    if (correosEl) correosEl.textContent = state.historialCorreos.length;
+    if (timbradasEl) timbradasEl.textContent = (state.facturas || []).length;
+    if (clientesEl) clientesEl.textContent = (state.clientes || []).length;
+    if (correosEl) correosEl.textContent = (state.historialCorreos || []).length;
 
     renderActividadReciente();
 }

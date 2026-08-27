@@ -154,12 +154,6 @@
                             Nueva solicitud
                         </a>
                     </li>
-                    <li class="nav-item" id="nav-proceso">
-                        <a href="#">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            En proceso
-                        </a>
-                    </li>
                     <li class="nav-item" id="nav-timbradas">
                         <a href="#">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
@@ -273,17 +267,17 @@
                         <div class="app-card" style="border-left: 5px solid var(--primary-color);">
                             <span class="form-label">Facturas Timbradas</span>
                             <div style="font-size: 2.2rem; font-weight: 700; color: var(--primary-color); margin: 10px 0;" id="dash-timbradas-count">0</div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">Se calcula con los datos autorizados</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Comprobantes oficiales ante el SAT</span>
                         </div>
-                        <div class="app-card" style="border-left: 5px solid var(--warning-color);">
-                            <span class="form-label">Solicitudes en Proceso</span>
-                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--warning-color); margin: 10px 0;" id="dash-proc-count">0</div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">Requieren atención</span>
+                        <div class="app-card" style="border-left: 5px solid var(--secondary-color);">
+                            <span class="form-label">Clientes Registrados</span>
+                            <div style="font-size: 2.2rem; font-weight: 700; color: var(--secondary-color); margin: 10px 0;" id="dash-clientes-count">0</div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Directorio de contribuyentes</span>
                         </div>
                         <div class="app-card" style="border-left: 5px solid var(--info-color);">
                             <span class="form-label">Correos Enviados</span>
                             <div style="font-size: 2.2rem; font-weight: 700; color: var(--info-color); margin: 10px 0;" id="dash-correos-count">0</div>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">Requiere un backend de correo</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Entrega de XML y PDF</span>
                         </div>
                     </div>
 
@@ -311,34 +305,6 @@
                                 <p style="font-size: 0.8rem; color: var(--text-muted); padding-top: 5px; margin: 0;">No hay actividad real cargada aún.</p>
                             </div>
                         </div>
-                    </div>
-                </section>
-
-                <!-- SIDEBAR MENU: 2. EN PROCESO PANEL -->
-                <section class="step-panel" id="panel-proceso">
-                    <div class="step-header-banner">
-                        <div class="step-header-badge" style="background-color: var(--primary-color);">P</div>
-                        <div class="step-header-text">
-                            <h2 class="step-header-title">Solicitudes en Proceso</h2>
-                            <p class="step-header-desc">Documentos recibidos que se encuentran en alguna etapa de procesamiento.</p>
-                        </div>
-                    </div>
-
-                    <div class="report-table-wrapper">
-                        <table class="report-table">
-                            <thead>
-                                <tr>
-                                    <th>Folio Recibo</th>
-                                    <th>Cliente / Remitente</th>
-                                    <th>Fecha Recibido</th>
-                                    <th>Fase del Proceso</th>
-                                    <th style="text-align: center;">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-proceso">
-                                <!-- Rendered dynamically by app.js -->
-                            </tbody>
-                        </table>
                     </div>
                 </section>
 
