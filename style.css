@@ -348,6 +348,22 @@ body {
     font-weight: 600;
 }
 
+.step-node.locked {
+    cursor: not-allowed !important;
+    opacity: 0.38 !important;
+}
+
+.step-node.locked .step-circle {
+    border-color: #e2e8f0 !important;
+    background-color: #f8f9fa !important;
+    color: #a0aec0 !important;
+}
+
+.step-node.locked .step-label {
+    color: #a0aec0 !important;
+}
+
+
 /* 3b. Topbar Styles */
 .topbar {
     height: 52px;

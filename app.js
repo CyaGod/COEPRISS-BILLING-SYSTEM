@@ -25,6 +25,7 @@ const state = {
     bitacoraSeguridad: [],
 
     currentStep: 1,
+    maxStepUnlocked: 1,
     xmlUploaded: false,
     pdfUploaded: false,
 
@@ -454,6 +455,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+function isFacturaTimbrada() {
+    return Boolean(
+        state.activeExpediente?.uuid ||
+        state.activeExpediente?.cfdiUuid ||
+        state.activeExpediente?.estatus === 'TIMBRADA' ||
+        state.activeExpediente?.estatus === 'TIMBRADO' ||
+        _lastStampResult?.uuid
+    );
+}
+
+function isStepUnlocked(step) {
+    if (step === 1) return !isFacturaTimbrada();
+    if (isFacturaTimbrada()) {
+        // Una vez timbrada, los pasos 1, 2 y 3 quedan bloqueados permanentemente para evitar alterar datos ya sellados
+        return step >= 4;
+    }
+    return step <= (state.maxStepUnlocked || 1);
+}
+
 // 1. Navigation & Panel Control
 function initNavigation() {
     // Header Stepper Node Click
@@ -461,14 +481,28 @@ function initNavigation() {
     stepNodes.forEach(node => {
         node.addEventListener('click', () => {
             const step = parseInt(node.getAttribute('data-step'), 10);
-            if (step === 1) {
-                goToStep(1);
-            } else if (state.activeExpediente) {
-                if (step === 7) renderReportTable();
+
+            // 1. Si la factura ya fue timbrada oficialmente ante el SAT
+            if (isFacturaTimbrada()) {
+                if (step < 4) {
+                    showToast('🔒 Esta factura ya fue timbrada ante el SAT. No se pueden modificar los pasos anteriores porque el comprobante ya fue emitido. Para emitir una nueva factura, haz clic en "Nueva Factura".', 'warning');
+                    return;
+                }
+                if (step === 7) {
+                    renderReportTable();
+                }
                 goToStep(step);
-            } else {
-                showToast('Primero carga y procesa un documento en el Paso 1 para abrir este paso.', 'warning');
+                return;
             }
+
+            // 2. Si la factura NO ha sido timbrada: bloqueo paso a paso progresivo
+            if (step > (state.maxStepUnlocked || 1)) {
+                showToast(`🔒 Completa el Paso ${state.currentStep || 1} antes de desbloquear y avanzar al Paso ${step}.`, 'warning');
+                return;
+            }
+
+            // Pasos ya desbloqueados (1..maxStepUnlocked): permitir revisar/corregir libremente
+            goToStep(step);
         });
     });
 
@@ -651,13 +685,23 @@ function goToStep(stepNumber) {
     // 2. Update Stepper Nodes UI
     const stepNodes = document.querySelectorAll('.step-node');
     stepNodes.forEach(node => {
-        const nodeStep = parseInt(node.getAttribute('data-step'));
-        node.classList.remove('active', 'completed');
+        const nodeStep = parseInt(node.getAttribute('data-step'), 10);
+        node.classList.remove('active', 'completed', 'locked');
         
         if (nodeStep === stepNumber) {
             node.classList.add('active');
         } else if (nodeStep < stepNumber) {
             node.classList.add('completed');
+        }
+
+        const unlocked = isStepUnlocked(nodeStep);
+        if (!unlocked) {
+            node.classList.add('locked');
+            node.style.opacity = '0.38';
+            node.style.cursor = 'not-allowed';
+        } else {
+            node.style.opacity = '1';
+            node.style.cursor = 'pointer';
         }
     });
 
@@ -943,6 +987,7 @@ async function startScanAnimation() {
         updatePaymentValidationUI();
         saveDatabaseToStorage();
         showToast(`✅ Lectura terminada: ${readCount} de ${totalCount} archivo(s) procesado(s). Revisa o corrige los datos antes de continuar.`, 'info');
+        state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, 2);
         goToStep(2);
     } catch (error) {
         console.error('OCR error:', error);
@@ -2846,6 +2891,7 @@ function confirmStep2() {
     state.activeExpediente.estatus = 'Datos confirmados';
     addAuditLogToActive('Datos del expediente confirmados manualmente por el usuario.');
     saveDatabaseToStorage();
+    state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, 3);
     goToStep(3);
 }
 
@@ -3097,6 +3143,7 @@ async function proceedToStep4() {
         console.warn('[EXPEDIENTE PRE-SAVE ERROR]', e.message);
     }
 
+    state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, 4);
     goToStep(4);
 }
 
@@ -3371,9 +3418,13 @@ function _mostrarResultadoTimbrado(data, isSandbox) {
                 <button onclick="copyToClipboard('${data.uuid}')" class="btn btn-secondary" style="font-size:0.8rem;padding:8px 14px;">
                     📋 Copiar UUID
                 </button>
+                <button onclick="restartProcess()" class="btn btn-primary" style="font-size:0.8rem;padding:8px 16px;background:var(--secondary-color);color:#fff;border:none;display:flex;align-items:center;gap:6px;font-weight:700;">
+                    ➕ Nueva Factura
+                </button>
             </div>
         </div>
     `;
+    goToStep(4);
 }
 
 async function downloadFromFacturama(facturamaId, formato) {
@@ -4384,6 +4435,7 @@ function facturarACliente(rfc) {
         auditoria: [`[${getCurrentDateTimeString()}] Expediente iniciado desde el Directorio de Clientes (${cliente.rfc}).`]
     };
 
+    state.maxStepUnlocked = 3;
     goToStep(3);
     showToast(`Iniciando factura para ${cliente.razonSocial}. Completa el importe y timbra.`, 'info');
 }
@@ -4394,6 +4446,7 @@ function facturarACliente(rfc) {
 
 function restartProcess() {
     state.activeExpediente = null;
+    state.maxStepUnlocked = 1;
     state.uploadedFiles = [];
     state.ocrBusy = false;
     state.scanPreviewUrl = '';
