@@ -2020,7 +2020,6 @@ async function startServer() {
             dbEngine = 'PostgreSQL (Render)';
             console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
             await autoSeedDatabase();
-            await vaciarFacturasYExpedientesPrueba();
         } catch (err) {
             console.warn('⚠️ No se pudo conectar a PostgreSQL:', err.message);
             console.log('👉 Ejecutando con Motor de Almacenamiento Local de Render.');
