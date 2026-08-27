@@ -460,19 +460,16 @@ function initNavigation() {
     const stepNodes = document.querySelectorAll('.step-node');
     stepNodes.forEach(node => {
         node.addEventListener('click', () => {
-            const step = parseInt(node.getAttribute('data-step'));
+            const step = parseInt(node.getAttribute('data-step'), 10);
             if (step === 1) {
                 goToStep(1);
             } else if (step === 7) {
                 renderReportTable();
                 goToStep(7);
-            } else if ([4, 5, 6].includes(step)) {
-                goToStep(step);
-                showToast('Este paso abre correctamente, pero requiere configurar el servicio real indicado.', 'warning');
             } else if (state.activeExpediente) {
                 goToStep(step);
             } else {
-                showToast('Primero carga y procesa un documento real para abrir este paso.', 'warning');
+                showToast('Primero carga y procesa un documento en el Paso 1 para abrir este paso.', 'warning');
             }
         });
     });
