@@ -4729,43 +4729,14 @@ function updateDashboardCounts() {
     const timbradasEl = document.getElementById('dash-timbradas-count');
     const procEl = document.getElementById('dash-proc-count');
     const correosEl = document.getElementById('dash-correos-count');
-    const totalMontoEl = document.getElementById('dash-total-monto');
 
-    const totalFacturas = (state.facturas || []).length;
-    if (timbradasEl) timbradasEl.textContent = totalFacturas;
-
-    // Calcular el monto total acumulado de las facturas timbradas
-    const sumTotal = (state.facturas || []).reduce((acc, f) => {
-        const val = parseFloat(f.importe || f.total || 0);
-        return acc + (isNaN(val) ? 0 : val);
-    }, 0);
-    if (totalMontoEl) {
-        totalMontoEl.textContent = `$${sumTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-
+    if (timbradasEl) timbradasEl.textContent = state.facturas.length;
     if (procEl) {
-        const procCount = (state.expedientes || []).filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado' && e.estatus !== 'TIMBRADO' && e.estatus !== 'TIMBRADA').length;
+        // Dossiers in process are those not Timbrado or Entregado
+        const procCount = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado' && e.estatus !== 'TIMBRADO' && e.estatus !== 'TIMBRADA').length;
         procEl.textContent = procCount;
     }
-    if (correosEl) correosEl.textContent = (state.historialCorreos || []).length;
-
-    // Actualizar badge de Facturama si existe
-    const pacStatusEl = document.getElementById('dash-status-pac');
-    if (pacStatusEl) {
-        apiFetch('/api/facturama/estado').then(r => r.json()).then(data => {
-            if (data.sandbox) {
-                pacStatusEl.textContent = 'Sandbox (Pruebas PAC)';
-                pacStatusEl.className = 'badge badge-warning';
-                pacStatusEl.style.backgroundColor = '#fff3cd';
-                pacStatusEl.style.color = '#856404';
-            } else {
-                pacStatusEl.textContent = 'Producción (SAT Oficial)';
-                pacStatusEl.className = 'badge badge-success';
-                pacStatusEl.style.backgroundColor = '#d4edda';
-                pacStatusEl.style.color = '#155724';
-            }
-        }).catch(() => {});
-    }
+    if (correosEl) correosEl.textContent = state.historialCorreos.length;
 
     renderActividadReciente();
 }
@@ -4779,36 +4750,48 @@ function renderActividadReciente() {
     // 1. Facturas timbradas
     (state.facturas || []).forEach(f => {
         const folioStr = f.folioRecibo || f.folioInterno || f.folio || 'REC';
-        const clienteStr = f.cliente || f.receptorNombre || 'Contribuyente';
-        const rfcStr = f.rfc || f.receptorRfc || 'RFC NO REGISTRADO';
+        const clienteStr = f.cliente || f.receptorNombre || f.rfc || 'Contribuyente';
         const totalNum = parseFloat(f.importe || f.total || 0);
-        const subtotalNum = parseFloat((totalNum / 1.16).toFixed(2));
-        const ivaNum = parseFloat((totalNum - subtotalNum).toFixed(2));
-
         feed.push({
             tipo: 'factura',
-            folio: folioStr,
-            cliente: clienteStr,
-            rfc: rfcStr,
-            total: totalNum,
-            subtotal: subtotalNum,
-            iva: ivaNum,
-            uuid: f.uuid || '',
-            facturamaId: f.facturamaId || '',
-            correo: f.correo || '',
+            titulo: `Factura Timbrada · ${folioStr}`,
+            subtitulo: `${clienteStr} — $${totalNum.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+            extra: f.uuid ? `UUID: ${f.uuid.substring(0, 8)}...` : '',
             fecha: f.fechaTimbrado || f.createdAt || f.fecha || new Date(),
+            icono: '⚡',
+            badgeBg: '#d4edda',
+            badgeColor: '#155724'
         });
     });
 
-    // 2. Historial de correos enviados
+    // 2. Historial de correos
     (state.historialCorreos || []).forEach(c => {
         feed.push({
             tipo: 'correo',
-            destinatario: c.destinatario || 'Destinatario',
-            folio: c.folio || '—',
-            adjuntos: c.adjuntos || 'XML / PDF',
+            titulo: 'Factura Enviada por Correo',
+            subtitulo: `${c.destinatario || 'Destinatario'} (Folio: ${c.folio || '—'})`,
+            extra: c.adjuntos || 'XML / PDF',
             fecha: c.fecha || new Date(),
+            icono: '✉️',
+            badgeBg: '#cce5ff',
+            badgeColor: '#004085'
         });
+    });
+
+    // 3. Bitácora de acciones
+    (state.bitacoraSeguridad || []).forEach(b => {
+        if (b.action && !b.action.includes('Inicio de sesión')) {
+            feed.push({
+                tipo: 'log',
+                titulo: b.action,
+                subtitulo: b.detalles || b.usuario || 'Sistema',
+                extra: '',
+                fecha: b.fecha || new Date(),
+                icono: '📋',
+                badgeBg: '#fff3cd',
+                badgeColor: '#856404'
+            });
+        }
     });
 
     // Ordenar por fecha descendente
@@ -4819,6 +4802,7 @@ function renderActividadReciente() {
             if (typeof d === 'string') {
                 const parsed = Date.parse(d);
                 if (!isNaN(parsed)) return parsed;
+                // Formato DD/MM/YYYY
                 const parts = d.split(/[\/\s,:]+/);
                 if (parts.length >= 3) {
                     return new Date(parts[2], parts[1] - 1, parts[0]).getTime() || 0;
@@ -4830,109 +4814,41 @@ function renderActividadReciente() {
     });
 
     if (feed.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; color: var(--text-muted); padding: 35px 20px;">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 38px; height: 38px; color: #cbd5e0; margin-bottom: 10px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                <p style="font-size: 0.85rem; margin: 0; font-weight: 600;">No hay movimientos recientes registrados</p>
-                <span style="font-size: 0.74rem;">Inicia una nueva solicitud para emitir comprobantes fiscales.</span>
-            </div>
-        `;
+        container.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); padding: 8px 0; margin: 0;">No hay actividad reciente registrada.</p>`;
         return;
     }
 
-    const itemsToShow = feed.slice(0, 8);
+    const itemsToShow = feed.slice(0, 6);
     container.innerHTML = itemsToShow.map(item => {
         let fechaStr = 'Reciente';
         if (item.fecha) {
             if (typeof item.fecha === 'string') {
                 fechaStr = item.fecha;
             } else if (item.fecha instanceof Date) {
-                fechaStr = item.fecha.toLocaleString('es-MX');
+                fechaStr = item.fecha.toLocaleDateString('es-MX');
             }
         }
-
-        if (item.tipo === 'factura') {
-            return `
-                <div style="padding: 14px 16px; border: 1px solid #dee2e6; border-left: 4.5px solid #28a745; background: #ffffff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); display: flex; flex-direction: column; gap: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-weight: 800; color: #1B365D; font-size: 0.94rem;">${item.folio}</span>
-                            <span style="background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700;">CFDI 4.0 TIMBRADO</span>
-                        </div>
-                        <span style="font-size: 0.72rem; color: #6c757d; font-weight: 500;">📅 ${fechaStr}</span>
+        return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: ${item.badgeBg}; color: ${item.badgeColor}; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">
+                        ${item.icono}
                     </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; background: #f8f9fa; padding: 10px 12px; border-radius: 6px; border: 1px solid #e9ecef; align-items: center;">
-                        <div style="min-width: 0;">
-                            <div style="font-size: 0.86rem; font-weight: 700; color: #212529; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                ${item.cliente}
-                            </div>
-                            <div style="font-size: 0.74rem; color: #6c757d; font-family: monospace;">
-                                RFC: <strong>${item.rfc}</strong>
-                            </div>
+                    <div style="min-width: 0;">
+                        <div style="font-size: 0.78rem; font-weight: 700; color: #212529; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${item.titulo}
                         </div>
-                        <div style="text-align: right; flex-shrink: 0;">
-                            <div style="font-size: 1.05rem; font-weight: 800; color: #1B365D;">
-                                $${item.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <div style="font-size: 0.68rem; color: #6c757d;">
-                                Sub: $${item.subtotal.toFixed(2)} | IVA: $${item.iva.toFixed(2)}
-                            </div>
+                        <div style="font-size: 0.72rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${item.subtitulo}
                         </div>
-                    </div>
-
-                    ${item.uuid ? `
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; background: #f1f5f9; padding: 6px 10px; border-radius: 4px; gap: 8px;">
-                            <span style="color: #64748b; font-weight: 600; flex-shrink: 0;">UUID SAT:</span>
-                            <span style="font-family: monospace; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.uuid}</span>
-                        </div>
-                    ` : ''}
-
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 8px;">
-                        ${item.facturamaId ? `
-                            <button onclick="openPdfViewer('${item.facturamaId}')" class="btn btn-secondary" style="font-size: 0.73rem; padding: 5px 10px; display: inline-flex; align-items: center; gap: 4px;">
-                                👁️ Ver PDF
-                            </button>
-                            <button onclick="downloadFromFacturama('${item.facturamaId}', 'pdf')" class="btn btn-secondary" style="font-size: 0.73rem; padding: 5px 10px; color: #dc3545; border-color: #dc3545; display: inline-flex; align-items: center; gap: 4px;">
-                                📥 PDF
-                            </button>
-                            <button onclick="downloadFromFacturama('${item.facturamaId}', 'xml')" class="btn btn-secondary" style="font-size: 0.73rem; padding: 5px 10px; color: #28a745; border-color: #28a745; display: inline-flex; align-items: center; gap: 4px;">
-                                📄 XML
-                            </button>
-                        ` : ''}
-                        <button onclick="openEmailModal('${item.folio}', '${item.correo}', '${item.cliente.replace(/'/g, "\\'")}')" class="btn btn-primary" style="font-size: 0.73rem; padding: 5px 10px; background: var(--primary-color); display: inline-flex; align-items: center; gap: 4px;">
-                            ✉️ Enviar Correo
-                        </button>
-                        ${item.uuid ? `
-                            <button onclick="copyToClipboard('${item.uuid}')" class="btn btn-secondary" style="font-size: 0.73rem; padding: 5px 8px;" title="Copiar UUID al portapapeles">
-                                📋 Copiar UUID
-                            </button>
-                        ` : ''}
                     </div>
                 </div>
-            `;
-        } else if (item.tipo === 'correo') {
-            return `
-                <div style="padding: 12px 14px; border: 1px solid #dee2e6; border-left: 4.5px solid #0056b3; background: #ffffff; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                    <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                        <div style="width: 32px; height: 32px; border-radius: 50%; background: #cce5ff; color: #004085; display: flex; align-items: center; justify-content: center; font-size: 0.95rem; flex-shrink: 0;">
-                            ✉️
-                        </div>
-                        <div style="min-width: 0;">
-                            <div style="font-size: 0.82rem; font-weight: 700; color: #212529;">Comprobante Enviado por Correo</div>
-                            <div style="font-size: 0.74rem; color: #6c757d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                Destinatario: <strong>${item.destinatario}</strong> · Folio: <strong>${item.folio}</strong>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="text-align: right; flex-shrink: 0;">
-                        <span style="font-size: 0.7rem; color: #868e96; display: block;">${fechaStr}</span>
-                        <span style="font-size: 0.68rem; background: #e8f4fd; color: #0c5460; padding: 1px 6px; border-radius: 3px; font-weight: 600;">${item.adjuntos}</span>
-                    </div>
+                <div style="text-align: right; flex-shrink: 0;">
+                    <span style="font-size: 0.68rem; color: #868e96; display: block;">${fechaStr}</span>
+                    ${item.extra ? `<span style="font-size: 0.65rem; font-family: monospace; color: #1B365D; background: #e8ecf4; padding: 1px 4px; border-radius: 3px;">${item.extra}</span>` : ''}
                 </div>
-            `;
-        }
-        return '';
+            </div>
+        `;
     }).join('');
 }
 
