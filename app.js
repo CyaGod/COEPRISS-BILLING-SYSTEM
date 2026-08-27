@@ -3145,7 +3145,6 @@ async function proceedToStep4() {
 
     state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, 4);
     goToStep(4);
-    stampInvoiceViaPAC();
 }
 
 // ─────────────────────────────────────────────
