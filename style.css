@@ -1300,6 +1300,7 @@ body {
 .action-icon-btn.btn-dl-pdf:hover { color: #d93025; }
 .action-icon-btn.btn-dl-xml:hover { color: #2e7d32; }
 .action-icon-btn.btn-email:hover { color: var(--primary-color); }
+.action-icon-btn.btn-delete:hover { color: #dc3545; background-color: #fee2e2; }
 
 .action-icon-btn svg {
     width: 15px;

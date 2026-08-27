@@ -3887,8 +3887,10 @@ function filterReportTable() {
                         <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${effectiveId}', 'pdf')" title="Descargar PDF" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                         <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${effectiveId}', 'xml')" title="Descargar XML" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                         <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar factura" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                     ` : `
                         <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
+                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'expediente')" title="Eliminar registro" style="color:#e05252;margin-left:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                     `}
                 </div>
             </td>
@@ -3904,9 +3906,52 @@ function filterReportTable() {
     if (showingText) showingText.textContent = `Mostrando ${filteredList.length} de ${totalCount} facturas`;
 }
 
+async function eliminarRegistro(folio, tipo = 'factura') {
+    if (!confirm(`¿Estás seguro de eliminar el registro ${folio}? Esta acción no se puede deshacer.`)) {
+        return;
+    }
+
+    try {
+        const endpoint = tipo === 'factura' ? `/api/facturas/${encodeURIComponent(folio)}` : `/api/expedientes/${encodeURIComponent(folio)}`;
+        const res = await apiFetch(endpoint, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`✅ Registro ${folio} eliminado correctamente.`, 'success');
+            state.facturas = (state.facturas || []).filter(f => f.folio !== folio && f.folioInterno !== folio && f.uuid !== folio);
+            state.expedientes = (state.expedientes || []).filter(e => e.folio !== folio);
+            renderCloudCollections();
+        } else {
+            showToast(`Error al eliminar: ${data.error || 'Desconocido'}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Error al eliminar: ${err.message}`, 'error');
+    }
+}
+
+async function limpiarFacturasPrueba() {
+    if (!confirm('¿Deseas eliminar todas las facturas y expedientes de prueba, conservando ÚNICAMENTE las 2 facturas reales?')) {
+        return;
+    }
+
+    try {
+        showToast('Limpiando registros de prueba...', 'info');
+        const res = await apiFetch('/api/facturas/limpiar-falsas', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('✅ Limpieza completada. Solo se conservaron las 2 facturas reales.', 'success');
+            await initRenderDbSync();
+        } else {
+            showToast(`Error: ${data.error || 'No se pudo realizar la limpieza'}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Error al limpiar: ${err.message}`, 'error');
+    }
+}
+
 function renderReportTable() {
     filterReportTable();
 }
+
 
 async function exportReportToExcel() {
     const estatus = document.getElementById('report-status-filter')?.value || 'TODOS';

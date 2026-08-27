@@ -394,6 +394,22 @@ app.get('/api/facturas', autenticarToken, apiLimiter, async (req, res) => {
     }
 });
 
+app.delete('/api/expedientes/:folio', autenticarToken, async (req, res) => {
+    try {
+        const { folio } = req.params;
+        const exp = await prisma.expediente.findUnique({ where: { folio } });
+        if (!exp) return res.status(404).json({ error: 'Expediente no encontrado.' });
+
+        await prisma.factura.deleteMany({ where: { expedienteId: exp.id } });
+        await prisma.expediente.delete({ where: { folio } });
+        await registrarBitacora(req.user?.id || 1, 'EXPEDIENTE_ELIMINADO', `Folio: ${folio}`, req.ip);
+        res.json({ success: true, message: `Expediente ${folio} eliminado correctamente.` });
+    } catch (err) {
+        console.error('[EXPEDIENTE/DELETE]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/facturas', autenticarToken, async (req, res) => {
     try {
         const { expedienteId, folio, xmlContent, uuid, estatus, facturamaId } = req.body;
@@ -406,6 +422,37 @@ app.post('/api/facturas', autenticarToken, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+app.delete('/api/facturas/:id', autenticarToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const idNum = parseInt(id, 10);
+        const where = !isNaN(idNum) ? { id: idNum } : { OR: [{ uuid: id }, { folio: id }] };
+        const fac = await prisma.factura.findFirst({ where });
+        if (!fac) return res.status(404).json({ error: 'Factura no encontrada.' });
+
+        await prisma.factura.delete({ where: { id: fac.id } });
+        if (fac.expedienteId) {
+            await prisma.expediente.delete({ where: { id: fac.expedienteId } }).catch(() => {});
+        }
+        await registrarBitacora(req.user?.id || 1, 'FACTURA_ELIMINADA', `Folio: ${fac.folio} | UUID: ${fac.uuid || 'N/A'}`, req.ip);
+        res.json({ success: true, message: `Factura ${fac.folio} eliminada correctamente.` });
+    } catch (err) {
+        console.error('[FACTURA/DELETE]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/facturas/limpiar-falsas', autenticarToken, async (req, res) => {
+    try {
+        const resultado = await limpiarFacturasFalsas();
+        await registrarBitacora(req.user?.id || 1, 'LIMPIEZA_PRUEBAS', 'Se eliminaron facturas falsas/pruebas dejando solo las 2 reales', req.ip);
+        res.json({ success: true, data: resultado });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // ─────────────────────────────────────────────
 // DIRECTORIO DE CLIENTES
@@ -1179,7 +1226,7 @@ app.get('/api/db', autenticarToken, async (req, res) => {
     try {
         const [rawExpedientes, rawFacturas, historialCorreos, bitacoraSeguridad] = await Promise.all([
             prisma.expediente.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
-            prisma.factura.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
+            prisma.factura.findMany({ orderBy: { createdAt: 'desc' }, take: 200, include: { expediente: true } }),
             prisma.historialCorreo.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
             prisma.bitacoraSeguridad.findMany({ orderBy: { createdAt: 'desc' }, take: 200 })
         ]);
@@ -1204,11 +1251,23 @@ app.get('/api/db', autenticarToken, async (req, res) => {
             fechaRecibo: e.createdAt ? new Date(e.createdAt).toLocaleDateString('es-MX') : ''
         }));
 
-        const facturas = rawFacturas.map(f => ({
-            ...f,
-            folioInterno: f.folio,
-            importe: f.xmlContent ? undefined : 0
-        }));
+        const facturas = rawFacturas.map(f => {
+            const exp = f.expediente || {};
+            return {
+                ...f,
+                folioInterno: f.folio,
+                folio: f.folio,
+                cliente: exp.receptorNombre || '',
+                rfc: exp.receptorRfc || '',
+                correo: exp.receptorEmail || '',
+                importe: exp.cfdiTotal ? parseFloat(exp.cfdiTotal) : 0,
+                concepto: exp.cfdiConcepto || '',
+                formaPago: exp.cfdiFormaPago || '',
+                metodoPago: exp.cfdiMetodoPago || '',
+                fecha: f.fechaTimbrado ? new Date(f.fechaTimbrado).toLocaleDateString('es-MX') : (f.createdAt ? new Date(f.createdAt).toLocaleDateString('es-MX') : ''),
+                fechaTimbrado: f.fechaTimbrado || f.createdAt
+            };
+        });
 
         res.json({ success: true, data: { expedientes, facturas, historialCorreos, bitacoraSeguridad } });
     } catch (err) {
@@ -1910,6 +1969,42 @@ async function autoSeedDatabase() {
     }
 }
 
+async function limpiarFacturasFalsas() {
+    try {
+        const facturas = await prisma.factura.findMany({
+            orderBy: { createdAt: 'desc' },
+            include: { expediente: true }
+        });
+
+        if (facturas.length > 2) {
+            const conservar = facturas.slice(0, 2);
+            const eliminar = facturas.slice(2);
+            const idsEliminar = eliminar.map(f => f.id);
+            const expIdsEliminar = eliminar.map(f => f.expedienteId).filter(Boolean);
+            const expIdsConservar = new Set(conservar.map(f => f.expedienteId).filter(Boolean));
+
+            console.log(`[LIMPIEZA] Conservando las 2 facturas reales (${conservar.map(f => f.folio).join(', ')}). Eliminando ${idsEliminar.length} facturas de prueba...`);
+
+            await prisma.factura.deleteMany({
+                where: { id: { in: idsEliminar } }
+            });
+
+            const expIdsBorrar = expIdsEliminar.filter(id => !expIdsConservar.has(id));
+            if (expIdsBorrar.length > 0) {
+                await prisma.expediente.deleteMany({
+                    where: { id: { in: expIdsBorrar } }
+                }).catch(() => {});
+            }
+            console.log(`[LIMPIEZA] ✅ Limpieza completada: Solo quedaron las 2 facturas reales.`);
+            return { eliminadas: idsEliminar.length, conservadas: conservar.length, folios: conservar.map(f => f.folio) };
+        }
+        return { eliminadas: 0, conservadas: facturas.length, folios: facturas.map(f => f.folio) };
+    } catch (err) {
+        console.warn('[LIMPIEZA] Error en limpieza de facturas:', err.message);
+        return { error: err.message };
+    }
+}
+
 async function startServer() {
     if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') {
         try {
@@ -1917,6 +2012,7 @@ async function startServer() {
             dbEngine = 'PostgreSQL (Render)';
             console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
             await autoSeedDatabase();
+            await limpiarFacturasFalsas();
         } catch (err) {
             console.warn('⚠️ No se pudo conectar a PostgreSQL:', err.message);
             console.log('👉 Ejecutando con Motor de Almacenamiento Local de Render.');
@@ -1935,3 +2031,4 @@ async function startServer() {
 }
 
 startServer();
+
