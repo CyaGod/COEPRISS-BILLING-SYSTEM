@@ -1857,15 +1857,20 @@ app.get('/api/facturama/descargar/:facturamaId/:formato', autenticarToken, async
  */
 app.delete('/api/facturama/cancelar/:facturamaId', autenticarToken, requiereRol('Administrador'), async (req, res) => {
     const { facturamaId } = req.params;
-    const { motivo = '02', uuid } = req.body || {};
+    const { motivo = '02', uuid, uuidSustituto } = req.body || {};
 
     try {
-        const resultado = await facturama.cancelarCFDI(facturamaId, motivo);
+        const resultado = await facturama.cancelarCFDI(facturamaId, motivo, uuidSustituto);
 
-        // Actualizar estatus en BD si viene uuid
-        if (uuid) {
+        // Actualizar estatus en BD si viene uuid o facturamaId
+        if (uuid || facturamaId) {
             await prisma.factura.updateMany({
-                where: { uuid },
+                where: {
+                    OR: [
+                        ...(uuid ? [{ uuid }] : []),
+                        ...(facturamaId ? [{ facturamaId }] : [])
+                    ]
+                },
                 data:  { estatus: 'CANCELADA' }
             }).catch(() => {});
         }

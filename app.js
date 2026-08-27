@@ -3968,7 +3968,10 @@ function filterReportTable() {
                         <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${effectiveId}', 'pdf')" title="Descargar PDF" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                         <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${effectiveId}', 'xml')" title="Descargar XML" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                         <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
-                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar factura" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                        ${!isCancelada ? `
+                        <button class="action-icon-btn btn-cancel" onclick="openCancelarModal('${folio}', '${effectiveId}', '${uuid}', '${(cliente || '').replace(/'/g, "\\'")}', '$${total.toFixed(2)}')" title="Cancelar Factura ante el SAT (Facturama)" style="color:#d97706;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg></button>
+                        ` : ''}
+                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar del historial" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                     ` : `
                         <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
                         <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'expediente')" title="Eliminar registro" style="color:#e05252;margin-left:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
@@ -3985,6 +3988,128 @@ function filterReportTable() {
 
     const showingText = document.getElementById('showing-results-text');
     if (showingText) showingText.textContent = `Mostrando ${filteredList.length} de ${totalCount} facturas`;
+}
+
+// ─────────────────────────────────────────────
+// MODAL DE CANCELACIÓN CFDI (FACTURAMA / SAT)
+// ─────────────────────────────────────────────
+
+function openCancelarModal(folio, facturamaId, uuid, cliente, total) {
+    const modal = document.getElementById('modal-cancelar-cfdi');
+    if (!modal) return;
+
+    document.getElementById('cancel-folio').textContent = folio || 'N/A';
+    document.getElementById('cancel-total').textContent = total || '$0.00';
+    document.getElementById('cancel-cliente').textContent = cliente || 'N/A';
+    document.getElementById('cancel-uuid').textContent = uuid || facturamaId || 'No disponible';
+    document.getElementById('cancel-facturama-id').value = facturamaId || uuid || '';
+    document.getElementById('cancel-uuid-val').value = uuid || '';
+
+    // Resetear formulario
+    const selectMotivo = document.getElementById('cancel-motivo');
+    if (selectMotivo) selectMotivo.value = '02';
+    toggleMotivo01Input('02');
+
+    openModal('modal-cancelar-cfdi');
+}
+
+function toggleMotivo01Input(motivo) {
+    const group = document.getElementById('cancel-uuid-sustituto-group');
+    const input = document.getElementById('cancel-uuid-sustituto');
+    const hint = document.getElementById('cancel-motivo-hint');
+
+    const hints = {
+        '01': '⚠️ Requiere que primero emitas la nueva factura y captures aquí su UUID sustituto.',
+        '02': 'ℹ️ Úsalo cuando la factura tiene un error en datos y no requiere sustitución inmediata.',
+        '03': 'ℹ️ Úsalo cuando la operación comercial no se concretó definitivamente.',
+        '04': 'ℹ️ Úsalo si la venta estaba en una factura global y el cliente solicitó factura individual.'
+    };
+
+    if (hint) hint.textContent = hints[motivo] || '';
+
+    if (group) {
+        if (motivo === '01') {
+            group.style.display = 'block';
+            if (input) input.required = true;
+        } else {
+            group.style.display = 'none';
+            if (input) {
+                input.required = false;
+                input.value = '';
+            }
+        }
+    }
+}
+
+async function ejecutarCancelacionCFDI() {
+    const facturamaId = document.getElementById('cancel-facturama-id')?.value;
+    const uuid = document.getElementById('cancel-uuid-val')?.value;
+    const motivo = document.getElementById('cancel-motivo')?.value || '02';
+    const uuidSustituto = document.getElementById('cancel-uuid-sustituto')?.value?.trim();
+
+    if (!facturamaId && !uuid) {
+        showToast('No se encontró el identificador ni UUID de la factura para cancelar.', 'error');
+        return;
+    }
+
+    if (motivo === '01' && !uuidSustituto) {
+        showToast('Para el motivo 01 debes ingresar el UUID de la factura sustituta.', 'warning');
+        document.getElementById('cancel-uuid-sustituto')?.focus();
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirmar-cancelar-cfdi');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `
+            <svg class="spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;animation:spin 1s linear infinite;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>Cancelando ante SAT...</span>
+        `;
+    }
+
+    setLoading('Cancelando CFDI ante el SAT...', 'Facturama está procesando la solicitud de cancelación.');
+
+    try {
+        const idParaCancelar = facturamaId || uuid;
+        const res = await apiFetch(`/api/facturama/cancelar/${encodeURIComponent(idParaCancelar)}`, {
+            method: 'DELETE',
+            body: JSON.stringify({
+                motivo,
+                uuid,
+                uuidSustituto: motivo === '01' ? uuidSustituto : undefined
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            showToast(`✅ Factura cancelada exitosamente ante el SAT (Motivo: ${motivo}).`, 'success');
+            
+            // Actualizar estado local
+            const folioCancelado = document.getElementById('cancel-folio')?.textContent;
+            (state.facturas || []).forEach(f => {
+                if ((f.folio && f.folio === folioCancelado) || (f.uuid && f.uuid === uuid) || (f.facturamaId && f.facturamaId === facturamaId)) {
+                    f.estatus = 'CANCELADA';
+                }
+            });
+
+            closeModal('modal-cancelar-cfdi');
+            renderReportTable();
+            addSecurityLog('CFDI Cancelado', `Folio: ${folioCancelado} | UUID: ${uuid} | Motivo: ${motivo}`);
+        } else {
+            const msg = data.error || data.message || 'Error desconocido al cancelar.';
+            showToast(`Error al cancelar en Facturama/SAT: ${msg}`, 'error');
+        }
+    } catch (err) {
+        showToast(`Error de conexión al cancelar: ${err.message}`, 'error');
+    } finally {
+        hideLoading();
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
 }
 
 async function eliminarRegistro(folio, tipo = 'factura') {

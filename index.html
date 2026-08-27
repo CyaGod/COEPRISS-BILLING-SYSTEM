@@ -1594,6 +1594,79 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <!-- MODAL: CANCELACIÓN DE CFDI ANTE EL SAT (FACTURAMA) -->
+    <div class="modal-overlay" id="modal-cancelar-cfdi">
+        <div class="modal-container" style="max-width: 540px;">
+            <div class="modal-header" style="background: #fff5f5; border-bottom: 1px solid #fed7d7;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; color: #dc2626;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="modal-title" style="color: #991b1b; font-size: 1.1rem; margin: 0;">Cancelar Factura ante el SAT</h3>
+                        <p style="font-size: 0.78rem; color: #7f1d1d; margin: 0;">Esta acción solicitará la cancelación fiscal vía API Facturama</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('modal-cancelar-cfdi')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.82rem;">
+                        <div><strong style="color: #64748b;">Folio:</strong> <span id="cancel-folio" style="font-weight: 700; color: #0f172a;">-</span></div>
+                        <div><strong style="color: #64748b;">Importe:</strong> <span id="cancel-total" style="font-weight: 700; color: #0f172a;">-</span></div>
+                        <div style="grid-column: span 2;"><strong style="color: #64748b;">Cliente / Receptor:</strong> <span id="cancel-cliente" style="font-weight: 600; color: #0f172a;">-</span></div>
+                        <div style="grid-column: span 2;"><strong style="color: #64748b;">UUID SAT:</strong> <span id="cancel-uuid" style="font-family: monospace; font-size: 0.75rem; color: #334155; word-break: break-all;">-</span></div>
+                    </div>
+                </div>
+
+                <form id="form-cancelar-cfdi" onsubmit="event.preventDefault(); ejecutarCancelacionCFDI();">
+                    <input type="hidden" id="cancel-facturama-id">
+                    <input type="hidden" id="cancel-uuid-val">
+
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">
+                            Motivo de Cancelación SAT <span style="color: #dc2626;">*</span>
+                        </label>
+                        <select class="form-control" id="cancel-motivo" required onchange="toggleMotivo01Input(this.value)" style="border: 1.5px solid #cbd5e1; font-weight: 500;">
+                            <option value="02" selected>02 - Comprobante emitido con errores sin relación</option>
+                            <option value="01">01 - Comprobante emitido con errores con relación</option>
+                            <option value="03">03 - No se llevó a cabo la operación</option>
+                            <option value="04">04 - Operación nominativa relacionada en una factura global</option>
+                        </select>
+                        <div id="cancel-motivo-hint" style="font-size: 0.75rem; color: #64748b; margin-top: 5px;">
+                            ℹ️ Úsalo cuando la factura tiene un error y no se emitirá una sustituta de inmediato.
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="cancel-uuid-sustituto-group" style="display: none; margin-bottom: 16px; background: #eff6ff; padding: 12px; border-radius: 8px; border: 1px solid #bfdbfe;">
+                        <label class="form-label" style="font-weight: 700; color: #1e40af; font-size: 0.82rem;">
+                            UUID de la Factura Sustituta <span style="color: #dc2626;">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="cancel-uuid-sustituto" placeholder="Ej: 8F3A2B1C-1234-5678-ABCD-1234567890AB" style="font-family: monospace; text-transform: uppercase;">
+                        <div style="font-size: 0.74rem; color: #3b82f6; margin-top: 4px;">
+                            ⚠️ El SAT exige emitir primero la factura correcta y colocar aquí su Folio Fiscal (UUID).
+                        </div>
+                    </div>
+
+                    <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 12px; border-radius: 0 6px 6px 0; margin-bottom: 16px;">
+                        <p style="font-size: 0.75rem; color: #92400e; margin: 0; line-height: 1.4;">
+                            <strong>Aviso importante:</strong> Si el importe supera los $1,000 MXN o han pasado más de 24 horas, el receptor tendrá 72 horas para autorizar la cancelación en su Buzón Tributario.
+                        </p>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('modal-cancelar-cfdi')">Cerrar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-cancelar-cfdi" onclick="ejecutarCancelacionCFDI()" style="background: #dc2626; color: #fff; font-weight: 600; display: flex; align-items: center; gap: 6px; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    <span>Solicitar Cancelación SAT</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: ESCÁNER DE CÁMARA INTELIGENTE (Estilo Apple Notes / CamScanner) -->
     <div class="modal-overlay" id="modal-camera-scanner" style="z-index: 1050; padding: 0;">
         <div class="camera-scanner-container">

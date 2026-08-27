@@ -296,8 +296,12 @@ async function obtenerCFDI(id) {
     return facturamaRequest('GET', `/cfdi/issued/${id}`);
 }
 
-async function cancelarCFDI(id, motivo = '02') {
-    return facturamaRequest('DELETE', `/cfdi/${id}?type=issued&motive=${motivo}`);
+async function cancelarCFDI(id, motivo = '02', uuidReplacement = null) {
+    let url = `/cfdi/${id}?type=issued&motive=${motivo}`;
+    if (motivo === '01' && uuidReplacement) {
+        url += `&uuidReplacement=${encodeURIComponent(uuidReplacement)}`;
+    }
+    return facturamaRequest('DELETE', url);
 }
 
 async function listarFacturas(pagina = 0, tamanio = 50) {
