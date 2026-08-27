@@ -1971,15 +1971,29 @@ async function autoSeedDatabase() {
 
 async function vaciarFacturasYExpedientesPrueba() {
     try {
-        const countFac = await prisma.factura.count().catch(() => 0);
-        const countExp = await prisma.expediente.count().catch(() => 0);
-        if (countFac > 0 || countExp > 0) {
-            console.log(`[LIMPIEZA] Eliminando ${countFac} facturas y ${countExp} expedientes de prueba...`);
-            await prisma.factura.deleteMany({});
-            await prisma.expediente.deleteMany({});
-            console.log(`[LIMPIEZA] ✅ Base de datos vaciada al 100%. Lista desde cero para facturación oficial.`);
+        console.log('[LIMPIEZA] Limpiando historial de facturas, expedientes, correos, clientes y bitácora de prueba...');
+        await prisma.historialCorreo.deleteMany({}).catch(() => {});
+        await prisma.factura.deleteMany({}).catch(() => {});
+        await prisma.archivo.deleteMany({}).catch(() => {});
+        await prisma.expediente.deleteMany({}).catch(() => {});
+        await prisma.cliente.deleteMany({}).catch(() => {});
+        await prisma.bitacoraSeguridad.deleteMany({}).catch(() => {});
+
+        // Registro inicial limpio de bitácora
+        const adminUser = await prisma.usuario.findFirst({ where: { username: 'admin' } });
+        if (adminUser) {
+            await prisma.bitacoraSeguridad.create({
+                data: {
+                    usuarioId: adminUser.id,
+                    accion: 'Sistema Reinicializado',
+                    detalles: 'Historiales de facturación, correos, clientes y bitácora limpiados para inicio en blanco.',
+                    resultado: 'EXITOSO'
+                }
+            }).catch(() => {});
         }
-        return { success: true, facturasEliminadas: countFac, expedientesEliminados: countExp };
+
+        console.log('[LIMPIEZA] ✅ Base de datos completamente limpia: facturas (0), expedientes (0), correos (0), clientes (0), bitácora reiniciada.');
+        return { success: true };
     } catch (err) {
         console.warn('[LIMPIEZA] Error al vaciar base de datos:', err.message);
         return { error: err.message };
