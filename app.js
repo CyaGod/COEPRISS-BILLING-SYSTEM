@@ -463,10 +463,8 @@ function initNavigation() {
             const step = parseInt(node.getAttribute('data-step'), 10);
             if (step === 1) {
                 goToStep(1);
-            } else if (step === 7) {
-                renderReportTable();
-                goToStep(7);
             } else if (state.activeExpediente) {
+                if (step === 7) renderReportTable();
                 goToStep(step);
             } else {
                 showToast('Primero carga y procesa un documento en el Paso 1 para abrir este paso.', 'warning');
