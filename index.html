@@ -223,27 +223,9 @@
                     </div>
                     <div class="step-node" data-step="4">
                         <div class="step-circle">
-                            <svg class="step-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-                        </div>
-                        <div class="step-label">Generación XML</div>
-                    </div>
-                    <div class="step-node" data-step="5">
-                        <div class="step-circle">
-                            <svg class="step-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                        </div>
-                        <div class="step-label">Carga SAT</div>
-                    </div>
-                    <div class="step-node" data-step="6">
-                        <div class="step-circle">
                             <svg class="step-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                         </div>
-                        <div class="step-label">Timbrado</div>
-                    </div>
-                    <div class="step-node" data-step="7">
-                        <div class="step-circle">
-                            <svg class="step-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                        </div>
-                        <div class="step-label">Reporte</div>
+                        <div class="step-label">Timbrado y Comprobante</div>
                     </div>
                 </nav>
             </header>
@@ -911,8 +893,8 @@
                     <div class="step-header-banner">
                         <div class="step-header-badge">4</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Timbrado CFDI 4.0 vía Facturama</h2>
-                            <p class="step-header-desc">Emisión oficial directa ante el SAT a través del PAC autorizado Facturama.</p>
+                            <h2 class="step-header-title">Timbrado y Comprobante Fiscal (CFDI 4.0)</h2>
+                            <p class="step-header-desc">Emisión oficial directa ante el SAT y entrega del comprobante (PDF / XML / Correo).</p>
                         </div>
                     </div>
 
@@ -982,124 +964,16 @@
 
                     <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px; margin-top: 15px;">
                         <button class="btn btn-secondary" onclick="goToStep(3)" style="padding: 10px 24px;">&larr; Regresar al Formulario</button>
-                        <button class="btn btn-secondary" onclick="goToStep(7)" style="padding: 10px 24px;">Ver Reporte General &rarr;</button>
+                        <button class="btn btn-secondary" onclick="triggerSidebarClick('nav-timbradas')" style="padding: 10px 24px;">Ver Facturas Timbradas &rarr;</button>
                     </div>
                 </section>
 
-                <!-- STEP 5 PANEL -->
-                <section class="step-panel" id="step-panel-5">
+                <!-- SIDEBAR MENU: 3. FACTURAS TIMBRADAS PANEL -->
+                <section class="step-panel" id="panel-timbradas">
                     <div class="step-header-banner">
-                        <div class="step-header-badge">5</div>
+                        <div class="step-header-badge" style="background-color: var(--primary-color);">F</div>
                         <div class="step-header-text">
-                            <h2 class="step-header-title">Carga de archivos y comprobantes</h2>
-                            <p class="step-header-desc">Adjuntar archivos externos o comprobantes de respaldo al expediente digital.</p>
-                        </div>
-                    </div>
-
-                    <div class="app-card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
-                        <div>
-                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">XML timbrado</label>
-                            <div class="file-upload-card" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 12px 16px;">
-                                <div class="file-upload-info">
-                                    <div class="file-icon file-icon-xml" style="background-color: #e8f5e9; color: #2e7d32; font-size: 0.7rem; font-weight: 700; border-radius: 4px; width: 36px; height: 36px;">XML</div>
-                                    <div class="file-details">
-                                        <span class="file-name" id="step5-xml-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">Generado automáticamente por Facturama</span>
-                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">Oficial SAT</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="form-label" style="font-size: 0.72rem; color: #495057; font-weight: 700; margin-bottom: 6px; display: block;">PDF timbrado</label>
-                            <div class="file-upload-card" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 12px 16px;">
-                                <div class="file-upload-info">
-                                    <div class="file-icon file-icon-pdf" style="background-color: #fce8e6; color: #d93025; font-size: 0.7rem; font-weight: 700; border-radius: 4px; width: 36px; height: 36px;">PDF</div>
-                                    <div class="file-details">
-                                        <span class="file-name" id="step5-pdf-name" style="font-size: 0.8rem; font-weight: 600; color: #212529; font-family: monospace;">Generado automáticamente por Facturama</span>
-                                        <span class="file-size" style="font-size: 0.7rem; color: #868e96;">Oficial SAT</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
-                        <button class="btn btn-secondary" onclick="goToStep(4)" style="padding: 10px 24px; border-radius: 4px;">&larr; Regresar al Timbrado</button>
-                        <button class="btn btn-primary" onclick="goToStep(6)" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px;">Continuar &rarr;</button>
-                    </div>
-                </section>
-
-                <!-- STEP 6 PANEL -->
-                <section class="step-panel" id="step-panel-6">
-                    <div class="step-header-banner">
-                        <div class="step-header-badge">6</div>
-                        <div class="step-header-text">
-                            <h2 class="step-header-title">Comprobante fiscal</h2>
-                            <p class="step-header-desc">Resumen del CFDI 4.0 timbrado y opciones de descarga y envío por correo.</p>
-                        </div>
-                    </div>
-
-                    <div class="stamp-grid" style="gap: 24px;">
-                        <div class="app-card" style="padding: 24px;">
-                            <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Información del timbrado</h3>
-                            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px 20px; font-size: 0.84rem;">
-                                <div style="color: #6c757d;">Folio fiscal (UUID):</div>
-                                <div id="step6-uuid" style="font-family: monospace; font-weight: 600; color: #212529; word-break: break-all;">Sin UUID real</div>
-
-                                <div style="color: #6c757d;">Fecha de timbrado:</div>
-                                <div id="step6-fecha" style="font-weight: 600; color: #212529;">Sin fecha de timbrado</div>
-
-                                <div style="color: #6c757d;">Estatus SAT:</div>
-                                <div>
-                                    <span id="step6-badge-estatus" class="badge badge-success">
-                                        Timbrado Oficial PAC
-                                    </span>
-                                </div>
-
-                                <div style="color: #6c757d;">Verificación SAT:</div>
-                                <div>
-                                    <a href="https://verificacfdi.facturaelectronica.sat.gob.mx/" target="_blank" class="upload-link" style="font-size: 0.82rem; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
-                                        Verificar en Portal Oficial del SAT
-                                        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="width: 12px; height: 12px; color: var(--secondary-color);"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="app-card" style="padding: 24px;">
-                            <h3 class="form-label" style="font-size: 0.8rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">Descarga y Envío</h3>
-                            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                                <button class="btn btn-secondary" onclick="openCurrentInvoicePdfViewer()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px;">
-                                    👁️ <strong>Ver Vista Previa del PDF</strong>
-                                </button>
-                                <button class="btn btn-secondary" onclick="downloadCurrentXml()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px; border-color: #28a745; color: #28a745;">
-                                    📄 <strong>Descargar Archivo XML</strong>
-                                </button>
-                                <button class="btn btn-secondary" onclick="downloadCurrentPdf()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px; border-color: #dc3545; color: #dc3545;">
-                                    📑 <strong>Descargar Archivo PDF</strong>
-                                </button>
-                                <button class="btn btn-primary" onclick="openEmailModalForActive()" style="justify-content: flex-start; gap: 8px; font-size: 0.82rem; padding: 10px 16px; background-color: var(--primary-color);">
-                                    ✉️ <strong>Enviar Factura por Correo (Brevo)</strong>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 15px;">
-                        <button class="btn btn-secondary" onclick="goToStep(4)" style="padding: 10px 24px;">&larr; Regresar</button>
-                        <button class="btn btn-primary" onclick="goToStep(7)" style="padding: 10px 24px; background-color: var(--secondary-color); color: #fff; font-weight: 700;">
-                            Ver Reporte General &rarr;
-                        </button>
-                    </div>
-                </section>
-
-                <!-- STEP 7 PANEL -->
-                <section class="step-panel" id="step-panel-7">
-                    <div class="step-header-banner">
-                        <div class="step-header-badge">7</div>
-                        <div class="step-header-text">
-                            <h2 class="step-header-title">Reporte General de Facturas Timbradas</h2>
+                            <h2 class="step-header-title">Facturas Timbradas - Historial Oficial</h2>
                             <p class="step-header-desc">Consulta, filtra por estatus o rango de fechas, y exporta el historial de comprobantes a Excel.</p>
                         </div>
                     </div>

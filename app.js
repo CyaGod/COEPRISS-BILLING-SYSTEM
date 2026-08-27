@@ -319,7 +319,7 @@ function initGlobalButtonActions() {
         });
     }
 
-    const filtersButton = Array.from(document.querySelectorAll('#step-panel-7 button'))
+    const filtersButton = Array.from(document.querySelectorAll('#panel-timbradas button, #step-panel-7 button'))
         .find(button => button.textContent.trim() === 'Filtros');
     if (filtersButton) {
         filtersButton.type = 'button';
@@ -378,7 +378,7 @@ function toggleReportFilters() {
         panel.hidden = !panel.hidden;
         return;
     }
-    const header = document.querySelector('#step-panel-7 .table-actions-header');
+    const header = document.querySelector('#panel-timbradas .table-actions-header, #step-panel-7 .table-actions-header');
     if (!header) return;
     panel = document.createElement('div');
     panel.id = 'report-filter-panel';
@@ -468,15 +468,15 @@ function isFacturaTimbrada() {
 function isStepUnlocked(step) {
     if (step === 1) return !isFacturaTimbrada();
     if (isFacturaTimbrada()) {
-        // Una vez timbrada, los pasos 1, 2 y 3 quedan bloqueados permanentemente para evitar alterar datos ya sellados
-        return step >= 4;
+        // Una vez timbrada, los pasos 1, 2 y 3 quedan bloqueados permanentemente
+        return step === 4;
     }
     return step <= (state.maxStepUnlocked || 1);
 }
 
 // 1. Navigation & Panel Control
 function initNavigation() {
-    // Header Stepper Node Click
+    // Header Stepper Node Click (Pasos 1 al 4)
     const stepNodes = document.querySelectorAll('.step-node');
     stepNodes.forEach(node => {
         node.addEventListener('click', () => {
@@ -488,10 +488,7 @@ function initNavigation() {
                     showToast('🔒 Esta factura ya fue timbrada ante el SAT. No se pueden modificar los pasos anteriores porque el comprobante ya fue emitido. Para emitir una nueva factura, haz clic en "Nueva Factura".', 'warning');
                     return;
                 }
-                if (step === 7) {
-                    renderReportTable();
-                }
-                goToStep(step);
+                goToStep(4);
                 return;
             }
 
@@ -519,8 +516,6 @@ function initNavigation() {
                 goToPanel('panel-inicio');
             } else if (id === 'nav-solicitud') {
                 item.classList.add('active-pulse');
-                // A new request must start empty. Demo presets remain available
-                // only through their explicit preset buttons below the dropzone.
                 restartProcess();
             } else if (id === 'nav-proceso') {
                 item.classList.add('active');
@@ -529,7 +524,7 @@ function initNavigation() {
             } else if (id === 'nav-timbradas') {
                 item.classList.add('active');
                 renderReportTable();
-                goToStep(7); // Wizard step 7 represents "Facturas timbradas"
+                goToPanel('panel-timbradas');
             } else if (id === 'nav-correos') {
                 item.classList.add('active');
                 renderCorreosTable();
@@ -651,6 +646,8 @@ function updateBreadcrumb(panelId) {
         path = 'Inicio › <strong>Panel General</strong>';
     } else if (panelId === 'panel-proceso') {
         path = 'Inicio › <strong>En proceso</strong>';
+    } else if (panelId === 'panel-timbradas' || panelId === 'step-panel-7') {
+        path = 'Inicio › <strong>Facturas timbradas</strong>';
     } else if (panelId === 'panel-correos') {
         path = 'Inicio › <strong>Historial de correos</strong>';
     } else if (panelId === 'panel-clientes') {
@@ -663,19 +660,16 @@ function updateBreadcrumb(panelId) {
             '1': 'Recepción',
             '2': 'Extracción',
             '3': 'Vista previa',
-            '4': 'Generación XML',
-            '5': 'Carga SAT',
-            '6': 'Timbrado',
-            '7': 'Reporte'
+            '4': 'Timbrado y Comprobante'
         };
-        path = `Inicio › Nueva solicitud › <strong>Paso ${stepNum}: ${stepNames[stepNum]}</strong>`;
+        path = `Inicio › Nueva solicitud › <strong>Paso ${stepNum}: ${stepNames[stepNum] || ''}</strong>`;
     }
     breadcrumbEl.innerHTML = path;
 }
 
-// Wizard-specific navigation (steps 1 to 7)
+// Wizard-specific navigation (steps 1 to 4)
 function goToStep(stepNumber) {
-    if (stepNumber < 1 || stepNumber > 7) return;
+    if (stepNumber < 1 || stepNumber > 4) return;
     
     state.currentStep = stepNumber;
     
@@ -708,29 +702,20 @@ function goToStep(stepNumber) {
     // 3. Update Stepper Progress Line
     const progressLine = document.getElementById('stepper-progress');
     if (progressLine) {
-        const percentage = ((stepNumber - 1) / 6) * 92;
+        const percentage = ((stepNumber - 1) / 3) * 96;
         progressLine.style.width = `${percentage}%`;
     }
 
     // 4. Highlight correct sidebar link based on step
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active', 'active-pulse'));
-    if (stepNumber === 7) {
-        const navTimbradas = document.getElementById('nav-timbradas');
-        if (navTimbradas) navTimbradas.classList.add('active');
-    } else {
-        const navSolicitud = document.getElementById('nav-solicitud');
-        if (navSolicitud) navSolicitud.classList.add('active-pulse');
-    }
+    const navSolicitud = document.getElementById('nav-solicitud');
+    if (navSolicitud) navSolicitud.classList.add('active-pulse');
 
     // 5. Al navegar a los pasos correspondientes:
     if (stepNumber === 3) {
         updateStep3UIFromActiveExpediente();
     } else if (stepNumber === 4) {
         initStep4FacturamaBadge();
-    } else if (stepNumber === 6) {
-        updateStep6ComprobanteUI();
-    } else if (stepNumber === 7) {
-        renderReportTable();
     }
 }
 
@@ -3214,7 +3199,7 @@ async function stampInvoiceViaPAC() {
         if (_lastStampResult) {
             _mostrarResultadoTimbrado(_lastStampResult, badgeEl?.dataset?.sandbox === 'true');
         }
-        goToStep(6);
+        goToStep(4);
         return;
     }
 
