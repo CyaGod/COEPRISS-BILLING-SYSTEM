@@ -302,9 +302,14 @@
                             </div>
                         </div>
 
-                        <div class="app-card">
-                            <h3 class="form-label" style="margin-bottom: 15px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">Actividad Reciente</h3>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); padding-top: 5px;">No hay actividad real cargada aún.</p>
+                        <div class="app-card" style="display: flex; flex-direction: column;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                                <h3 class="form-label" style="margin: 0; font-size: 0.9rem; font-weight: 700; color: var(--primary-color);">Actividad Reciente</h3>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">Últimos movimientos</span>
+                            </div>
+                            <div id="dash-actividad-reciente-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 2px;">
+                                <p style="font-size: 0.8rem; color: var(--text-muted); padding-top: 5px; margin: 0;">No hay actividad real cargada aún.</p>
+                            </div>
                         </div>
                     </div>
                 </section>

@@ -513,6 +513,7 @@ function initNavigation() {
             const id = item.id;
             if (id === 'nav-inicio') {
                 item.classList.add('active');
+                updateDashboardCounts();
                 goToPanel('panel-inicio');
             } else if (id === 'nav-solicitud') {
                 item.classList.add('active-pulse');
@@ -4732,10 +4733,123 @@ function updateDashboardCounts() {
     if (timbradasEl) timbradasEl.textContent = state.facturas.length;
     if (procEl) {
         // Dossiers in process are those not Timbrado or Entregado
-        const procCount = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado').length;
+        const procCount = state.expedientes.filter(e => e.estatus !== 'Timbrado' && e.estatus !== 'Entregado' && e.estatus !== 'TIMBRADO' && e.estatus !== 'TIMBRADA').length;
         procEl.textContent = procCount;
     }
     if (correosEl) correosEl.textContent = state.historialCorreos.length;
+
+    renderActividadReciente();
+}
+
+function renderActividadReciente() {
+    const container = document.getElementById('dash-actividad-reciente-container');
+    if (!container) return;
+
+    const feed = [];
+
+    // 1. Facturas timbradas
+    (state.facturas || []).forEach(f => {
+        const folioStr = f.folioRecibo || f.folioInterno || f.folio || 'REC';
+        const clienteStr = f.cliente || f.receptorNombre || f.rfc || 'Contribuyente';
+        const totalNum = parseFloat(f.importe || f.total || 0);
+        feed.push({
+            tipo: 'factura',
+            titulo: `Factura Timbrada · ${folioStr}`,
+            subtitulo: `${clienteStr} — $${totalNum.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+            extra: f.uuid ? `UUID: ${f.uuid.substring(0, 8)}...` : '',
+            fecha: f.fechaTimbrado || f.createdAt || f.fecha || new Date(),
+            icono: '⚡',
+            badgeBg: '#d4edda',
+            badgeColor: '#155724'
+        });
+    });
+
+    // 2. Historial de correos
+    (state.historialCorreos || []).forEach(c => {
+        feed.push({
+            tipo: 'correo',
+            titulo: 'Factura Enviada por Correo',
+            subtitulo: `${c.destinatario || 'Destinatario'} (Folio: ${c.folio || '—'})`,
+            extra: c.adjuntos || 'XML / PDF',
+            fecha: c.fecha || new Date(),
+            icono: '✉️',
+            badgeBg: '#cce5ff',
+            badgeColor: '#004085'
+        });
+    });
+
+    // 3. Bitácora de acciones
+    (state.bitacoraSeguridad || []).forEach(b => {
+        if (b.action && !b.action.includes('Inicio de sesión')) {
+            feed.push({
+                tipo: 'log',
+                titulo: b.action,
+                subtitulo: b.detalles || b.usuario || 'Sistema',
+                extra: '',
+                fecha: b.fecha || new Date(),
+                icono: '📋',
+                badgeBg: '#fff3cd',
+                badgeColor: '#856404'
+            });
+        }
+    });
+
+    // Ordenar por fecha descendente
+    feed.sort((a, b) => {
+        const parseDate = (d) => {
+            if (!d) return 0;
+            if (d instanceof Date) return d.getTime();
+            if (typeof d === 'string') {
+                const parsed = Date.parse(d);
+                if (!isNaN(parsed)) return parsed;
+                // Formato DD/MM/YYYY
+                const parts = d.split(/[\/\s,:]+/);
+                if (parts.length >= 3) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]).getTime() || 0;
+                }
+            }
+            return 0;
+        };
+        return parseDate(b.fecha) - parseDate(a.fecha);
+    });
+
+    if (feed.length === 0) {
+        container.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); padding: 8px 0; margin: 0;">No hay actividad reciente registrada.</p>`;
+        return;
+    }
+
+    const itemsToShow = feed.slice(0, 6);
+    container.innerHTML = itemsToShow.map(item => {
+        let fechaStr = 'Reciente';
+        if (item.fecha) {
+            if (typeof item.fecha === 'string') {
+                fechaStr = item.fecha;
+            } else if (item.fecha instanceof Date) {
+                fechaStr = item.fecha.toLocaleDateString('es-MX');
+            }
+        }
+        return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: ${item.badgeBg}; color: ${item.badgeColor}; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">
+                        ${item.icono}
+                    </div>
+                    <div style="min-width: 0;">
+                        <div style="font-size: 0.78rem; font-weight: 700; color: #212529; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${item.titulo}
+                        </div>
+                        <div style="font-size: 0.72rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${item.subtitulo}
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: right; flex-shrink: 0;">
+                    <span style="font-size: 0.68rem; color: #868e96; display: block;">${fechaStr}</span>
+                    ${item.extra ? `<span style="font-size: 0.65rem; font-family: monospace; color: #1B365D; background: #e8ecf4; padding: 1px 4px; border-radius: 3px;">${item.extra}</span>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // 10. Audit logs and security helper functions
