@@ -305,39 +305,50 @@ async function listarFacturas(pagina = 0, tamanio = 50) {
 }
 
 /**
- * Busca si un CFDI ya fue emitido en Facturama recientemente para el mismo expediente/receptor
- * para reconciliar en caso de fallas de red o timeouts y evitar doble timbrado ante el SAT.
+ * Busca si un CFDI ya fue emitido en Facturama recientemente para el mismo expediente
+ * para reconciliar en caso de fallas de red, timeouts o caídas de servidor y evitar doble timbrado.
+ *
+ * ⚠️ REGLA DE SEGURIDAD: Valida obligatoriamente el FOLIO ÚNICO del expediente, RFC y Total exacto.
  */
 async function reconciliarFacturaConPAC(expediente) {
     try {
+        const folio = (expediente.folio || expediente.cfdiFolio || '').toString().trim();
         const rfc = (expediente.receptorRfc || expediente.rfc || '').toUpperCase().trim();
         const total = parseFloat(expediente.cfdiTotal || expediente.importe || 0);
 
-        if (!rfc) return null;
+        if (!folio || !rfc) return null;
 
-        // Consultar los CFDIs emitidos más recientes (primeros 20)
-        let lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=20&keyword=${encodeURIComponent(rfc)}`).catch(() => null);
+        // 1. Consultar a Facturama buscando por la palabra clave del FOLIO ÚNICO
+        let lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=20&keyword=${encodeURIComponent(folio)}`).catch(() => null);
+        
+        // Si no arrojó resultados por folio, buscar por RFC como fallback de búsqueda (pero filtrando obligatoriamente por folio en el loop)
         if (!lista || !Array.isArray(lista) || lista.length === 0) {
-            lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=20`).catch(() => null);
+            lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=30&keyword=${encodeURIComponent(rfc)}`).catch(() => null);
+        }
+        if (!lista || !Array.isArray(lista) || lista.length === 0) {
+            lista = await facturamaRequest('GET', `/cfdi?type=issued&page=0&pageSize=30`).catch(() => null);
         }
 
         if (!lista || !Array.isArray(lista)) return null;
 
-        const ahora = Date.now();
-        const MAX_DIFF_MS = 60 * 60 * 1000; // Ventana de coincidencia de 1 hora
+        const folioNorm = folio.toUpperCase().replace(/\s+/g, '');
 
         for (const cfdi of lista) {
+            const cfdiFolio = (cfdi.Folio || '').toString().trim().toUpperCase().replace(/\s+/g, '');
             const cfdiRfc = (cfdi.Receiver?.Rfc || cfdi.Rfc || '').toUpperCase().trim();
             const cfdiTotal = parseFloat(cfdi.Total || 0);
-            const cfdiFecha = cfdi.Date ? new Date(cfdi.Date).getTime() : 0;
 
-            const rfcMatch = cfdiRfc === rfc || rfc === 'XAXX010101000';
-            const totalMatch = Math.abs(cfdiTotal - total) < 0.05;
-            const tiempoMatch = !cfdiFecha || Math.abs(ahora - cfdiFecha) < MAX_DIFF_MS;
+            // Validaciones obligatorias:
+            // 1. Folio idéntico (o contenido en Folio/Serie)
+            const folioMatch = cfdiFolio === folioNorm || cfdiFolio.endsWith(folioNorm) || (cfdi.Folio && cfdi.Folio.toString() === folio.toString());
+            // 2. RFC idéntico
+            const rfcMatch = cfdiRfc === rfc;
+            // 3. Monto total exacto (tolerancia de 2 centavos por redondeo)
+            const totalMatch = Math.abs(cfdiTotal - total) < 0.02;
 
-            if (rfcMatch && totalMatch && tiempoMatch) {
+            if (folioMatch && rfcMatch && totalMatch) {
                 const uuid = cfdi.Complement?.TaxStamp?.Uuid || cfdi.Uuid || null;
-                console.log(`[PAC RECONCILIACION] CFDI previo detectado en Facturama: ID=${cfdi.Id}, Folio=${cfdi.Folio}, UUID=${uuid}`);
+                console.log(`[PAC RECONCILIACION] ✓ CFDI previo confirmado en Facturama para folio ${folio}: ID=${cfdi.Id}, Folio=${cfdi.Folio}, UUID=${uuid}`);
                 
                 const [xmlData, pdfData] = await Promise.all([
                     descargarArchivo(cfdi.Id, 'xml').catch(() => null),
@@ -347,7 +358,7 @@ async function reconciliarFacturaConPAC(expediente) {
                 return {
                     id:         cfdi.Id,
                     uuid:       uuid,
-                    folio:      cfdi.Folio,
+                    folio:      cfdi.Folio || folio,
                     serie:      cfdi.Serie,
                     fecha:      cfdi.Date,
                     subtotal:   cfdi.Subtotal,

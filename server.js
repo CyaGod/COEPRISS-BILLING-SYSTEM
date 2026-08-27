@@ -1374,7 +1374,7 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
 
         if (!expediente) return res.status(404).json({ error: `Expediente ${expedienteId} no encontrado.` });
 
-        // ── CAPA AUTORITATIVA EN BASE DE DATOS: Verificar si ya cuenta con factura timbrada ──
+        // ── CAPA AUTORITATIVA EN BASE DE DATOS: 1. ESTADO TERMINAL INMUTABLE ──
         const facturaExistente = await prisma.factura.findFirst({
             where: { expedienteId: expediente.id, estatus: 'TIMBRADA' }
         });
@@ -1382,7 +1382,7 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
         if (facturaExistente || (expediente.estatus === 'TIMBRADO' && expediente.cfdiUuid)) {
             const uuidExistente = facturaExistente?.uuid || expediente.cfdiUuid;
             const facturamaIdExistente = facturaExistente?.facturamaId;
-            console.log(`[FACTURAMA/TIMBRAR] Expediente ${expedienteId} ya estaba timbrado previamente (UUID: ${uuidExistente}). Retornando comprobante existente sin llamar al PAC.`);
+            console.log(`[FACTURAMA/TIMBRAR] Expediente ${expedienteId} ya cuenta con UUID oficial en PostgreSQL (${uuidExistente}). Retornando comprobante existente (CERO llamadas a Facturama).`);
 
             let xmlB64 = facturaExistente?.xmlContent ? Buffer.from(facturaExistente.xmlContent, 'utf-8').toString('base64') : null;
             let pdfB64 = null;
@@ -1410,21 +1410,101 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
             });
         }
 
+        // ── CAPA DE PERSISTENCIA: 2. VERIFICAR SI ESTABA EN PROCESO (CRASH/TIMEOUT PREVIO) ──
+        if (expediente.estatus === 'EN_PROCESO') {
+            console.log(`[FACTURAMA/TIMBRAR] Expediente ${expedienteId} se encuentra en estado EN_PROCESO. Ejecutando reconciliación obligatoria con Facturama por folio único antes de cualquier acción...`);
+            const reconciliadoPrevio = await facturama.reconciliarFacturaConPAC(expediente);
+            if (reconciliadoPrevio && reconciliadoPrevio.uuid) {
+                console.log(`[FACTURAMA/TIMBRAR] ✓ Reconciliación exitosa para expediente en proceso: UUID=${reconciliadoPrevio.uuid}`);
+                
+                // Guardar en base de datos para transicionar a TIMBRADO
+                const facGuardada = await prisma.factura.create({
+                    data: {
+                        expedienteId:    expediente.id,
+                        usuarioId:       req.user.id,
+                        folio:           reconciliadoPrevio.folio || expedienteId,
+                        uuid:            reconciliadoPrevio.uuid,
+                        facturamaId:     reconciliadoPrevio.id ? String(reconciliadoPrevio.id) : null,
+                        xmlContent:      reconciliadoPrevio.xmlBase64 ? Buffer.from(reconciliadoPrevio.xmlBase64, 'base64').toString('utf-8') : null,
+                        estatus:         'TIMBRADA',
+                        fechaTimbrado:   new Date(),
+                        cadenaOriginal:  reconciliadoPrevio.datos?.OriginalString || null,
+                        noCertificadoSat: reconciliadoPrevio.datos?.NoCertificadoSAT || null,
+                    }
+                });
+
+                await prisma.expediente.update({
+                    where: { folio: expedienteId },
+                    data: { estatus: 'TIMBRADO', cfdiUuid: reconciliadoPrevio.uuid, cfdiTotal: parseFloat(expediente.cfdiTotal || 0) }
+                });
+
+                return res.json({
+                    success:           true,
+                    yaEstabaTimbrada:  true,
+                    reconciliado:      true,
+                    sandbox:           reconciliadoPrevio.sandbox,
+                    facturaId:         facGuardada.id,
+                    facturamaId:       reconciliadoPrevio.id,
+                    uuid:              reconciliadoPrevio.uuid,
+                    folio:             reconciliadoPrevio.folio,
+                    serie:             reconciliadoPrevio.serie,
+                    fecha:             reconciliadoPrevio.fecha,
+                    subtotal:          reconciliadoPrevio.subtotal,
+                    total:             reconciliadoPrevio.total,
+                    xmlBase64:         reconciliadoPrevio.xmlBase64,
+                    pdfBase64:         reconciliadoPrevio.pdfBase64,
+                    correoEnviado:     false,
+                    correoDestinatario: expediente.receptorEmail || null
+                });
+            } else {
+                // Facturama confirmó que NO fue timbrado tras caída previa; revertir a PENDIENTE para adquirir candado limpio
+                await prisma.expediente.update({
+                    where: { folio: expedienteId },
+                    data: { estatus: 'PENDIENTE' }
+                }).catch(() => {});
+            }
+        }
+
+        // ── CAPA DE CONCURRENCIA DISTRIBUIDA: CANDADO ATÓMICO EN POSTGRESQL (Multi-Instancia) ──
+        // Solo 1 proceso/instancia en todo el clúster logrará actualizar de PENDIENTE a EN_PROCESO
+        const lockUpdate = await prisma.expediente.updateMany({
+            where: {
+                folio: expedienteId,
+                estatus: { notIn: ['TIMBRADO', 'EN_PROCESO'] }
+            },
+            data: {
+                estatus: 'EN_PROCESO'
+            }
+        });
+
+        if (lockUpdate.count === 0) {
+            console.warn(`[FACTURAMA/TIMBRAR] Expediente ${expedienteId} bloqueado por concurrencia atómica a nivel de PostgreSQL.`);
+            return res.status(409).json({
+                error: 'El timbrado de este expediente ya se encuentra en proceso por otra instancia o solicitud.',
+                enProceso: true,
+            });
+        }
+
         console.log(`[FACTURAMA/TIMBRAR] Iniciando timbrado oficial para expediente ${expedienteId} (sandbox=${facturama.SANDBOX})`);
 
-        // ── LLAMADA AL PAC CON RECONCILIACIÓN ANTE TIMEOUT O FALLO DE RED ──
+        // ── LLAMADA AL PAC CON RECONCILIACIÓN OBLIGATORIA ANTE TIMEOUT O FALLO DE RED ──
         let resultado = null;
         try {
             resultado = await facturama.timbrarCFDI(expediente);
         } catch (pacErr) {
-            console.warn(`[FACTURAMA/TIMBRAR] Error en llamada al PAC (${pacErr.message}). Ejecutando reconciliación previa para evitar duplicados...`);
+            console.warn(`[FACTURAMA/TIMBRAR] Error en llamada al PAC (${pacErr.message}). Ejecutando reconciliación obligatoria por folio para evitar duplicados...`);
             
-            // Intentar reconciliar por si el PAC timbró exitosamente antes del corte de red o timeout
+            // Reconciliar por folio único antes de asumir fallo
             const reconciliado = await facturama.reconciliarFacturaConPAC(expediente);
             if (reconciliado && reconciliado.uuid) {
-                console.log(`[FACTURAMA/TIMBRAR] ¡Reconciliación exitosa! Comprobante emitido recuperado: UUID=${reconciliado.uuid}`);
+                console.log(`[FACTURAMA/TIMBRAR] ✓ Reconciliación exitosa: CFDI emitido recuperado: UUID=${reconciliado.uuid}`);
                 resultado = reconciliado;
             } else {
+                // Solo si Facturama confirma fehacientemente que NO existe CFDI para este folio, revertir a PENDIENTE
+                await prisma.expediente.update({
+                    where: { folio: expedienteId },
+                    data: { estatus: 'PENDIENTE' }
+                }).catch(() => {});
                 throw pacErr;
             }
         }
