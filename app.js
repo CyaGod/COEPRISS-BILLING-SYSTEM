@@ -581,9 +581,12 @@ function resumeFlowAtStep(wizardStep, folio) {
                 targetStep = 4;
             } else if (exp.rfc || exp.cliente) {
                 targetStep = 3;
+            } else if (exp.archivos && exp.archivos.length) {
+                targetStep = 2;
             }
         }
 
+        state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, targetStep);
         showToast(`Reanudando expediente ${folio} en el Paso ${targetStep}...`, 'info');
         
         // Highlight "Nueva solicitud" sidebar link
@@ -3030,9 +3033,22 @@ async function buscarClientePorRfc(rfc, notifyIfNotFound = true, overwriteFields
     }
 }
 
+let _dbSaveTimer = null;
+function saveDatabaseToStorageDebounced() {
+    clearTimeout(_dbSaveTimer);
+    _dbSaveTimer = setTimeout(() => {
+        saveDatabaseToStorage();
+    }, 400);
+}
+
 function syncStep3Field(field, val) {
     if (!state.activeExpediente) return;
     state.activeExpediente[field] = val;
+    const idx = (state.expedientes || []).findIndex(e => e.folio === state.activeExpediente.folio);
+    if (idx !== -1) {
+        state.expedientes[idx][field] = val;
+    }
+    saveDatabaseToStorageDebounced();
 }
 
 function onStep3TotalChange(val) {
@@ -3041,6 +3057,13 @@ function onStep3TotalChange(val) {
         state.activeExpediente.importe = num;
         state.activeExpediente.total = num;
         state.activeExpediente.cfdiTotal = num;
+        const idx = (state.expedientes || []).findIndex(e => e.folio === state.activeExpediente.folio);
+        if (idx !== -1) {
+            state.expedientes[idx].importe = num;
+            state.expedientes[idx].total = num;
+            state.expedientes[idx].cfdiTotal = num;
+        }
+        saveDatabaseToStorageDebounced();
     }
     updateStep3Summary(num);
 }
@@ -3168,23 +3191,101 @@ async function initStep4FacturamaBadge() {
     }
 
     const btnTimbrar = document.getElementById('btn-pac-stamp');
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
     const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
     if (isFacturaTimbrada()) {
         if (btnTimbrar) btnTimbrar.style.display = 'none';
+        if (btnCancelar) btnCancelar.style.display = 'none';
         if (btnRegresar) btnRegresar.style.display = 'none';
     } else {
         if (btnTimbrar) btnTimbrar.style.display = 'inline-flex';
+        if (btnCancelar) btnCancelar.style.display = 'inline-flex';
         if (btnRegresar) btnRegresar.style.display = 'inline-flex';
     }
 }
 
 let _isStampingActive = false;
 
+async function cancelarSolicitudStep4() {
+    if (!state.activeExpediente) {
+        showToast('No hay ninguna solicitud activa para cancelar.', 'warning');
+        return;
+    }
+
+    const d = state.activeExpediente;
+
+    // Si ya tiene UUID o ya está TIMBRADA, no permitir Cancelar solicitud interna
+    if (d.uuid || d.estatus === 'TIMBRADA' || d.estatus === 'TIMBRADO' || isFacturaTimbrada()) {
+        showToast('Esta solicitud ya cuenta con comprobante fiscal timbrado ante el SAT. No se puede cancelar desde este apartado.', 'warning');
+        return;
+    }
+
+    const confirmar = confirm('¿Deseas cancelar esta solicitud? Los datos se guardarán en el historial como CANCELADA y se limpiará la solicitud actual.');
+    if (!confirmar) {
+        return;
+    }
+
+    // 1. Marcar como CANCELADA en el objeto local
+    d.estatus = 'CANCELADA';
+    addAuditLogToActive('Solicitud cancelada internamente por el usuario antes de timbrar.');
+    addSecurityLog('Cancelación interna', `Solicitud con folio ${d.folio} registrada en el historial con estatus CANCELADA.`);
+
+    // 2. Guardar en state.expedientes (si no estaba, agregarlo; si ya estaba, actualizarlo)
+    const idx = (state.expedientes || []).findIndex(e => e.folio === d.folio);
+    if (idx !== -1) {
+        state.expedientes[idx] = { ...d };
+    } else {
+        state.expedientes.unshift({ ...d });
+    }
+
+    // 3. Persistir en la base de datos PostgreSQL sin eliminar ningún dato
+    try {
+        await apiFetch('/api/expedientes', {
+            method: 'POST',
+            body: JSON.stringify({
+                folio: d.folio,
+                receptorRfc: d.rfc || null,
+                receptorNombre: d.cliente || null,
+                receptorCodigoPostal: d.codigoPostal || null,
+                receptorRegimenFiscal: d.regimenFiscal || null,
+                receptorUsoCfdi: d.usoCfdi || 'G03',
+                receptorEmail: d.correo || null,
+                cfdiConcepto: d.concepto || null,
+                cfdiTotal: d.importe || d.total || d.cfdiTotal || null,
+                cfdiSubtotal: d.subtotal || null,
+                cfdiFormaPago: d.formaPago || '03',
+                cfdiMetodoPago: d.metodoPago || 'PUE',
+                estatus: 'CANCELADO',
+                observaciones: 'Solicitud cancelada internamente por el usuario antes de timbrar.'
+            })
+        });
+    } catch (err) {
+        console.warn('[CANCELAR SOLICITUD API]', err.message);
+    }
+
+    // 4. Guardar en almacenamiento local
+    saveDatabaseToStorage();
+
+    // 5. Actualizar tablas de historial y procesos
+    renderProcesoTable();
+    renderReportTable();
+    updateDashboardCounts();
+
+    // 6. Limpiar la solicitud actual y regresar a Inicio
+    restartProcess();
+
+    showToast('✓ Solicitud cancelada y registrada en el historial como CANCELADA.', 'info');
+}
+
 async function stampInvoiceViaPAC() {
     if (_isStampingActive) {
         console.warn('[STAMP] Clic duplicado ignorado: el timbrado ya se encuentra en ejecución.');
         return;
     }
+
+    // Ocultar botón Cancelar factura inmediatamente al iniciar el timbrado
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
+    if (btnCancelar) btnCancelar.style.display = 'none';
 
     if (!state.activeExpediente) {
         showToast('Primero carga y procesa un documento para obtener el expediente.', 'warning');
@@ -3218,10 +3319,14 @@ async function stampInvoiceViaPAC() {
         if (titleEl) titleEl.textContent = msg;
         if (descEl) descEl.textContent = sub;
         if (btn) btn.disabled = true;
+        const btnCanc = document.getElementById('btn-cancelar-factura-step4');
+        if (btnCanc) btnCanc.style.display = 'none';
     }
     function clearLoading() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (btn) btn.disabled = false;
+        const btnCanc = document.getElementById('btn-cancelar-factura-step4');
+        if (btnCanc && !isFacturaTimbrada()) btnCanc.style.display = 'inline-flex';
     }
 
     _isStampingActive = true;
@@ -3377,9 +3482,11 @@ function _mostrarResultadoTimbrado(data, isSandbox) {
     const box = document.getElementById('pac-resultado-timbrado');
     if (!box) return;
 
-    // Ocultar botón de timbrar porque la factura ya fue emitida
+    // Ocultar botón de timbrar y cancelar porque la factura ya fue emitida
     const btnTimbrar = document.getElementById('btn-pac-stamp');
     if (btnTimbrar) btnTimbrar.style.display = 'none';
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
+    if (btnCancelar) btnCancelar.style.display = 'none';
 
     // Ocultar botón de regresar a formulario porque el CFDI ya fue sellado
     const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
@@ -3866,9 +3973,9 @@ function getFilteredInvoicesList() {
         const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
 
         const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
-        const isPendiente = estatus === 'PENDIENTE' || estatus === 'EN_PROCESO' || estatus === 'RECIBIDO' || estatus === 'PAGO PENDIENTE' || estatus === 'EN PROCESO';
         const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
         const isError = estatus === 'ERROR' || estatus === 'FALLIDO';
+        const isPendiente = !isTimbrada && !isCancelada && !isError;
 
         // 1. Filtro por texto
         const matchText = !busqueda || [folio, uuid, cliente, rfc, concepto].some(val => (val || '').toLowerCase().includes(busqueda));
@@ -3943,7 +4050,6 @@ function filterReportTable() {
         const badgeClass = isTimbrada ? 'badge-success' : (isCancelada ? 'badge-danger' : 'badge-info');
         const displayEstatus = isTimbrada ? 'TIMBRADA' : estatus;
         const facturamaId = f.facturamaId || '';
-        // Identificador efectivo: prefiere facturamaId, cae a uuid como alternativa
         const effectiveId = facturamaId || uuid || '';
 
         const dObj = parseInvoiceDate(f);
@@ -3971,10 +4077,14 @@ function filterReportTable() {
                         <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${effectiveId}', 'xml')" title="Descargar XML" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                         <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
                         <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar del historial" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                    ` : (isCancelada ? `
+                        <span style="color:#dc3545;font-size:0.74rem;font-weight:600;display:inline-flex;align-items:center;gap:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2.2;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg> Cancelada</span>
                     ` : `
-                        <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
-                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'expediente')" title="Eliminar registro" style="color:#e05252;margin-left:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
-                    `}
+                        <button class="btn btn-primary" onclick="resumeFlowAtStep(1, '${folio}')" style="padding: 4px 12px; font-size: 0.74rem; font-weight: 600; background-color: #e67e22; border-color: #e67e22; display: inline-flex; align-items: center; gap: 5px;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            Continuar solicitud
+                        </button>
+                    `)}
                 </div>
             </td>
         `;
@@ -4682,6 +4792,9 @@ function restartProcess() {
         btnTimbrar.style.display = 'inline-flex';
         btnTimbrar.disabled = false;
     }
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
+    if (btnCancelar) btnCancelar.style.display = 'inline-flex';
+
     const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
     if (btnRegresar) btnRegresar.style.display = 'inline-flex';
 

@@ -903,10 +903,16 @@
                             </div>
                         </div>
 
-                        <button class="btn btn-primary" id="btn-pac-stamp" onclick="stampInvoiceViaPAC()" style="font-size: 0.85rem; padding: 11px 24px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700;">
-                            <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M2.166 2.22a.75.75 0 00-.804.885 55.302 55.302 0 002.597 11.3c.78 2.22 3.1 3.595 5.516 3.595a11.956 11.956 0 007.059-2.302c.264-.2.264-.607 0-.807A11.956 11.956 0 019.477 12a11.956 11.956 0 01-5.11-7.059c-.2-.264-.607-.264-.807 0A11.956 11.956 0 001.258 11.96c.78 2.22 3.1 3.595 5.516 3.595.347 0 .692-.02 1.033-.06a.75.75 0 00.65-.63L9 12.06c.038-.344-.12-.686-.414-.88a55.302 55.302 0 00-6.42-3.96zm15.42 1.15a.75.75 0 00-.63.65L16.9 7.06c-.038.344.12.686.414.88a55.302 55.302 0 006.42 3.96c.328.2.736-.08.68-.456l-1.033-6.837a.75.75 0 00-.804-.685z" clip-rule="evenodd"/></svg>
-                            Firmar y Timbrar Factura Oficial
-                        </button>
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-primary" id="btn-pac-stamp" onclick="stampInvoiceViaPAC()" style="font-size: 0.85rem; padding: 11px 24px; display: inline-flex; align-items: center; gap: 8px; font-weight: 700;">
+                                <svg fill="currentColor" viewBox="0 0 20 20" style="width: 16px; height: 16px;"><path fill-rule="evenodd" d="M2.166 2.22a.75.75 0 00-.804.885 55.302 55.302 0 002.597 11.3c.78 2.22 3.1 3.595 5.516 3.595a11.956 11.956 0 007.059-2.302c.264-.2.264-.607 0-.807A11.956 11.956 0 019.477 12a11.956 11.956 0 01-5.11-7.059c-.2-.264-.607-.264-.807 0A11.956 11.956 0 001.258 11.96c.78 2.22 3.1 3.595 5.516 3.595.347 0 .692-.02 1.033-.06a.75.75 0 00.65-.63L9 12.06c.038-.344-.12-.686-.414-.88a55.302 55.302 0 00-6.42-3.96zm15.42 1.15a.75.75 0 00-.63.65L16.9 7.06c-.038.344.12.686.414.88a55.302 55.302 0 006.42 3.96c.328.2.736-.08.68-.456l-1.033-6.837a.75.75 0 00-.804-.685z" clip-rule="evenodd"/></svg>
+                                Firmar y Timbrar Factura Oficial
+                            </button>
+                            <button class="btn btn-secondary" id="btn-cancelar-factura-step4" onclick="cancelarSolicitudStep4()" style="font-size: 0.85rem; padding: 11px 24px; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; border-color: #dc3545; color: #dc3545; background-color: #ffffff;">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px; stroke-width: 2.2;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                Cancelar solicitud
+                            </button>
+                        </div>
 
                         <!-- Panel de resultado del timbrado -->
                         <div id="pac-resultado-timbrado" style="display:none; margin-top: 18px;"></div>
