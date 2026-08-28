@@ -3168,23 +3168,37 @@ async function initStep4FacturamaBadge() {
     }
 
     const btnTimbrar = document.getElementById('btn-pac-stamp');
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
     const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
     if (isFacturaTimbrada()) {
         if (btnTimbrar) btnTimbrar.style.display = 'none';
+        if (btnCancelar) btnCancelar.style.display = 'none';
         if (btnRegresar) btnRegresar.style.display = 'none';
     } else {
         if (btnTimbrar) btnTimbrar.style.display = 'inline-flex';
+        if (btnCancelar) btnCancelar.style.display = 'inline-flex';
         if (btnRegresar) btnRegresar.style.display = 'inline-flex';
     }
 }
 
 let _isStampingActive = false;
 
+function cancelarFacturaStep4() {
+    if (confirm('¿Estás seguro de cancelar este proceso de facturación? Los datos actuales del trámite se descartarán.')) {
+        restartProcess();
+        showToast('Proceso de facturación cancelado.', 'info');
+    }
+}
+
 async function stampInvoiceViaPAC() {
     if (_isStampingActive) {
         console.warn('[STAMP] Clic duplicado ignorado: el timbrado ya se encuentra en ejecución.');
         return;
     }
+
+    // Ocultar botón Cancelar factura inmediatamente al iniciar el timbrado
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
+    if (btnCancelar) btnCancelar.style.display = 'none';
 
     if (!state.activeExpediente) {
         showToast('Primero carga y procesa un documento para obtener el expediente.', 'warning');
@@ -3218,10 +3232,14 @@ async function stampInvoiceViaPAC() {
         if (titleEl) titleEl.textContent = msg;
         if (descEl) descEl.textContent = sub;
         if (btn) btn.disabled = true;
+        const btnCanc = document.getElementById('btn-cancelar-factura-step4');
+        if (btnCanc) btnCanc.style.display = 'none';
     }
     function clearLoading() {
         if (loadingEl) loadingEl.style.display = 'none';
         if (btn) btn.disabled = false;
+        const btnCanc = document.getElementById('btn-cancelar-factura-step4');
+        if (btnCanc && !isFacturaTimbrada()) btnCanc.style.display = 'inline-flex';
     }
 
     _isStampingActive = true;
@@ -3377,9 +3395,11 @@ function _mostrarResultadoTimbrado(data, isSandbox) {
     const box = document.getElementById('pac-resultado-timbrado');
     if (!box) return;
 
-    // Ocultar botón de timbrar porque la factura ya fue emitida
+    // Ocultar botón de timbrar y cancelar porque la factura ya fue emitida
     const btnTimbrar = document.getElementById('btn-pac-stamp');
     if (btnTimbrar) btnTimbrar.style.display = 'none';
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
+    if (btnCancelar) btnCancelar.style.display = 'none';
 
     // Ocultar botón de regresar a formulario porque el CFDI ya fue sellado
     const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
@@ -4680,6 +4700,9 @@ function restartProcess() {
         btnTimbrar.style.display = 'inline-flex';
         btnTimbrar.disabled = false;
     }
+    const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
+    if (btnCancelar) btnCancelar.style.display = 'inline-flex';
+
     const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
     if (btnRegresar) btnRegresar.style.display = 'inline-flex';
 
