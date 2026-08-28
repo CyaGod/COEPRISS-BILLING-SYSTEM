@@ -3973,9 +3973,9 @@ function getFilteredInvoicesList() {
         const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
 
         const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
-        const isPendiente = estatus === 'PENDIENTE' || estatus === 'EN_PROCESO' || estatus === 'RECIBIDO' || estatus === 'PAGO PENDIENTE' || estatus === 'EN PROCESO';
         const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
         const isError = estatus === 'ERROR' || estatus === 'FALLIDO';
+        const isPendiente = !isTimbrada && !isCancelada && !isError;
 
         // 1. Filtro por texto
         const matchText = !busqueda || [folio, uuid, cliente, rfc, concepto].some(val => (val || '').toLowerCase().includes(busqueda));
@@ -4895,74 +4895,6 @@ function openInvoicePreviewModal(folio = '', clientName = '', totalVal = '') {
     modal.classList.add('open');
 }
 
-function verSolicitudesPendientes() {
-    triggerSidebarClick('nav-timbradas');
-    const filter = document.getElementById('report-status-filter');
-    if (filter) {
-        filter.value = 'PENDIENTE';
-        filterReportTable();
-    }
-}
-
-function renderSolicitudesPendientes() {
-    const listContainer = document.getElementById('dash-pendientes-list');
-    const countEl = document.getElementById('dash-pendientes-count');
-    const badgeEl = document.getElementById('badge-pendientes-total');
-
-    const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
-    const pendingList = (state.expedientes || []).filter(e => {
-        const estatus = (e.estatus || '').toUpperCase();
-        const hasUuid = Boolean(e.uuid || e.cfdiUuid || facturaFolios.has(e.folio));
-        const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
-        const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || hasUuid;
-        return !isCancelada && !isTimbrada;
-    });
-
-    if (countEl) countEl.textContent = pendingList.length;
-    if (badgeEl) badgeEl.textContent = `${pendingList.length} pendiente${pendingList.length === 1 ? '' : 's'}`;
-
-    if (!listContainer) return;
-
-    if (pendingList.length === 0) {
-        listContainer.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; text-align: center; padding: 14px 0;">No hay solicitudes pendientes en este momento. Todas las solicitudes han sido timbradas o concluidas.</p>`;
-        return;
-    }
-
-    listContainer.innerHTML = pendingList.map(e => {
-        const folio = e.folio || '—';
-        const cliente = e.cliente || e.receptorNombre || 'Cliente sin asignar';
-        const rfc = e.rfc || e.receptorRfc || 'Sin RFC';
-        const total = parseFloat(e.importe || e.cfdiTotal || 0);
-        const fecha = e.fechaRecibo || (e.createdAt ? new Date(e.createdAt).toLocaleString('es-MX') : 'Reciente');
-
-        // Determinar paso recomendado
-        let wizardStep = 1;
-        if (e.rfc && e.cliente && e.codigoPostal && (e.importe || e.cfdiTotal)) wizardStep = 4;
-        else if (e.rfc || e.cliente) wizardStep = 3;
-        else if (e.archivos && e.archivos.length) wizardStep = 2;
-
-        return `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #fff; border: 1px solid #e9ecef; border-radius: 6px; gap: 10px; flex-wrap: wrap;">
-                <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <strong style="color: #1B365D; font-size: 0.88rem;">${folio}</strong>
-                        <span class="badge badge-warning" style="font-size: 0.68rem; padding: 2px 6px;">Paso ${wizardStep}</span>
-                        <span style="font-size: 0.72rem; color: #6c757d;">${fecha}</span>
-                    </div>
-                    <span style="font-size: 0.8rem; color: #495057; font-weight: 500;">${cliente} <span style="font-family: monospace; color: #6c757d; font-size: 0.75rem;">(${rfc})</span></span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    ${total > 0 ? `<strong style="color: #1B365D; font-size: 0.95rem;">$${total.toFixed(2)} MXN</strong>` : '<span style="font-size:0.75rem; color:#868e96;">Importe pendiente</span>'}
-                    <button class="btn btn-primary" onclick="resumeFlowAtStep(${wizardStep}, '${folio}')" style="padding: 6px 14px; font-size: 0.78rem; font-weight: 600; background-color: #e67e22; border-color: #e67e22; display: inline-flex; align-items: center; gap: 6px;">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
-                        Continuar solicitud
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
 function updateDashboardCounts() {
     const timbradasEl = document.getElementById('dash-timbradas-count');
     const clientesEl = document.getElementById('dash-clientes-count');
@@ -4972,7 +4904,6 @@ function updateDashboardCounts() {
     if (clientesEl) clientesEl.textContent = (state.clientes || []).length;
     if (correosEl) correosEl.textContent = (state.historialCorreos || []).length;
 
-    renderSolicitudesPendientes();
     renderActividadReciente();
 }
 
