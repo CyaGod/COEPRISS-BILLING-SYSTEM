@@ -1,0 +1,35 @@
+{
+  "metadata": {
+    "system": "COEPRISS Sinaloa Facturación Electrónica",
+    "provider": "Render Database Engine",
+    "version": "3.0.0",
+    "lastUpdated": "2026-08-28T20:41:29.996Z"
+  },
+  "usuarios": [
+    {
+      "username": "brenda.gonzalez",
+      "name": "Brenda González",
+      "role": "Administrador",
+      "avatar": "BG",
+      "password": "SinaloaFacturas2026"
+    },
+    {
+      "username": "jose.perez",
+      "name": "José Pérez",
+      "role": "Auditor",
+      "avatar": "JP",
+      "password": "SinaloaAuditor2026"
+    }
+  ],
+  "expedientes": [],
+  "facturas": [],
+  "historialCorreos": [],
+  "bitacoraSeguridad": [
+    {
+      "fecha": "28/8/2026 01:41 p.m.",
+      "usuario": "Sistema COEPRISS",
+      "accion": "Inicialización de Producción",
+      "detalles": "Base de datos limpia y lista para operación oficial en producción."
+    }
+  ]
+}

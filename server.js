@@ -1992,6 +1992,7 @@ async function vaciarFacturasYExpedientesPrueba() {
         await prisma.expediente.deleteMany({}).catch(() => {});
         await prisma.cliente.deleteMany({}).catch(() => {});
         await prisma.bitacoraSeguridad.deleteMany({}).catch(() => {});
+        await prisma.sesion.deleteMany({}).catch(() => {});
 
         // Registro inicial limpio de bitácora
         const adminUser = await prisma.usuario.findFirst({ where: { username: 'admin' } });
@@ -1999,12 +2000,32 @@ async function vaciarFacturasYExpedientesPrueba() {
             await prisma.bitacoraSeguridad.create({
                 data: {
                     usuarioId: adminUser.id,
-                    accion: 'Sistema Reinicializado',
-                    detalles: 'Historiales de facturación, correos, clientes y bitácora limpiados para inicio en blanco.',
+                    accion: 'INICIALIZACIÓN PRODUCCIÓN',
+                    detalles: 'Base de datos vaciada y preparada para operación oficial en producción.',
                     resultado: 'EXITOSO'
                 }
             }).catch(() => {});
         }
+
+        // Limpiar almacenamiento JSON de disco si está activo
+        try {
+            const dbEngineMod = require('./db');
+            if (dbEngineMod && typeof dbEngineMod.updateFullState === 'function') {
+                dbEngineMod.updateFullState({
+                    expedientes: [],
+                    facturas: [],
+                    historialCorreos: [],
+                    bitacoraSeguridad: [
+                        {
+                            fecha: new Date().toLocaleDateString('es-MX') + ' ' + new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+                            usuario: 'Sistema COEPRISS',
+                            accion: 'Inicialización de Producción',
+                            detalles: 'Base de datos limpia y lista para operación oficial en producción.'
+                        }
+                    ]
+                });
+            }
+        } catch (e) {}
 
         console.log('[LIMPIEZA] ✅ Base de datos completamente limpia: facturas (0), expedientes (0), correos (0), clientes (0), bitácora reiniciada.');
         return { success: true };

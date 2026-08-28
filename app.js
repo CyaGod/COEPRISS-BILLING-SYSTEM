@@ -4134,16 +4134,18 @@ async function eliminarRegistro(folio, tipo = 'factura') {
 }
 
 async function limpiarFacturasPrueba() {
-    if (!confirm('¿Deseas vaciar el historial y eliminar TODAS las facturas y expedientes de prueba para comenzar desde cero?')) {
+    if (!confirm('¿Deseas vaciar el historial y eliminar TODAS las facturas, expedientes, correos y clientes de prueba para iniciar en MODO PRODUCCIÓN?')) {
         return;
     }
 
     try {
-        showToast('Vaciando registros de prueba...', 'info');
+        showToast('Vaciando base de datos para modo producción...', 'info');
         const res = await apiFetch('/api/facturas/limpiar-falsas', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-            showToast('✅ Historial vaciado al 100%. Sistema listo desde cero.', 'success');
+            resetCloudCollections();
+            renderCloudCollections();
+            showToast('✅ Base de datos limpia. Sistema listo para facturación en producción.', 'success');
             await initRenderDbSync();
         } else {
             showToast(`Error: ${data.error || 'No se pudo realizar la limpieza'}`, 'error');

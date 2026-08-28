@@ -416,8 +416,12 @@
                                 <h3 class="panel-title" style="font-size: 1.05rem; font-weight: 700; margin: 0; color: #1B365D;">Eventos de Auditoría Registrados</h3>
                                 <p style="font-size: 0.75rem; color: #6c757d; margin: 2px 0 0 0;">Historial inmutable de operaciones realizadas en la plataforma.</p>
                             </div>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="search-bitacora" placeholder="Buscar por acción o usuario..." oninput="filterBitacoraTable()" style="padding: 7px 14px; font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px; width: 260px;">
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="search-bitacora" placeholder="Buscar por acción o usuario..." oninput="filterBitacoraTable()" style="padding: 7px 14px; font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px; width: 220px;">
+                                <button class="btn btn-secondary" onclick="limpiarFacturasPrueba()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; padding: 7px 12px; background-color: #dc3545; border: none; color: #ffffff; font-weight: 600;" title="Limpiar todos los registros para pasar a producción">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    Limpiar Datos (Producción)
+                                </button>
                             </div>
                         </div>
 
@@ -926,7 +930,11 @@
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
                         <h3 class="panel-title" style="font-size: 1.15rem; font-weight: 700; margin: 0; color: #1B365D;">Historial de Facturación</h3>
-                        <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="limpiarFacturasPrueba()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 8px 14px; background-color: #dc3545; border: none; color: #ffffff; font-weight: 600;" title="Eliminar todos los registros de prueba e iniciar en blanco">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                Limpiar Datos (Modo Prod)
+                            </button>
                             <button class="btn btn-secondary" onclick="exportReportToExcel()" style="border-radius: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 8px 16px; background-color: #28a745; border: none; color: #ffffff; font-weight: 600;">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                 Exportar a Excel
