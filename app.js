@@ -3669,7 +3669,7 @@ function openEmailModal(expedienteId, destinatario = '', razonSocial = '') {
     if (nombreInput) nombreInput.value = razonSocial;
     if (asuntoInput) asuntoInput.value = `Factura Electrónica CFDI 4.0 - COEPRISS Sinaloa (${_currentEmailExpedienteId || ''})`;
     if (mensajeInput) {
-        mensajeInput.value = `Estimado contribuyente ${razonSocial || ''},\n\nLe hacemos entrega de los archivos oficiales (XML y PDF) correspondientes a su comprobante fiscal digital emitido por la Comisión Estatal para la Protección contra Riesgos Sanitarios de Sinaloa (COEPRISS).\n\nSaludos cordiales.`;
+        mensajeInput.value = `Estimado contribuyente ${razonSocial || ''},\n\nLe hacemos entrega de los archivos oficiales (XML y PDF) correspondientes a su comprobante fiscal digital emitido por la Comisión Estatal para la Protección contra Riesgos Sanitarios de Sinaloa (COEPRISS).\n\nCualquier duda o aclaración enviar correo a facturacion.coepriss@sinaloa.gob.mx\n\nSaludos cordiales.`;
     }
 
     modal.classList.add('open');
