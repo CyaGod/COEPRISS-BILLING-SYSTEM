@@ -899,7 +899,7 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
                     </div>
 
                     <p style="font-size: 0.85rem; color: #64748b;">En los archivos adjuntos a este correo encontrará las versiones oficiales <strong>XML</strong> y <strong>PDF</strong> con sello digital del SAT.</p>
-                    <p style="font-size: 0.85rem; color: #64748b;">Si tiene dudas o requiere aclaraciones, favor de comunicarse a las oficinas de COEPRISS Sinaloa.</p>
+                    <p style="font-size: 0.85rem; color: #64748b; margin-top: 10px;">Cualquier duda o aclaración enviar correo a <a href="mailto:facturacion.coepriss@sinaloa.gob.mx" style="color: #1B365D; font-weight: bold; text-decoration: underline;">facturacion.coepriss@sinaloa.gob.mx</a></p>
                 </div>
                 <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; text-align: center; font-size: 0.75rem; color: #94a3b8;">
                     COEPRISS Sinaloa — Blvd. Alfonso G. Calderón #2193, C.P. 80020, Culiacán, Sinaloa, México.<br>
@@ -1674,6 +1674,7 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
                                 </table>
                             </div>
                             <p style="font-size: 0.85rem; color: #64748b;">En los archivos adjuntos a este correo encontrará las versiones oficiales <strong>XML</strong> y <strong>PDF</strong> con sello digital del SAT.</p>
+                            <p style="font-size: 0.85rem; color: #64748b; margin-top: 10px;">Cualquier duda o aclaración enviar correo a <a href="mailto:facturacion.coepriss@sinaloa.gob.mx" style="color: #1B365D; font-weight: bold; text-decoration: underline;">facturacion.coepriss@sinaloa.gob.mx</a></p>
                         </div>
                         <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; text-align: center; font-size: 0.75rem; color: #94a3b8;">
                             COEPRISS Sinaloa — Blvd. Alfonso G. Calderón #2193, C.P. 80020, Culiacán, Sinaloa, México.<br>
