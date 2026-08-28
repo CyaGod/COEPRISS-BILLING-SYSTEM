@@ -2929,9 +2929,9 @@ function updateStep3UIFromActiveExpediente() {
     const conceptoInput = document.getElementById('step3-concepto');
     const totalInput = document.getElementById('step3-total');
 
-    if (rfcInput && d.rfc) rfcInput.value = d.rfc;
-    if (razonInput && d.cliente) razonInput.value = d.cliente;
-    if (cpInput && d.codigoPostal) cpInput.value = d.codigoPostal;
+    if (rfcInput) rfcInput.value = d.rfc || '';
+    if (razonInput) razonInput.value = d.cliente || '';
+    if (cpInput) cpInput.value = d.codigoPostal || '';
 
     // Normalización inteligente de catálogos SAT
     const normRegimen = normalizeSatRegimen(d.regimenFiscal) || d.regimenFiscal;
@@ -2958,8 +2958,8 @@ function updateStep3UIFromActiveExpediente() {
         d.metodoPago = normMetodo;
     }
 
-    if (correoInput && d.correo) correoInput.value = d.correo;
-    if (conceptoInput && d.concepto) conceptoInput.value = d.concepto;
+    if (correoInput) correoInput.value = d.correo || '';
+    if (conceptoInput) conceptoInput.value = d.concepto || '';
 
     const totalVal = parseFloat(d.importe || d.total || d.cfdiTotal || d.importePago || 0);
     if (totalInput && totalVal > 0) {
@@ -2967,8 +2967,10 @@ function updateStep3UIFromActiveExpediente() {
     }
     updateStep3Summary(totalVal);
 
-    // Verificar si ya existe en clientes del directorio institucional
-    if (d.rfc) buscarClientePorRfc(d.rfc, false);
+    // Verificar si ya existe en clientes del directorio institucional (SOLO mostrar badge si existe, SIN sobreescribir los datos actuales del expediente)
+    if (d.rfc) {
+        buscarClientePorRfc(d.rfc, false, false);
+    }
 }
 
 function onStep3RfcChange(val) {
@@ -2979,11 +2981,11 @@ function onStep3RfcChange(val) {
     if (rfcInput && rfcInput.value !== rfcClean) rfcInput.value = rfcClean;
 
     if (rfcClean.length >= 12) {
-        buscarClientePorRfc(rfcClean, false);
+        buscarClientePorRfc(rfcClean, false, true);
     }
 }
 
-async function buscarClientePorRfc(rfc, notifyIfNotFound = true) {
+async function buscarClientePorRfc(rfc, notifyIfNotFound = true, overwriteFields = true) {
     if (!rfc || rfc.trim().length < 10) {
         if (notifyIfNotFound) showToast('Ingresa un RFC válido de al menos 10 caracteres.', 'warning');
         return;
@@ -3005,21 +3007,23 @@ async function buscarClientePorRfc(rfc, notifyIfNotFound = true) {
 
     if (cliente) {
         if (badge) badge.style.display = 'inline-block';
-        const razonInput = document.getElementById('step3-razon');
-        const cpInput = document.getElementById('step3-cp');
-        const regimenSelect = document.getElementById('step3-regimen');
-        const usoCfdiSelect = document.getElementById('step3-uso-cfdi');
-        const correoInput = document.getElementById('step3-correo');
-        const formaPagoSelect = document.getElementById('step3-forma-pago');
+        if (overwriteFields) {
+            const razonInput = document.getElementById('step3-razon');
+            const cpInput = document.getElementById('step3-cp');
+            const regimenSelect = document.getElementById('step3-regimen');
+            const usoCfdiSelect = document.getElementById('step3-uso-cfdi');
+            const correoInput = document.getElementById('step3-correo');
+            const formaPagoSelect = document.getElementById('step3-forma-pago');
 
-        if (razonInput && cliente.razonSocial) { razonInput.value = cliente.razonSocial; syncStep3Field('cliente', cliente.razonSocial); }
-        if (cpInput && cliente.codigoPostal) { cpInput.value = cliente.codigoPostal; syncStep3Field('codigoPostal', cliente.codigoPostal); }
-        if (regimenSelect && cliente.regimenFiscal) { regimenSelect.value = cliente.regimenFiscal; syncStep3Field('regimenFiscal', cliente.regimenFiscal); }
-        if (usoCfdiSelect && cliente.usoCfdi) { usoCfdiSelect.value = cliente.usoCfdi; syncStep3Field('usoCfdi', cliente.usoCfdi); }
-        if (correoInput && cliente.email) { correoInput.value = cliente.email; syncStep3Field('correo', cliente.email); }
-        if (formaPagoSelect && cliente.formaPago) { formaPagoSelect.value = cliente.formaPago; syncStep3Field('formaPago', cliente.formaPago); }
+            if (razonInput && cliente.razonSocial) { razonInput.value = cliente.razonSocial; syncStep3Field('cliente', cliente.razonSocial); }
+            if (cpInput && cliente.codigoPostal) { cpInput.value = cliente.codigoPostal; syncStep3Field('codigoPostal', cliente.codigoPostal); }
+            if (regimenSelect && cliente.regimenFiscal) { regimenSelect.value = cliente.regimenFiscal; syncStep3Field('regimenFiscal', cliente.regimenFiscal); }
+            if (usoCfdiSelect && cliente.usoCfdi) { usoCfdiSelect.value = cliente.usoCfdi; syncStep3Field('usoCfdi', cliente.usoCfdi); }
+            if (correoInput && cliente.email) { correoInput.value = cliente.email; syncStep3Field('correo', cliente.email); }
+            if (formaPagoSelect && cliente.formaPago) { formaPagoSelect.value = cliente.formaPago; syncStep3Field('formaPago', cliente.formaPago); }
 
-        if (notifyIfNotFound) showToast(`✓ Datos del cliente ${cliente.razonSocial} autocompletados desde el Directorio.`, 'success');
+            if (notifyIfNotFound) showToast(`✓ Datos del cliente ${cliente.razonSocial} autocompletados desde el Directorio.`, 'success');
+        }
     } else {
         if (badge) badge.style.display = 'none';
         if (notifyIfNotFound) showToast(`RFC ${rfcNorm} no encontrado en el Directorio de Clientes. Se registrará automáticamente al timbrar.`, 'info');
@@ -5015,6 +5019,22 @@ async function saveFiscalData(event) {
         dossier[field] = parsed.value;
     }
 
+    // Sincronizar importes totales y subtotales derivados
+    if (dossier.importe !== null && dossier.importe !== undefined && Number.isFinite(Number(dossier.importe))) {
+        dossier.total = Number(dossier.importe);
+        dossier.cfdiTotal = Number(dossier.importe);
+        if (!dossier.subtotal) {
+            dossier.subtotal = Number(dossier.importe) / 1.16;
+        }
+    } else if (dossier.importePago !== null && dossier.importePago !== undefined && Number.isFinite(Number(dossier.importePago))) {
+        dossier.importe = Number(dossier.importePago);
+        dossier.total = Number(dossier.importePago);
+        dossier.cfdiTotal = Number(dossier.importePago);
+        if (!dossier.subtotal) {
+            dossier.subtotal = Number(dossier.importePago) / 1.16;
+        }
+    }
+
     // Sync state.expedientes array so all tables and database records reflect the edits!
     const idx = state.expedientes.findIndex(e => e.folio === dossier.folio);
     if (idx !== -1) {
@@ -5026,6 +5046,7 @@ async function saveFiscalData(event) {
     
     updateStep2Fields();
     updatePreviewFields();
+    updateStep3UIFromActiveExpediente();
     renderProcesoTable();
     renderReportTable();
     renderTimeline();
