@@ -1525,14 +1525,14 @@
 
                 <form id="form-limpiar-produccion" onsubmit="handleEjecutarLimpiezaProduccion(event)">
                     <div class="form-group" style="margin-bottom: 14px;">
-                        <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Contraseña de Administrador:</label>
+                        <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Clave Maestra de Seguridad:</label>
                         <div style="position: relative;">
-                            <input type="password" id="input-clean-password" class="form-control" placeholder="Ingresa tu contraseña de acceso" required autocomplete="current-password" style="padding: 10px 40px 10px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%;">
+                            <input type="password" id="input-clean-password" class="form-control" placeholder="Ingresa la clave maestra autorizada" required autocomplete="off" style="padding: 10px 40px 10px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%;">
                             <button type="button" onclick="toggleCleanPasswordVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #64748b;" title="Mostrar / Ocultar">
                                 <svg id="icon-eye-clean" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                             </button>
                         </div>
-                        <small style="color: #64748b; font-size: 0.72rem; margin-top: 4px; display: block;">Ingresa tu contraseña de sesión de administrador o clave maestra.</small>
+                        <small style="color: #64748b; font-size: 0.72rem; margin-top: 4px; display: block;">Ingresa la clave maestra exclusiva configurada para reinicialización de producción.</small>
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
@@ -1625,7 +1625,7 @@
     <!-- jsQR: QR fallback for Firefox/Safari (BarcodeDetector not supported there) -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <!-- OCR Core Engine: Clasificador, Parsers especializados, Filtros y Fusión -->
-    <script src="ocr-core.js?v=20260828_prod_password"></script>
-    <script src="app.js?v=20260828_prod_password"></script>
+    <script src="ocr-core.js?v=20260828_prod_exclusive_key"></script>
+    <script src="app.js?v=20260828_prod_exclusive_key"></script>
 </body>
 </html>
