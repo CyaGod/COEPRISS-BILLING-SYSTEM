@@ -325,7 +325,7 @@ function sanitizeExpediente(data) {
         transferenciaBanco: data.transferenciaBanco || data.banco || null,
         transferenciaReferencia: data.transferenciaReferencia || data.claveRastreo || null,
         observaciones: data.observaciones || null,
-        estatus: (data.estatus === 'TIMBRADA' || data.estatus === 'TIMBRADO') ? 'TIMBRADO' : (data.estatus || 'PENDIENTE')
+        estatus: (data.estatus === 'TIMBRADA' || data.estatus === 'TIMBRADO') ? 'TIMBRADO' : ((data.estatus === 'CANCELADA' || data.estatus === 'CANCELADO') ? 'CANCELADO' : (data.estatus || 'PENDIENTE'))
     };
     return Object.fromEntries(Object.entries(mapped).filter(([_, v]) => v !== null && v !== undefined));
 }
@@ -1102,7 +1102,7 @@ app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
             const iva = e.cfdiIva ? parseFloat(e.cfdiIva) : parseFloat((total - subtotal).toFixed(2));
             const uuid = fac?.uuid || e.cfdiUuid || '';
             const isTimbrada = Boolean(uuid) || e.estatus === 'TIMBRADO';
-            const estatusDesc = isTimbrada ? 'TIMBRADA' : (e.estatus || 'PENDIENTE');
+            const estatusDesc = isTimbrada ? 'TIMBRADA' : ((e.estatus === 'CANCELADO' || e.estatus === 'CANCELADA') ? 'CANCELADA' : (e.estatus || 'PENDIENTE'));
 
             const fechaRegistro = e.createdAt ? new Date(e.createdAt).toLocaleString('es-MX') : '';
             const fechaTimbrado = fac?.fechaTimbrado ? new Date(fac.fechaTimbrado).toLocaleString('es-MX') : (isTimbrada ? fechaRegistro : 'Pendiente');

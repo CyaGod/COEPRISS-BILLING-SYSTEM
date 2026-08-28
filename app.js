@@ -3183,11 +3183,75 @@ async function initStep4FacturamaBadge() {
 
 let _isStampingActive = false;
 
-function cancelarFacturaStep4() {
-    if (confirm('¿Estás seguro de cancelar este proceso de facturación? Los datos actuales del trámite se descartarán.')) {
-        restartProcess();
-        showToast('Proceso de facturación cancelado.', 'info');
+async function cancelarSolicitudStep4() {
+    if (!state.activeExpediente) {
+        showToast('No hay ninguna solicitud activa para cancelar.', 'warning');
+        return;
     }
+
+    const d = state.activeExpediente;
+
+    // Si ya tiene UUID o ya está TIMBRADA, no permitir Cancelar solicitud interna
+    if (d.uuid || d.estatus === 'TIMBRADA' || d.estatus === 'TIMBRADO' || isFacturaTimbrada()) {
+        showToast('Esta solicitud ya cuenta con comprobante fiscal timbrado ante el SAT. No se puede cancelar desde este apartado.', 'warning');
+        return;
+    }
+
+    const confirmar = confirm('¿Deseas cancelar esta solicitud? Los datos se guardarán en el historial como CANCELADA y se limpiará la solicitud actual.');
+    if (!confirmar) {
+        return;
+    }
+
+    // 1. Marcar como CANCELADA en el objeto local
+    d.estatus = 'CANCELADA';
+    addAuditLogToActive('Solicitud cancelada internamente por el usuario antes de timbrar.');
+    addSecurityLog('Cancelación interna', `Solicitud con folio ${d.folio} registrada en el historial con estatus CANCELADA.`);
+
+    // 2. Guardar en state.expedientes (si no estaba, agregarlo; si ya estaba, actualizarlo)
+    const idx = (state.expedientes || []).findIndex(e => e.folio === d.folio);
+    if (idx !== -1) {
+        state.expedientes[idx] = { ...d };
+    } else {
+        state.expedientes.unshift({ ...d });
+    }
+
+    // 3. Persistir en la base de datos PostgreSQL sin eliminar ningún dato
+    try {
+        await apiFetch('/api/expedientes', {
+            method: 'POST',
+            body: JSON.stringify({
+                folio: d.folio,
+                receptorRfc: d.rfc || null,
+                receptorNombre: d.cliente || null,
+                receptorCodigoPostal: d.codigoPostal || null,
+                receptorRegimenFiscal: d.regimenFiscal || null,
+                receptorUsoCfdi: d.usoCfdi || 'G03',
+                receptorEmail: d.correo || null,
+                cfdiConcepto: d.concepto || null,
+                cfdiTotal: d.importe || d.total || d.cfdiTotal || null,
+                cfdiSubtotal: d.subtotal || null,
+                cfdiFormaPago: d.formaPago || '03',
+                cfdiMetodoPago: d.metodoPago || 'PUE',
+                estatus: 'CANCELADO',
+                observaciones: 'Solicitud cancelada internamente por el usuario antes de timbrar.'
+            })
+        });
+    } catch (err) {
+        console.warn('[CANCELAR SOLICITUD API]', err.message);
+    }
+
+    // 4. Guardar en almacenamiento local
+    saveDatabaseToStorage();
+
+    // 5. Actualizar tablas de historial y procesos
+    renderProcesoTable();
+    renderReportTable();
+    updateDashboardCounts();
+
+    // 6. Limpiar la solicitud actual y regresar a Inicio
+    restartProcess();
+
+    showToast('✓ Solicitud cancelada y registrada en el historial como CANCELADA.', 'info');
 }
 
 async function stampInvoiceViaPAC() {
