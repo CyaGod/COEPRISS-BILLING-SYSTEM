@@ -581,9 +581,12 @@ function resumeFlowAtStep(wizardStep, folio) {
                 targetStep = 4;
             } else if (exp.rfc || exp.cliente) {
                 targetStep = 3;
+            } else if (exp.archivos && exp.archivos.length) {
+                targetStep = 2;
             }
         }
 
+        state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, targetStep);
         showToast(`Reanudando expediente ${folio} en el Paso ${targetStep}...`, 'info');
         
         // Highlight "Nueva solicitud" sidebar link
@@ -3030,9 +3033,22 @@ async function buscarClientePorRfc(rfc, notifyIfNotFound = true, overwriteFields
     }
 }
 
+let _dbSaveTimer = null;
+function saveDatabaseToStorageDebounced() {
+    clearTimeout(_dbSaveTimer);
+    _dbSaveTimer = setTimeout(() => {
+        saveDatabaseToStorage();
+    }, 400);
+}
+
 function syncStep3Field(field, val) {
     if (!state.activeExpediente) return;
     state.activeExpediente[field] = val;
+    const idx = (state.expedientes || []).findIndex(e => e.folio === state.activeExpediente.folio);
+    if (idx !== -1) {
+        state.expedientes[idx][field] = val;
+    }
+    saveDatabaseToStorageDebounced();
 }
 
 function onStep3TotalChange(val) {
@@ -3041,6 +3057,13 @@ function onStep3TotalChange(val) {
         state.activeExpediente.importe = num;
         state.activeExpediente.total = num;
         state.activeExpediente.cfdiTotal = num;
+        const idx = (state.expedientes || []).findIndex(e => e.folio === state.activeExpediente.folio);
+        if (idx !== -1) {
+            state.expedientes[idx].importe = num;
+            state.expedientes[idx].total = num;
+            state.expedientes[idx].cfdiTotal = num;
+        }
+        saveDatabaseToStorageDebounced();
     }
     updateStep3Summary(num);
 }
@@ -4027,7 +4050,6 @@ function filterReportTable() {
         const badgeClass = isTimbrada ? 'badge-success' : (isCancelada ? 'badge-danger' : 'badge-info');
         const displayEstatus = isTimbrada ? 'TIMBRADA' : estatus;
         const facturamaId = f.facturamaId || '';
-        // Identificador efectivo: prefiere facturamaId, cae a uuid como alternativa
         const effectiveId = facturamaId || uuid || '';
 
         const dObj = parseInvoiceDate(f);
@@ -4055,10 +4077,14 @@ function filterReportTable() {
                         <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${effectiveId}', 'xml')" title="Descargar XML" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
                         <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
                         <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar del historial" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                    ` : (isCancelada ? `
+                        <span style="color:#dc3545;font-size:0.74rem;font-weight:600;display:inline-flex;align-items:center;gap:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2.2;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg> Cancelada</span>
                     ` : `
-                        <button class="btn btn-primary" onclick="resumeFlowAtStep(4, '${folio}')" style="padding: 4px 10px; font-size: 0.72rem;">Timbrar</button>
-                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'expediente')" title="Eliminar registro" style="color:#e05252;margin-left:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
-                    `}
+                        <button class="btn btn-primary" onclick="resumeFlowAtStep(1, '${folio}')" style="padding: 4px 12px; font-size: 0.74rem; font-weight: 600; background-color: #e67e22; border-color: #e67e22; display: inline-flex; align-items: center; gap: 5px;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            Continuar solicitud
+                        </button>
+                    `)}
                 </div>
             </td>
         `;
@@ -4869,6 +4895,74 @@ function openInvoicePreviewModal(folio = '', clientName = '', totalVal = '') {
     modal.classList.add('open');
 }
 
+function verSolicitudesPendientes() {
+    triggerSidebarClick('nav-timbradas');
+    const filter = document.getElementById('report-status-filter');
+    if (filter) {
+        filter.value = 'PENDIENTE';
+        filterReportTable();
+    }
+}
+
+function renderSolicitudesPendientes() {
+    const listContainer = document.getElementById('dash-pendientes-list');
+    const countEl = document.getElementById('dash-pendientes-count');
+    const badgeEl = document.getElementById('badge-pendientes-total');
+
+    const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
+    const pendingList = (state.expedientes || []).filter(e => {
+        const estatus = (e.estatus || '').toUpperCase();
+        const hasUuid = Boolean(e.uuid || e.cfdiUuid || facturaFolios.has(e.folio));
+        const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
+        const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || hasUuid;
+        return !isCancelada && !isTimbrada;
+    });
+
+    if (countEl) countEl.textContent = pendingList.length;
+    if (badgeEl) badgeEl.textContent = `${pendingList.length} pendiente${pendingList.length === 1 ? '' : 's'}`;
+
+    if (!listContainer) return;
+
+    if (pendingList.length === 0) {
+        listContainer.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; text-align: center; padding: 14px 0;">No hay solicitudes pendientes en este momento. Todas las solicitudes han sido timbradas o concluidas.</p>`;
+        return;
+    }
+
+    listContainer.innerHTML = pendingList.map(e => {
+        const folio = e.folio || '—';
+        const cliente = e.cliente || e.receptorNombre || 'Cliente sin asignar';
+        const rfc = e.rfc || e.receptorRfc || 'Sin RFC';
+        const total = parseFloat(e.importe || e.cfdiTotal || 0);
+        const fecha = e.fechaRecibo || (e.createdAt ? new Date(e.createdAt).toLocaleString('es-MX') : 'Reciente');
+
+        // Determinar paso recomendado
+        let wizardStep = 1;
+        if (e.rfc && e.cliente && e.codigoPostal && (e.importe || e.cfdiTotal)) wizardStep = 4;
+        else if (e.rfc || e.cliente) wizardStep = 3;
+        else if (e.archivos && e.archivos.length) wizardStep = 2;
+
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #fff; border: 1px solid #e9ecef; border-radius: 6px; gap: 10px; flex-wrap: wrap;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong style="color: #1B365D; font-size: 0.88rem;">${folio}</strong>
+                        <span class="badge badge-warning" style="font-size: 0.68rem; padding: 2px 6px;">Paso ${wizardStep}</span>
+                        <span style="font-size: 0.72rem; color: #6c757d;">${fecha}</span>
+                    </div>
+                    <span style="font-size: 0.8rem; color: #495057; font-weight: 500;">${cliente} <span style="font-family: monospace; color: #6c757d; font-size: 0.75rem;">(${rfc})</span></span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    ${total > 0 ? `<strong style="color: #1B365D; font-size: 0.95rem;">$${total.toFixed(2)} MXN</strong>` : '<span style="font-size:0.75rem; color:#868e96;">Importe pendiente</span>'}
+                    <button class="btn btn-primary" onclick="resumeFlowAtStep(${wizardStep}, '${folio}')" style="padding: 6px 14px; font-size: 0.78rem; font-weight: 600; background-color: #e67e22; border-color: #e67e22; display: inline-flex; align-items: center; gap: 6px;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        Continuar solicitud
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function updateDashboardCounts() {
     const timbradasEl = document.getElementById('dash-timbradas-count');
     const clientesEl = document.getElementById('dash-clientes-count');
@@ -4878,6 +4972,7 @@ function updateDashboardCounts() {
     if (clientesEl) clientesEl.textContent = (state.clientes || []).length;
     if (correosEl) correosEl.textContent = (state.historialCorreos || []).length;
 
+    renderSolicitudesPendientes();
     renderActividadReciente();
 }
 

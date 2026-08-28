@@ -263,11 +263,19 @@
                         </div>
                     </div>
 
-                    <div class="grid-3" style="margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 20px;">
                         <div class="app-card" style="border-left: 5px solid var(--primary-color);">
                             <span class="form-label">Facturas Timbradas</span>
                             <div style="font-size: 2.2rem; font-weight: 700; color: var(--primary-color); margin: 10px 0;" id="dash-timbradas-count">0</div>
                             <span style="font-size: 0.75rem; color: var(--text-muted);">Comprobantes oficiales ante el SAT</span>
+                        </div>
+                        <div class="app-card" style="border-left: 5px solid #e67e22; cursor: pointer;" onclick="verSolicitudesPendientes()">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="form-label">Solicitudes Pendientes</span>
+                                <span class="badge badge-warning" style="font-size: 0.7rem;">En proceso</span>
+                            </div>
+                            <div style="font-size: 2.2rem; font-weight: 700; color: #e67e22; margin: 10px 0;" id="dash-pendientes-count">0</div>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Trámites guardados por concluir</span>
                         </div>
                         <div class="app-card" style="border-left: 5px solid var(--secondary-color);">
                             <span class="form-label">Clientes Registrados</span>
@@ -278,6 +286,21 @@
                             <span class="form-label">Correos Enviados</span>
                             <div style="font-size: 2.2rem; font-weight: 700; color: var(--info-color); margin: 10px 0;" id="dash-correos-count">0</div>
                             <span style="font-size: 0.75rem; color: var(--text-muted);">Entrega de XML y PDF</span>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: LISTADO DE SOLICITUDES PENDIENTES -->
+                    <div class="app-card" id="card-solicitudes-pendientes" style="margin-bottom: 20px; border-left: 4px solid #e67e22;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg fill="none" stroke="#e67e22" viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke-width: 2.2;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <h3 class="form-label" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #1B365D;">Solicitudes Pendientes en Proceso</h3>
+                            </div>
+                            <span class="badge badge-warning" id="badge-pendientes-total">0 pendientes</span>
+                        </div>
+                        <p style="font-size: 0.8rem; color: #6c757d; margin-bottom: 12px;">Identifica y continúa cualquier solicitud que hayas dejado inconclusa en cualquier paso del sistema:</p>
+                        <div id="dash-pendientes-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto;">
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; text-align: center; padding: 12px 0;">No hay solicitudes pendientes en este momento.</p>
                         </div>
                     </div>
 
