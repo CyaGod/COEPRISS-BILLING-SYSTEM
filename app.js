@@ -4243,25 +4243,70 @@ async function eliminarRegistro(folio, tipo = 'factura') {
     }
 }
 
-async function limpiarFacturasPrueba() {
-    if (!confirm('¿Deseas vaciar el historial y eliminar TODAS las facturas, expedientes, correos y clientes de prueba para iniciar en MODO PRODUCCIÓN?')) {
+function limpiarFacturasPrueba() {
+    const modal = document.getElementById('modal-limpiar-produccion');
+    if (!modal) return;
+    const input = document.getElementById('input-clean-password');
+    if (input) {
+        input.value = '';
+        input.type = 'password';
+    }
+    modal.classList.add('open');
+    setTimeout(() => { if (input) input.focus(); }, 150);
+}
+
+function toggleCleanPasswordVisibility() {
+    const input = document.getElementById('input-clean-password');
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+async function handleEjecutarLimpiezaProduccion(event) {
+    if (event) event.preventDefault();
+    const password = document.getElementById('input-clean-password')?.value?.trim();
+    if (!password) {
+        showToast('Debes ingresar la contraseña de administrador.', 'warning');
         return;
     }
 
+    const btn = document.getElementById('btn-submit-limpiar-prod');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Verificando y vaciando...';
+    }
+
     try {
-        showToast('Vaciando base de datos para modo producción...', 'info');
-        const res = await apiFetch('/api/facturas/limpiar-falsas', { method: 'POST' });
+        showToast('Validando autorización y vaciando registros...', 'info');
+        const res = await apiFetch('/api/facturas/limpiar-falsas', {
+            method: 'POST',
+            body: JSON.stringify({ password })
+        });
         const data = await res.json();
-        if (data.success) {
+
+        if (res.ok && data.success) {
+            closeModal('modal-limpiar-produccion');
             resetCloudCollections();
             renderCloudCollections();
-            showToast('✅ Base de datos limpia. Sistema listo para facturación en producción.', 'success');
+            showToast('✅ Base de datos limpia y reinicializada para producción.', 'success');
             await initRenderDbSync();
         } else {
-            showToast(`Error: ${data.error || 'No se pudo realizar la limpieza'}`, 'error');
+            showToast(`❌ ${data.error || 'Contraseña incorrecta o error de servidor.'}`, 'error');
+            const input = document.getElementById('input-clean-password');
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
         }
     } catch (err) {
-        showToast(`Error al limpiar: ${err.message}`, 'error');
+        showToast(`Error al procesar: ${err.message}`, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                <span>Confirmar y Vaciar</span>
+            `;
+        }
     }
 }
 

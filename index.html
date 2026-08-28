@@ -1501,6 +1501,52 @@
         </div>
     </div>
 
+    <!-- MODAL: AUTORIZACIÓN PARA LIMPIAR DATOS DE PRODUCCIÓN -->
+    <div class="modal-overlay" id="modal-limpiar-produccion">
+        <div class="modal-container" style="max-width: 500px;">
+            <div class="modal-header" style="background: #fff5f5; border-bottom: 1px solid #fed7d7;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; color: #dc2626;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="modal-title" style="color: #991b1b; font-size: 1.05rem; margin: 0;">Autorización Requerida</h3>
+                        <p style="font-size: 0.75rem; color: #7f1d1d; margin: 0;">Limpieza total de datos para modo producción</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('modal-limpiar-produccion')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+                    <p style="font-size: 0.82rem; color: #92400e; margin: 0; line-height: 1.45;">
+                        <strong>⚠️ Acción crítica:</strong> Se eliminarán todas las facturas, expedientes, correos y clientes de prueba. Las cuentas de usuario institucionales no serán afectadas.
+                    </p>
+                </div>
+
+                <form id="form-limpiar-produccion" onsubmit="handleEjecutarLimpiezaProduccion(event)">
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Contraseña de Administrador:</label>
+                        <div style="position: relative;">
+                            <input type="password" id="input-clean-password" class="form-control" placeholder="Ingresa tu contraseña de acceso" required autocomplete="current-password" style="padding: 10px 40px 10px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%;">
+                            <button type="button" onclick="toggleCleanPasswordVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #64748b;" title="Mostrar / Ocultar">
+                                <svg id="icon-eye-clean" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            </button>
+                        </div>
+                        <small style="color: #64748b; font-size: 0.72rem; margin-top: 4px; display: block;">Ingresa tu contraseña de sesión de administrador o clave maestra.</small>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-limpiar-produccion')" style="padding: 8px 16px; font-size: 0.82rem;">Cancelar</button>
+                        <button type="submit" id="btn-submit-limpiar-prod" class="btn btn-danger" style="background: #dc2626; color: #fff; font-weight: 700; display: flex; align-items: center; gap: 6px; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 0.82rem;">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 15px; height: 15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            <span>Confirmar y Vaciar</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: ESCÁNER DE CÁMARA INTELIGENTE (Estilo Apple Notes / CamScanner) -->
     <div class="modal-overlay" id="modal-camera-scanner" style="z-index: 1050; padding: 0;">
         <div class="camera-scanner-container">
@@ -1579,7 +1625,7 @@
     <!-- jsQR: QR fallback for Firefox/Safari (BarcodeDetector not supported there) -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <!-- OCR Core Engine: Clasificador, Parsers especializados, Filtros y Fusión -->
-    <script src="ocr-core.js?v=20260828_prod_cleanup"></script>
-    <script src="app.js?v=20260828_prod_cleanup"></script>
+    <script src="ocr-core.js?v=20260828_prod_password"></script>
+    <script src="app.js?v=20260828_prod_password"></script>
 </body>
 </html>
