@@ -799,10 +799,45 @@ app.get('/api/correos', autenticarToken, async (req, res) => {
     const { page = 1, limit = 50 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     try {
-        const [total, correos] = await Promise.all([
+        const [total, rawCorreos] = await Promise.all([
             prisma.historialCorreo.count(),
-            prisma.historialCorreo.findMany({ skip, take: parseInt(limit), orderBy: { createdAt: 'desc' }, include: { usuario: { select: { nombreCompleto: true } } } })
+            prisma.historialCorreo.findMany({
+                skip,
+                take: parseInt(limit),
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    usuario: { select: { nombreCompleto: true } },
+                    expediente: true
+                }
+            })
         ]);
+
+        const correos = rawCorreos.map(c => {
+            const exp = c.expediente || {};
+            let folio = exp.folio || '';
+            let cliente = exp.receptorNombre || '';
+            let rfc = exp.receptorRfc || '';
+
+            if (!folio && c.asunto) {
+                const match = c.asunto.match(/\(([^)]+)\)/);
+                if (match) folio = match[1];
+            }
+
+            return {
+                id: c.id,
+                fecha: c.createdAt ? new Date(c.createdAt).toLocaleString('es-MX') : '',
+                createdAt: c.createdAt,
+                destinatario: c.destinatario,
+                folio: folio || '—',
+                cliente: cliente || '',
+                rfc: rfc || '',
+                asunto: c.asunto,
+                cuerpo: c.cuerpo,
+                adjuntos: 'XML y PDF',
+                estatus: c.estatus || 'ENVIADO'
+            };
+        });
+
         res.json({ success: true, total, data: correos });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -852,9 +887,27 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
                         ...(effectiveUuid && effectiveUuid !== 'N/A' ? [{ uuid: effectiveUuid }] : []),
                         ...(expedienteId ? [{ folio: String(expedienteId) }] : [])
                     ]
-                }
+                },
+                include: { expediente: true }
+            }).catch(() => null);
+            if (factura && factura.expediente && !expediente) {
+                expediente = factura.expediente;
+            }
+        }
+
+        if (!expediente && factura?.expedienteId) {
+            expediente = await prisma.expediente.findUnique({ where: { id: factura.expedienteId } }).catch(() => null);
+        }
+
+        if (!expediente && destinatario) {
+            expediente = await prisma.expediente.findFirst({
+                where: { receptorEmail: { equals: destinatario.trim(), mode: 'insensitive' } },
+                orderBy: { createdAt: 'desc' }
             }).catch(() => null);
         }
+
+        const effectiveFolio = expediente?.folio || factura?.folio || expedienteId || '';
+        const clientName = nombreDestinatario || expediente?.receptorNombre || 'Contribuyente';
 
         const adjuntos = [];
 
@@ -869,7 +922,7 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
             }
             if (xmlData) {
                 adjuntos.push({
-                    name: `COEPRISS_${expedienteId || 'Factura'}.xml`,
+                    name: `COEPRISS_${effectiveFolio || 'Factura'}.xml`,
                     content: xmlData
                 });
             }
@@ -883,13 +936,13 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
             }
             if (pdfData) {
                 adjuntos.push({
-                    name: `COEPRISS_${expedienteId || 'Factura'}.pdf`,
+                    name: `COEPRISS_${effectiveFolio || 'Factura'}.pdf`,
                     content: pdfData
                 });
             }
         }
 
-        const emailSubject = asunto || `Comprobante Fiscal Digital (CFDI 4.0) - COEPRISS Sinaloa - Folio ${expediente?.folio || expedienteId || ''}`;
+        const emailSubject = asunto || `Comprobante Fiscal Digital (CFDI 4.0) - COEPRISS Sinaloa (${effectiveFolio || ''})`.trim();
         const emailHtml = `
             <div style="font-family: Arial, sans-serif; max-width: 650px; margin: auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #ffffff;">
                 <div style="background: #1B365D; color: #ffffff; padding: 24px; text-align: center;">
@@ -904,7 +957,7 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
 
                     <div style="background: #f1f5f9; border-radius: 6px; padding: 16px; margin: 20px 0;">
                         <table style="width: 100%; font-size: 0.88rem; border-collapse: collapse;">
-                            <tr><td style="color: #64748b; padding: 4px 0; width: 140px;">Folio / Trámite:</td><td style="font-weight: bold;">${expediente?.folio || expedienteId || '—'}</td></tr>
+                            <tr><td style="color: #64748b; padding: 4px 0; width: 140px;">Folio / Trámite:</td><td style="font-weight: bold;">${effectiveFolio || '—'}</td></tr>
                             <tr><td style="color: #64748b; padding: 4px 0;">RFC Receptor:</td><td style="font-weight: bold;">${expediente?.receptorRfc || '—'}</td></tr>
                             <tr><td style="color: #64748b; padding: 4px 0;">Folio Fiscal (UUID):</td><td style="font-family: monospace; font-size: 0.82rem; word-break: break-all;">${effectiveUuid}</td></tr>
                             ${expediente?.cfdiTotal ? `<tr><td style="color: #64748b; padding: 4px 0;">Importe Total:</td><td style="font-weight: bold; color: #1B365D; font-size: 1rem;">$${parseFloat(expediente.cfdiTotal).toFixed(2)} MXN</td></tr>` : ''}
@@ -932,7 +985,7 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
         // Registrar en historial de correos de la BD
         const registroCorreo = await prisma.historialCorreo.create({
             data: {
-                expedienteId: expediente?.id || null,
+                expedienteId: expediente?.id || (factura?.expedienteId || null),
                 usuarioId:    req.user.id,
                 destinatario: destinatario.trim(),
                 asunto:       emailSubject,
@@ -1245,10 +1298,10 @@ app.post('/api/usuarios', autenticarToken, requiereRol('Administrador'), async (
 
 app.get('/api/db', autenticarToken, async (req, res) => {
     try {
-        const [rawExpedientes, rawFacturas, historialCorreos, bitacoraSeguridad] = await Promise.all([
+        const [rawExpedientes, rawFacturas, rawHistorialCorreos, bitacoraSeguridad] = await Promise.all([
             prisma.expediente.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
             prisma.factura.findMany({ orderBy: { createdAt: 'desc' }, take: 200, include: { expediente: true } }),
-            prisma.historialCorreo.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }),
+            prisma.historialCorreo.findMany({ orderBy: { createdAt: 'desc' }, take: 200, include: { expediente: true } }),
             prisma.bitacoraSeguridad.findMany({ orderBy: { createdAt: 'desc' }, take: 200 })
         ]);
 
@@ -1287,6 +1340,32 @@ app.get('/api/db', autenticarToken, async (req, res) => {
                 metodoPago: exp.cfdiMetodoPago || '',
                 fecha: f.fechaTimbrado ? new Date(f.fechaTimbrado).toLocaleDateString('es-MX') : (f.createdAt ? new Date(f.createdAt).toLocaleDateString('es-MX') : ''),
                 fechaTimbrado: f.fechaTimbrado || f.createdAt
+            };
+        });
+
+        const historialCorreos = rawHistorialCorreos.map(c => {
+            const exp = c.expediente || {};
+            let folio = exp.folio || '';
+            let cliente = exp.receptorNombre || '';
+            let rfc = exp.receptorRfc || '';
+
+            if (!folio && c.asunto) {
+                const match = c.asunto.match(/\(([^)]+)\)/);
+                if (match) folio = match[1];
+            }
+
+            return {
+                id: c.id,
+                fecha: c.createdAt ? new Date(c.createdAt).toLocaleString('es-MX') : '',
+                createdAt: c.createdAt,
+                destinatario: c.destinatario,
+                folio: folio || '—',
+                cliente: cliente || '',
+                rfc: rfc || '',
+                asunto: c.asunto,
+                cuerpo: c.cuerpo,
+                adjuntos: 'XML y PDF',
+                estatus: c.estatus || 'ENVIADO'
             };
         });
 

@@ -3723,7 +3723,32 @@ function openEmailModalForActive() {
 let _currentEmailExpedienteId = null;
 
 function openEmailModal(expedienteId, destinatario = '', razonSocial = '') {
-    _currentEmailExpedienteId = expedienteId || state.activeExpediente?.folio;
+    let effectiveFolio = expedienteId || state.activeExpediente?.folio || '';
+    let effectiveEmail = destinatario || state.activeExpediente?.correo || '';
+    let effectiveNombre = razonSocial || state.activeExpediente?.cliente || '';
+
+    // Si falta el nombre o el folio, autocompletar buscando en facturas registradas
+    if (effectiveFolio && effectiveFolio !== '—') {
+        const fac = (state.facturas || []).find(f => f.folio === effectiveFolio || f.folioInterno === effectiveFolio);
+        if (fac) {
+            if (!effectiveNombre) effectiveNombre = fac.cliente || fac.receptorNombre || '';
+            if (!effectiveEmail) effectiveEmail = fac.correo || '';
+        }
+    } else if (effectiveEmail) {
+        const fac = (state.facturas || []).find(f => (f.correo || '').toLowerCase() === effectiveEmail.toLowerCase());
+        if (fac) {
+            if (!effectiveFolio || effectiveFolio === '—') effectiveFolio = fac.folio || fac.folioInterno || '';
+            if (!effectiveNombre) effectiveNombre = fac.cliente || fac.receptorNombre || '';
+        }
+    }
+
+    // Si aún falta el nombre, autocompletar buscando en el directorio de clientes
+    if (!effectiveNombre && effectiveEmail) {
+        const cli = (state.clientes || []).find(c => (c.email || '').toLowerCase() === effectiveEmail.toLowerCase());
+        if (cli) effectiveNombre = cli.razonSocial || '';
+    }
+
+    _currentEmailExpedienteId = (effectiveFolio && effectiveFolio !== '—') ? effectiveFolio : '';
     const modal = document.getElementById('modal-enviar-correo');
     if (!modal) return;
 
@@ -3732,11 +3757,16 @@ function openEmailModal(expedienteId, destinatario = '', razonSocial = '') {
     const asuntoInput = document.getElementById('modal-correo-asunto');
     const mensajeInput = document.getElementById('modal-correo-mensaje');
 
-    if (emailInput) emailInput.value = destinatario;
-    if (nombreInput) nombreInput.value = razonSocial;
-    if (asuntoInput) asuntoInput.value = `Factura Electrónica CFDI 4.0 - COEPRISS Sinaloa (${_currentEmailExpedienteId || ''})`;
+    if (emailInput) emailInput.value = effectiveEmail;
+    if (nombreInput) nombreInput.value = effectiveNombre;
+    if (asuntoInput) {
+        asuntoInput.value = _currentEmailExpedienteId 
+            ? `Factura Electrónica CFDI 4.0 - COEPRISS Sinaloa (${_currentEmailExpedienteId})`
+            : `Factura Electrónica CFDI 4.0 - COEPRISS Sinaloa`;
+    }
     if (mensajeInput) {
-        mensajeInput.value = `Estimado contribuyente ${razonSocial || ''},\n\nLe hacemos entrega de los archivos oficiales (XML y PDF) correspondientes a su comprobante fiscal digital emitido por la Comisión Estatal para la Protección contra Riesgos Sanitarios de Sinaloa (COEPRISS).\n\nCualquier duda o aclaración enviar correo a facturacion.coepriss@sinaloa.gob.mx\n\nSaludos cordiales.`;
+        const saludo = effectiveNombre ? `Estimado(a) ${effectiveNombre},` : 'Estimado contribuyente,';
+        mensajeInput.value = `${saludo}\n\nLe hacemos entrega de los archivos oficiales (XML y PDF) correspondientes a su comprobante fiscal digital emitido por la Comisión Estatal para la Protección contra Riesgos Sanitarios de Sinaloa (COEPRISS).\n\nCualquier duda o aclaración enviar correo a facturacion.coepriss@sinaloa.gob.mx\n\nSaludos cordiales.`;
     }
 
     modal.classList.add('open');
@@ -3824,8 +3854,8 @@ async function handleSendInvoiceEmail(event) {
     }
 }
 
-function resendEmail(destinatario, folio) {
-    openEmailModal(folio, destinatario, '');
+function resendEmail(destinatario, folio, cliente = '') {
+    openEmailModal(folio, destinatario, cliente);
 }
 
 // ─────────────────────────────────────────────
@@ -4620,23 +4650,58 @@ function renderCorreosTable() {
 
     tbody.innerHTML = '';
     if (!state.historialCorreos || state.historialCorreos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-table-cell" style="text-align:center; padding:24px; color:#868e96;">No hay correos enviados en esta sesión.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-table-cell" style="text-align:center; padding:24px; color:#868e96;">No hay correos registrados en el historial.</td></tr>';
         return;
     }
     state.historialCorreos.forEach(c => {
+        let folio = c.folio || c.folioExpediente || '';
+        let cliente = c.cliente || c.razonSocial || '';
+
+        // Si el folio viene vacío o con guión, intentar extraer de asunto
+        if ((!folio || folio === '—') && c.asunto) {
+            const match = c.asunto.match(/\(([^)]+)\)/);
+            if (match) folio = match[1];
+        }
+
+        // Buscar factura coincidente por folio o por correo para completar datos
+        if (folio && folio !== '—') {
+            const fac = (state.facturas || []).find(f => f.folio === folio || f.folioInterno === folio);
+            if (fac) {
+                if (!cliente) cliente = fac.cliente || fac.receptorNombre || '';
+            }
+        } else if (c.destinatario) {
+            const fac = (state.facturas || []).find(f => (f.correo || '').toLowerCase() === c.destinatario.toLowerCase());
+            if (fac) {
+                folio = fac.folio || fac.folioInterno || '';
+                if (!cliente) cliente = fac.cliente || fac.receptorNombre || '';
+            }
+        }
+
+        // Si aún no tenemos cliente, buscar en directorio de clientes
+        if (!cliente && c.destinatario) {
+            const cli = (state.clientes || []).find(cl => (cl.email || '').toLowerCase() === c.destinatario.toLowerCase());
+            if (cli) cliente = cli.razonSocial || '';
+        }
+
+        const fechaDisplay = c.fecha || (c.createdAt ? new Date(c.createdAt).toLocaleString('es-MX') : '—');
+        const destinatarioDisplay = c.destinatario || c.correoDestinatario || '—';
+        const folioDisplay = (folio && folio !== '—') ? folio : '—';
+        const clienteDisplay = cliente || 'Contribuyente';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td style="color:#6c757d;">${c.fecha || (c.createdAt ? new Date(c.createdAt).toLocaleString('es-MX') : '—')}</td>
-            <td style="font-weight:600; color:#0d6efd;">${c.destinatario || c.correoDestinatario || '—'}</td>
-            <td class="col-folio">${c.folio || c.folioExpediente || '—'}</td>
-            <td>${c.adjuntos || 'XML y PDF'}</td>
+            <td style="color:#6c757d; font-size: 0.8rem;">${fechaDisplay}</td>
+            <td style="font-weight:600; color:#0d6efd; font-size: 0.82rem;">${destinatarioDisplay}</td>
+            <td style="font-weight:600; color:#212529; font-size: 0.82rem;">${clienteDisplay}</td>
+            <td class="col-folio" style="font-weight:700; color:#1B365D;">${folioDisplay}</td>
+            <td style="font-size: 0.8rem;">${c.adjuntos || 'XML y PDF'}</td>
             <td style="text-align: center;">
                 <span class="badge badge-success">
                     ${c.estatus || 'Enviado'}
                 </span>
             </td>
             <td style="text-align: center;">
-                <button class="btn btn-secondary" onclick="resendEmail('${c.destinatario || c.correoDestinatario || ''}', '${c.folio || c.folioExpediente || ''}')" style="padding: 4px 10px; font-size: 0.72rem;">Reenviar</button>
+                <button class="btn btn-secondary" onclick="resendEmail('${destinatarioDisplay}', '${folioDisplay === '—' ? '' : folioDisplay}', '${clienteDisplay.replace(/'/g, "\\'")}')" style="padding: 4px 10px; font-size: 0.75rem;">Reenviar</button>
             </td>
         `;
         tbody.appendChild(tr);
