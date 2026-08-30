@@ -911,10 +911,6 @@ function createActiveExpedienteFromUploads() {
         archivos: [],
         auditoria: [`[${getCurrentDateTimeString()}] Tramite recibido mediante carga de documentos.`]
     };
-    state.expedientes.unshift(state.activeExpediente);
-    renderProcesoTable();
-    updateDashboardCounts();
-    saveDatabaseToStorage();
     document.getElementById('lbl-cliente-correo').textContent = 'Pendiente de lectura';
     document.getElementById('lbl-cliente-fecha').textContent = state.activeExpediente.fechaRecibo;
 }
@@ -3127,29 +3123,6 @@ async function proceedToStep4() {
         return;
     }
 
-    // Persistir cambios en BD antes de timbrar
-    try {
-        await apiFetch('/api/expedientes', {
-            method: 'POST',
-            body: JSON.stringify({
-                folio: d.folio,
-                receptorRfc: d.rfc,
-                receptorNombre: d.cliente,
-                receptorRegimenFiscal: d.regimenFiscal,
-                receptorCodigoPostal: d.codigoPostal,
-                receptorUsoCfdi: d.usoCfdi,
-                cfdiTotal: d.importe,
-                cfdiSubtotal: d.subtotal || (d.importe / 1.16),
-                cfdiConcepto: d.concepto,
-                cfdiFormaPago: d.formaPago,
-                cfdiMetodoPago: d.metodoPago,
-                receptorEmail: d.correo
-            })
-        });
-    } catch (e) {
-        console.warn('[EXPEDIENTE PRE-SAVE ERROR]', e.message);
-    }
-
     state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, 4);
     goToStep(4);
 }
@@ -3960,9 +3933,7 @@ function getFilteredInvoicesList() {
     const fromDateObj = dateFrom ? new Date(dateFrom + 'T00:00:00') : null;
     const toDateObj = dateTo ? new Date(dateTo + 'T23:59:59') : null;
 
-    const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
-    const expedientesRestantes = (state.expedientes || []).filter(e => !facturaFolios.has(e.folio));
-    const list = [...(state.facturas || []), ...expedientesRestantes];
+    const list = [...(state.facturas || [])];
 
     return list.filter(f => {
         const folio = f.folioInterno || f.folio || '';
@@ -3970,7 +3941,7 @@ function getFilteredInvoicesList() {
         const cliente = f.cliente || f.receptorNombre || '';
         const rfc = f.rfc || f.receptorRfc || '';
         const concepto = f.concepto || f.cfdiConcepto || '';
-        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
+        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'TIMBRADA')).toUpperCase();
 
         const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
         const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
@@ -3986,8 +3957,6 @@ function getFilteredInvoicesList() {
             matchEstatus = true;
         } else if (estatusFilter === 'TIMBRADA' || estatusFilter === 'TIMBRADO') {
             matchEstatus = isTimbrada;
-        } else if (estatusFilter === 'PENDIENTE') {
-            matchEstatus = isPendiente && !isTimbrada;
         } else if (estatusFilter === 'CANCELADA' || estatusFilter === 'CANCELADO') {
             matchEstatus = isCancelada;
         } else if (estatusFilter === 'ERROR') {
@@ -4032,17 +4001,24 @@ function filterReportTable() {
 
     tbody.innerHTML = '';
     const filteredList = getFilteredInvoicesList();
+    const totalCount = (state.facturas || []).length;
 
-    const facturaFolios = new Set((state.facturas || []).map(f => f.folioInterno || f.folio));
-    const expedientesRestantes = (state.expedientes || []).filter(e => !facturaFolios.has(e.folio));
-    const totalCount = (state.facturas || []).length + expedientesRestantes.length;
+    const countDisplay = document.getElementById('report-showing-count');
+    if (countDisplay) {
+        countDisplay.textContent = `Mostrando ${filteredList.length} de ${totalCount} facturas`;
+    }
+
+    if (filteredList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-table-cell" style="text-align:center;padding:36px;color:#868e96;">No se encontraron facturas con los filtros seleccionados.</td></tr>';
+        return;
+    }
 
     filteredList.forEach(f => {
         const folio = f.folioInterno || f.folio || '';
         const uuid = f.uuid || f.cfdiUuid || '';
         const cliente = f.cliente || f.receptorNombre || '';
         const rfc = f.rfc || f.receptorRfc || '';
-        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'PENDIENTE')).toUpperCase();
+        const estatus = (f.estatus || (uuid ? 'TIMBRADA' : 'TIMBRADA')).toUpperCase();
         const total = parseFloat(f.importe || f.cfdiTotal || 0);
 
         const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
@@ -4071,20 +4047,11 @@ function filterReportTable() {
             </td>
             <td style="text-align:center;">
                 <div class="action-icon-group">
-                    ${isTimbrada ? `
-                        <button class="action-icon-btn btn-view" onclick="openPdfViewer('${effectiveId}')" title="Ver PDF" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
-                        <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${effectiveId}', 'pdf')" title="Descargar PDF" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                        <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${effectiveId}', 'xml')" title="Descargar XML" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
-                        <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
-                        <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar del historial" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
-                    ` : (isCancelada ? `
-                        <span style="color:#dc3545;font-size:0.74rem;font-weight:600;display:inline-flex;align-items:center;gap:4px;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2.2;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg> Cancelada</span>
-                    ` : `
-                        <button class="btn btn-primary" onclick="resumeFlowAtStep(1, '${folio}')" style="padding: 4px 12px; font-size: 0.74rem; font-weight: 600; background-color: #e67e22; border-color: #e67e22; display: inline-flex; align-items: center; gap: 5px;">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 12px; height: 12px; stroke-width: 2.5;"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
-                            Continuar solicitud
-                        </button>
-                    `)}
+                    <button class="action-icon-btn btn-view" onclick="openPdfViewer('${effectiveId}')" title="Ver PDF" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
+                    <button class="action-icon-btn btn-dl-pdf" onclick="downloadFromFacturama('${effectiveId}', 'pdf')" title="Descargar PDF" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                    <button class="action-icon-btn btn-dl-xml" onclick="downloadFromFacturama('${effectiveId}', 'xml')" title="Descargar XML" ${!effectiveId ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>
+                    <button class="action-icon-btn btn-email" onclick="openEmailModal('${folio}', '${f.correo || ''}', '${cliente}')" title="Enviar por correo"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></button>
+                    <button class="action-icon-btn btn-delete" onclick="eliminarRegistro('${folio}', 'factura')" title="Eliminar del historial" style="color:#e05252;"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                 </div>
             </td>
         `;
