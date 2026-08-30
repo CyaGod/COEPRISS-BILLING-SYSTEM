@@ -3165,15 +3165,18 @@ async function initStep4FacturamaBadge() {
 
     const btnTimbrar = document.getElementById('btn-pac-stamp');
     const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
-    const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
+    const btnRegresar = document.getElementById('btn-step4-regresar') || document.querySelector('#step-panel-4 .btn-container button:first-child');
+    const btnVerTimbradas = document.getElementById('btn-step4-ver-timbradas');
     if (isFacturaTimbrada()) {
         if (btnTimbrar) btnTimbrar.style.display = 'none';
         if (btnCancelar) btnCancelar.style.display = 'none';
         if (btnRegresar) btnRegresar.style.display = 'none';
+        if (btnVerTimbradas) btnVerTimbradas.style.display = 'inline-flex';
     } else {
         if (btnTimbrar) btnTimbrar.style.display = 'inline-flex';
         if (btnCancelar) btnCancelar.style.display = 'inline-flex';
         if (btnRegresar) btnRegresar.style.display = 'inline-flex';
+        if (btnVerTimbradas) btnVerTimbradas.style.display = 'none';
     }
 }
 
@@ -3462,8 +3465,12 @@ function _mostrarResultadoTimbrado(data, isSandbox) {
     if (btnCancelar) btnCancelar.style.display = 'none';
 
     // Ocultar botón de regresar a formulario porque el CFDI ya fue sellado
-    const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
+    const btnRegresar = document.getElementById('btn-step4-regresar') || document.querySelector('#step-panel-4 .btn-container button:first-child');
     if (btnRegresar) btnRegresar.style.display = 'none';
+
+    // Mostrar botón de ver facturas timbradas en la parte inferior derecha
+    const btnVerTimbradas = document.getElementById('btn-step4-ver-timbradas');
+    if (btnVerTimbradas) btnVerTimbradas.style.display = 'inline-flex';
 
     const fmt = n => n != null ? `$${parseFloat(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—';
     const sandboxBadge = isSandbox
@@ -4803,8 +4810,11 @@ function restartProcess() {
     const btnCancelar = document.getElementById('btn-cancelar-factura-step4');
     if (btnCancelar) btnCancelar.style.display = 'inline-flex';
 
-    const btnRegresar = document.querySelector('#step-panel-4 .btn-container button:first-child');
+    const btnRegresar = document.getElementById('btn-step4-regresar') || document.querySelector('#step-panel-4 .btn-container button:first-child');
     if (btnRegresar) btnRegresar.style.display = 'inline-flex';
+
+    const btnVerTimbradas = document.getElementById('btn-step4-ver-timbradas');
+    if (btnVerTimbradas) btnVerTimbradas.style.display = 'none';
 
     _lastStampResult = null;
 

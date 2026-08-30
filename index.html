@@ -918,8 +918,11 @@
                         <div id="pac-resultado-timbrado" style="display:none; margin-top: 18px;"></div>
                     </div>
 
-                    <div class="btn-container" style="justify-content: flex-start; border-top: none; padding-top: 5px; margin-top: 15px;">
-                        <button class="btn btn-secondary" onclick="goToStep(3)" style="padding: 10px 24px;">&larr; Regresar al Formulario</button>
+                    <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px; margin-top: 15px;">
+                        <button class="btn btn-secondary" id="btn-step4-regresar" onclick="goToStep(3)" style="padding: 10px 24px;">&larr; Regresar al Formulario</button>
+                        <button class="btn btn-primary" id="btn-step4-ver-timbradas" onclick="triggerSidebarClick('nav-timbradas')" style="display: none; padding: 10px 24px; margin-left: auto; font-weight: 700; align-items: center; gap: 6px; background-color: var(--primary-color);">
+                            Ver Facturas Timbradas &rarr;
+                        </button>
                     </div>
                 </section>
 
