@@ -878,7 +878,6 @@ app.post('/api/correo/enviar', autenticarToken, async (req, res) => {
 
         const effectiveUuid = uuid || factura?.uuid || expediente?.cfdiUuid || 'N/A';
         const effectiveFacturamaId = facturamaId || factura?.facturamaId || null;
-        const clientName = nombreDestinatario || expediente?.receptorNombre || 'Contribuyente';
 
         if (!factura && (effectiveUuid !== 'N/A' || expedienteId)) {
             factura = await prisma.factura.findFirst({
