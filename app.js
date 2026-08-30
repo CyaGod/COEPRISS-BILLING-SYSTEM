@@ -3945,8 +3945,6 @@ function getFilteredInvoicesList() {
 
         const isTimbrada = estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || Boolean(uuid);
         const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
-        const isError = estatus === 'ERROR' || estatus === 'FALLIDO';
-        const isPendiente = !isTimbrada && !isCancelada && !isError;
 
         // 1. Filtro por texto
         const matchText = !busqueda || [folio, uuid, cliente, rfc, concepto].some(val => (val || '').toLowerCase().includes(busqueda));
@@ -3959,8 +3957,6 @@ function getFilteredInvoicesList() {
             matchEstatus = isTimbrada;
         } else if (estatusFilter === 'CANCELADA' || estatusFilter === 'CANCELADO') {
             matchEstatus = isCancelada;
-        } else if (estatusFilter === 'ERROR') {
-            matchEstatus = isError;
         } else {
             matchEstatus = (estatus === estatusFilter);
         }
