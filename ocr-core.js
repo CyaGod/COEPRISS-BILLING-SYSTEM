@@ -540,14 +540,30 @@
     function getRegimenLabel(code) {
         const map = {
             '601': 'General de Ley Personas Morales',
+            '602': 'Régimen Simplificado de Ley Personas Morales',
             '603': 'Personas Morales con Fines no Lucrativos',
+            '604': 'Régimen de Pequeños Contribuyentes',
             '605': 'Sueldos y Salarios e Ingresos Asimilados a Salarios',
             '606': 'Arrendamiento',
-            '608': 'Demás ingresos',
+            '607': 'Régimen de Enajenación o Adquisición de Bienes',
+            '608': 'Régimen de los Demás Ingresos',
+            '609': 'Régimen de Consolidación',
+            '610': 'Residentes en el Extranjero sin Establecimiento Permanente en México',
+            '611': 'Ingresos por Dividendos (Socios y Accionistas)',
             '612': 'Personas Físicas con Actividades Empresariales y Profesionales',
-            '616': 'Sin obligaciones fiscales',
+            '613': 'Régimen Intermedio de las Personas Físicas con Actividades Empresariales',
+            '614': 'Régimen de los Ingresos por Intereses',
+            '615': 'Régimen de los Ingresos por Obtención de Premios',
+            '616': 'Sin Obligaciones Fiscales',
+            '617': 'PEMEX',
+            '618': 'Régimen Simplificado de Ley Personas Físicas',
+            '619': 'Ingresos por la Obtención de Préstamos',
+            '620': 'Sociedades Cooperativas de Producción que Optan por Diferir sus Ingresos',
             '621': 'Incorporación Fiscal',
-            '625': 'Actividades Empresariales con ingresos vía Plataformas Tecnológicas',
+            '622': 'Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras PM',
+            '623': 'Régimen Opcional para Grupos de Sociedades',
+            '624': 'Régimen de los Coordinados',
+            '625': 'Actividades Empresariales con Ingresos a través de Plataformas Tecnológicas',
             '626': 'Régimen Simplificado de Confianza (RESICO)'
         };
         return map[String(code)] || 'General';
