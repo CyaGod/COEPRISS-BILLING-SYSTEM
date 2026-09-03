@@ -2288,13 +2288,29 @@ function normalizeSatUsoCfdi(val) {
 function normalizeSatFormaPago(val) {
     if (!val) return '';
     const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
-    if (/\b03\b|TRANSFERENCIA|SPEI|ELECTRONICA/.test(clean)) return '03';
+    if (/\b03\b|TRANSFERENCIA|SPEI|ELECTRONICA DE FONDOS/.test(clean)) return '03';
     if (/\b01\b|EFECTIVO/.test(clean)) return '01';
     if (/\b02\b|CHEQUE/.test(clean)) return '02';
-    if (/\b04\b|TARJETA DE CREDITO|CREDITO/.test(clean)) return '04';
-    if (/\b28\b|TARJETA DE DEBITO|DEBITO/.test(clean)) return '28';
+    if (/\b04\b|TARJETA DE CREDITO/.test(clean)) return '04';
+    if (/\b05\b|MONEDERO ELECTRONICO/.test(clean)) return '05';
+    if (/\b06\b|DINERO ELECTRONICO/.test(clean)) return '06';
+    if (/\b08\b|VALES DE DESPENSA/.test(clean)) return '08';
+    if (/\b12\b|DACION EN PAGO/.test(clean)) return '12';
+    if (/\b13\b|SUBROGACION/.test(clean)) return '13';
+    if (/\b14\b|CONSIGNACION/.test(clean)) return '14';
+    if (/\b15\b|CONDONACION/.test(clean)) return '15';
+    if (/\b17\b|COMPENSACION/.test(clean)) return '17';
+    if (/\b23\b|NOVACION/.test(clean)) return '23';
+    if (/\b24\b|CONFUSION/.test(clean)) return '24';
+    if (/\b25\b|REMISION DE DEUDA/.test(clean)) return '25';
+    if (/\b26\b|PRESCRIPCION|CADUCIDAD/.test(clean)) return '26';
+    if (/\b27\b|SATISFACCION DEL ACREEDOR/.test(clean)) return '27';
+    if (/\b28\b|TARJETA DE DEBITO/.test(clean)) return '28';
+    if (/\b29\b|TARJETA DE SERVICIOS/.test(clean)) return '29';
+    if (/\b30\b|APLICACION DE ANTICIPOS/.test(clean)) return '30';
+    if (/\b31\b|INTERMEDIARIO/.test(clean)) return '31';
     if (/\b99\b|POR DEFINIR/.test(clean)) return '99';
-    const code = clean.match(/\b(01|02|03|04|28|99)\b/);
+    const code = clean.match(/\b(0[1-68]|1[2-57]|2[3-9]|3[01]|99)\b/);
     return code ? code[1] : '';
 }
 
