@@ -67,15 +67,32 @@
         if (!val) return '';
         const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
         if (/\b601\b|GENERAL DE LEY/.test(clean)) return '601';
+        if (/\b602\b|SIMPLIFICADO DE LEY PERSONAS MORALES/.test(clean)) return '602';
         if (/\b603\b|FINES NO LUCRATIVOS|PERSONAS MORALES CON FINES/.test(clean)) return '603';
+        if (/\b604\b|PEQUENOS CONTRIBUYENTES/.test(clean)) return '604';
         if (/\b605\b|SUELDOS|SALARIOS|ASIMILADOS/.test(clean)) return '605';
         if (/\b606\b|ARRENDAMIENTO/.test(clean)) return '606';
-        if (/\b612\b|ACTIVIDADES EMPRESARIALES|PROFESIONALES/.test(clean)) return '612';
+        if (/\b607\b|ENAJENACION O ADQUISICION DE BIENES/.test(clean)) return '607';
+        if (/\b608\b|DEMAS INGRESOS/.test(clean)) return '608';
+        if (/\b609\b|CONSOLIDACION/.test(clean)) return '609';
+        if (/\b610\b|RESIDENTES EN EL EXTRANJERO/.test(clean)) return '610';
+        if (/\b611\b|DIVIDENDOS|SOCIOS Y ACCIONISTAS/.test(clean)) return '611';
+        if (/\b612\b|ACTIVIDADES EMPRESARIALES Y PROFESIONALES|EMPRESARIALES Y PROFESIONALES|PERSONAS FISICAS CON ACTIVIDADES EMPRESARIALES/.test(clean)) return '612';
+        if (/\b613\b|INTERMEDIO DE LAS PERSONAS FISICAS/.test(clean)) return '613';
+        if (/\b614\b|INGRESOS POR INTERESES|INTERESES/.test(clean)) return '614';
+        if (/\b615\b|OBTENCION DE PREMIOS|PREMIOS/.test(clean)) return '615';
         if (/\b616\b|SIN OBLIGACIONES/.test(clean)) return '616';
+        if (/\b617\b|PEMEX/.test(clean)) return '617';
+        if (/\b618\b|SIMPLIFICADO DE LEY PERSONAS FISICAS/.test(clean)) return '618';
+        if (/\b619\b|OBTENCION DE PRESTAMOS|PRESTAMOS/.test(clean)) return '619';
+        if (/\b620\b|SOCIEDADES COOPERATIVAS DE PRODUCCION|COOPERATIVAS/.test(clean)) return '620';
         if (/\b621\b|INCORPORACION FISCAL|RIF/.test(clean)) return '621';
+        if (/\b622\b|AGRICOLAS|GANADERAS|SILVICOLAS|PESQUERAS|AGAPES/.test(clean)) return '622';
+        if (/\b623\b|OPCIONAL PARA GRUPOS DE SOCIEDADES/.test(clean)) return '623';
+        if (/\b624\b|COORDINADOS/.test(clean)) return '624';
         if (/\b625\b|PLATAFORMAS/.test(clean)) return '625';
         if (/\b626\b|SIMPLIFICADO DE CONFIANZA|RESICO/.test(clean)) return '626';
-        const num = clean.match(/\b(601|603|605|606|612|616|621|625|626)\b/);
+        const num = clean.match(/\b(60[1-9]|61[0-9]|62[0-6])\b/);
         return num ? num[1] : '';
     }
 

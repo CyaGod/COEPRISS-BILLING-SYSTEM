@@ -2255,15 +2255,32 @@ function normalizeSatRegimen(val) {
     if (!val) return '';
     const clean = stripOcrAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
     if (/\b601\b|GENERAL DE LEY/.test(clean)) return '601';
+    if (/\b602\b|SIMPLIFICADO DE LEY PERSONAS MORALES/.test(clean)) return '602';
     if (/\b603\b|FINES NO LUCRATIVOS|PERSONAS MORALES CON FINES/.test(clean)) return '603';
+    if (/\b604\b|PEQUENOS CONTRIBUYENTES/.test(clean)) return '604';
     if (/\b605\b|SUELDOS|SALARIOS|ASIMILADOS/.test(clean)) return '605';
     if (/\b606\b|ARRENDAMIENTO/.test(clean)) return '606';
-    if (/\b612\b|ACTIVIDADES EMPRESARIALES|PROFESIONALES/.test(clean)) return '612';
+    if (/\b607\b|ENAJENACION O ADQUISICION DE BIENES/.test(clean)) return '607';
+    if (/\b608\b|DEMAS INGRESOS/.test(clean)) return '608';
+    if (/\b609\b|CONSOLIDACION/.test(clean)) return '609';
+    if (/\b610\b|RESIDENTES EN EL EXTRANJERO/.test(clean)) return '610';
+    if (/\b611\b|DIVIDENDOS|SOCIOS Y ACCIONISTAS/.test(clean)) return '611';
+    if (/\b612\b|ACTIVIDADES EMPRESARIALES Y PROFESIONALES|EMPRESARIALES Y PROFESIONALES|PERSONAS FISICAS CON ACTIVIDADES EMPRESARIALES/.test(clean)) return '612';
+    if (/\b613\b|INTERMEDIO DE LAS PERSONAS FISICAS/.test(clean)) return '613';
+    if (/\b614\b|INGRESOS POR INTERESES|INTERESES/.test(clean)) return '614';
+    if (/\b615\b|OBTENCION DE PREMIOS|PREMIOS/.test(clean)) return '615';
     if (/\b616\b|SIN OBLIGACIONES/.test(clean)) return '616';
+    if (/\b617\b|PEMEX/.test(clean)) return '617';
+    if (/\b618\b|SIMPLIFICADO DE LEY PERSONAS FISICAS/.test(clean)) return '618';
+    if (/\b619\b|OBTENCION DE PRESTAMOS|PRESTAMOS/.test(clean)) return '619';
+    if (/\b620\b|SOCIEDADES COOPERATIVAS DE PRODUCCION|COOPERATIVAS/.test(clean)) return '620';
     if (/\b621\b|INCORPORACION FISCAL|RIF/.test(clean)) return '621';
+    if (/\b622\b|AGRICOLAS|GANADERAS|SILVICOLAS|PESQUERAS|AGAPES/.test(clean)) return '622';
+    if (/\b623\b|OPCIONAL PARA GRUPOS DE SOCIEDADES/.test(clean)) return '623';
+    if (/\b624\b|COORDINADOS/.test(clean)) return '624';
     if (/\b625\b|PLATAFORMAS/.test(clean)) return '625';
     if (/\b626\b|SIMPLIFICADO DE CONFIANZA|RESICO/.test(clean)) return '626';
-    const num = clean.match(/\b(601|603|605|606|612|616|621|625|626)\b/);
+    const num = clean.match(/\b(60[1-9]|61[0-9]|62[0-6])\b/);
     return num ? num[1] : '';
 }
 
@@ -2990,19 +3007,19 @@ function updateStep3UIFromActiveExpediente() {
     if (cpInput) cpInput.value = d.codigoPostal || '';
 
     // Normalización inteligente de catálogos SAT
-    const normRegimen = normalizeSatRegimen(d.regimenFiscal) || d.regimenFiscal;
+    const normRegimen = normalizeSatRegimen(d.regimenFiscal) || (d.rfc?.length === 12 ? '601' : '626');
     if (regimenSelect && normRegimen) {
         regimenSelect.value = normRegimen;
         d.regimenFiscal = normRegimen;
     }
 
-    const normUso = normalizeSatUsoCfdi(d.usoCfdi) || d.usoCfdi;
+    const normUso = normalizeSatUsoCfdi(d.usoCfdi) || 'G03';
     if (usoCfdiSelect && normUso) {
         usoCfdiSelect.value = normUso;
         d.usoCfdi = normUso;
     }
 
-    const normForma = normalizeSatFormaPago(d.formaPago) || d.formaPago;
+    const normForma = normalizeSatFormaPago(d.formaPago) || '03';
     if (formaPagoSelect && normForma) {
         formaPagoSelect.value = normForma;
         d.formaPago = normForma;
@@ -3150,11 +3167,11 @@ async function proceedToStep4() {
     d.rfc = (document.getElementById('step3-rfc')?.value || d.rfc || '').toUpperCase().trim();
     d.cliente = (document.getElementById('step3-razon')?.value || d.cliente || '').trim();
     d.codigoPostal = (document.getElementById('step3-cp')?.value || d.codigoPostal || '').trim();
-    d.regimenFiscal = document.getElementById('step3-regimen')?.value || d.regimenFiscal || '626';
-    d.usoCfdi = document.getElementById('step3-uso-cfdi')?.value || d.usoCfdi || 'G03';
+    d.regimenFiscal = normalizeSatRegimen(document.getElementById('step3-regimen')?.value) || normalizeSatRegimen(d.regimenFiscal) || (d.rfc?.length === 12 ? '601' : '626');
+    d.usoCfdi = normalizeSatUsoCfdi(document.getElementById('step3-uso-cfdi')?.value) || normalizeSatUsoCfdi(d.usoCfdi) || 'G03';
     d.correo = (document.getElementById('step3-correo')?.value || d.correo || '').trim();
-    d.formaPago = document.getElementById('step3-forma-pago')?.value || d.formaPago || '03';
-    d.metodoPago = document.getElementById('step3-metodo-pago')?.value || d.metodoPago || 'PUE';
+    d.formaPago = normalizeSatFormaPago(document.getElementById('step3-forma-pago')?.value) || normalizeSatFormaPago(d.formaPago) || '03';
+    d.metodoPago = normalizeSatMetodoPago(document.getElementById('step3-metodo-pago')?.value) || normalizeSatMetodoPago(d.metodoPago) || 'PUE';
     d.concepto = (document.getElementById('step3-concepto')?.value || d.concepto || 'Derechos de Trámite Sanitario COEPRISS').trim();
     d.importe = parseFloat(document.getElementById('step3-total')?.value || d.importe || 0);
 

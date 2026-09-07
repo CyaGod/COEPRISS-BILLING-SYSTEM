@@ -102,6 +102,111 @@ function cleanSatRazonSocial(name, rfc = '') {
     return clean || name.trim().toUpperCase();
 }
 
+function stripAccents(str) {
+    return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizeSatRegimen(val) {
+    if (!val) return '';
+    const clean = stripAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\b601\b|GENERAL DE LEY/.test(clean)) return '601';
+    if (/\b602\b|SIMPLIFICADO DE LEY PERSONAS MORALES/.test(clean)) return '602';
+    if (/\b603\b|FINES NO LUCRATIVOS|PERSONAS MORALES CON FINES/.test(clean)) return '603';
+    if (/\b604\b|PEQUENOS CONTRIBUYENTES/.test(clean)) return '604';
+    if (/\b605\b|SUELDOS|SALARIOS|ASIMILADOS/.test(clean)) return '605';
+    if (/\b606\b|ARRENDAMIENTO/.test(clean)) return '606';
+    if (/\b607\b|ENAJENACION O ADQUISICION DE BIENES/.test(clean)) return '607';
+    if (/\b608\b|DEMAS INGRESOS/.test(clean)) return '608';
+    if (/\b609\b|CONSOLIDACION/.test(clean)) return '609';
+    if (/\b610\b|RESIDENTES EN EL EXTRANJERO/.test(clean)) return '610';
+    if (/\b611\b|DIVIDENDOS|SOCIOS Y ACCIONISTAS/.test(clean)) return '611';
+    if (/\b612\b|ACTIVIDADES EMPRESARIALES Y PROFESIONALES|EMPRESARIALES Y PROFESIONALES|PERSONAS FISICAS CON ACTIVIDADES EMPRESARIALES/.test(clean)) return '612';
+    if (/\b613\b|INTERMEDIO DE LAS PERSONAS FISICAS/.test(clean)) return '613';
+    if (/\b614\b|INGRESOS POR INTERESES|INTERESES/.test(clean)) return '614';
+    if (/\b615\b|OBTENCION DE PREMIOS|PREMIOS/.test(clean)) return '615';
+    if (/\b616\b|SIN OBLIGACIONES/.test(clean)) return '616';
+    if (/\b617\b|PEMEX/.test(clean)) return '617';
+    if (/\b618\b|SIMPLIFICADO DE LEY PERSONAS FISICAS/.test(clean)) return '618';
+    if (/\b619\b|OBTENCION DE PRESTAMOS|PRESTAMOS/.test(clean)) return '619';
+    if (/\b620\b|SOCIEDADES COOPERATIVAS DE PRODUCCION|COOPERATIVAS/.test(clean)) return '620';
+    if (/\b621\b|INCORPORACION FISCAL|RIF/.test(clean)) return '621';
+    if (/\b622\b|AGRICOLAS|GANADERAS|SILVICOLAS|PESQUERAS|AGAPES/.test(clean)) return '622';
+    if (/\b623\b|OPCIONAL PARA GRUPOS DE SOCIEDADES/.test(clean)) return '623';
+    if (/\b624\b|COORDINADOS/.test(clean)) return '624';
+    if (/\b625\b|PLATAFORMAS/.test(clean)) return '625';
+    if (/\b626\b|SIMPLIFICADO DE CONFIANZA|RESICO/.test(clean)) return '626';
+    const num = clean.match(/\b(60[1-9]|61[0-9]|62[0-6])\b/);
+    return num ? num[1] : '';
+}
+
+function normalizeSatUsoCfdi(val) {
+    if (!val) return '';
+    const clean = stripAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\bG01\b|ADQUISICION DE MERCANCIAS|MERCANCIAS/.test(clean)) return 'G01';
+    if (/\bG02\b|DEVOLUCIONES|DESCUENTOS|BONIFICACIONES/.test(clean)) return 'G02';
+    if (/\bG03\b|GASTOS EN GENERAL|GASTOS/.test(clean)) return 'G03';
+    if (/\bI01\b|CONSTRUCCIONES/.test(clean)) return 'I01';
+    if (/\bI02\b|MOBILIARIO Y EQUIPO DE OFICINA/.test(clean)) return 'I02';
+    if (/\bI03\b|EQUIPO DE TRANSPORTE/.test(clean)) return 'I03';
+    if (/\bI04\b|EQUIPO DE COMPUTO|COMPUTO/.test(clean)) return 'I04';
+    if (/\bI05\b|DADOS|TROQUELES|MOLDES|MATRICES|HERRAMENTAL/.test(clean)) return 'I05';
+    if (/\bI06\b|COMUNICACIONES TELEFONICAS/.test(clean)) return 'I06';
+    if (/\bI07\b|COMUNICACIONES SATELITALES/.test(clean)) return 'I07';
+    if (/\bI08\b|OTRA MAQUINARIA|MAQUINARIA Y EQUIPO/.test(clean)) return 'I08';
+    if (/\bD01\b|HONORARIOS MEDICOS|MEDICOS|HOSPITALARIOS/.test(clean)) return 'D01';
+    if (/\bD02\b|GASTOS MEDICOS POR INCAPACIDAD|DISCAPACIDAD/.test(clean)) return 'D02';
+    if (/\bD03\b|GASTOS FUNERALES/.test(clean)) return 'D03';
+    if (/\bD04\b|DONATIVOS/.test(clean)) return 'D04';
+    if (/\bD05\b|INTERESES REALES|CREDITOS HIPOTECARIOS/.test(clean)) return 'D05';
+    if (/\bD06\b|APORTACIONES VOLUNTARIAS AL SAR|SAR/.test(clean)) return 'D06';
+    if (/\bD07\b|SEGUROS DE GASTOS MEDICOS/.test(clean)) return 'D07';
+    if (/\bD08\b|TRANSPORTACION ESCOLAR/.test(clean)) return 'D08';
+    if (/\bD09\b|DEPOSITOS EN CUENTAS PARA EL AHORRO|PLANES DE PENSIONES/.test(clean)) return 'D09';
+    if (/\bD10\b|SERVICIOS EDUCATIVOS|COLEGIATURAS/.test(clean)) return 'D10';
+    if (/\bS01\b|SIN EFECTOS FISCALES|SIN EFECTOS/.test(clean)) return 'S01';
+    if (/\bCP01\b|PAGOS/.test(clean)) return 'CP01';
+    if (/\bCN01\b|NOMINA/.test(clean)) return 'CN01';
+    const code = clean.match(/\b(G0[1-3]|I0[1-8]|D0[1-9]|D10|S01|CP01|CN01)\b/);
+    return code ? code[1] : '';
+}
+
+function normalizeSatFormaPago(val) {
+    if (!val) return '';
+    const clean = stripAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\b03\b|TRANSFERENCIA|SPEI|ELECTRONICA DE FONDOS/.test(clean)) return '03';
+    if (/\b01\b|EFECTIVO/.test(clean)) return '01';
+    if (/\b02\b|CHEQUE/.test(clean)) return '02';
+    if (/\b04\b|TARJETA DE CREDITO/.test(clean)) return '04';
+    if (/\b05\b|MONEDERO ELECTRONICO/.test(clean)) return '05';
+    if (/\b06\b|DINERO ELECTRONICO/.test(clean)) return '06';
+    if (/\b08\b|VALES DE DESPENSA/.test(clean)) return '08';
+    if (/\b12\b|DACION EN PAGO/.test(clean)) return '12';
+    if (/\b13\b|SUBROGACION/.test(clean)) return '13';
+    if (/\b14\b|CONSIGNACION/.test(clean)) return '14';
+    if (/\b15\b|CONDONACION/.test(clean)) return '15';
+    if (/\b17\b|COMPENSACION/.test(clean)) return '17';
+    if (/\b23\b|NOVACION/.test(clean)) return '23';
+    if (/\b24\b|CONFUSION/.test(clean)) return '24';
+    if (/\b25\b|REMISION DE DEUDA/.test(clean)) return '25';
+    if (/\b26\b|PRESCRIPCION|CADUCIDAD/.test(clean)) return '26';
+    if (/\b27\b|SATISFACCION DEL ACREEDOR/.test(clean)) return '27';
+    if (/\b28\b|TARJETA DE DEBITO/.test(clean)) return '28';
+    if (/\b29\b|TARJETA DE SERVICIOS/.test(clean)) return '29';
+    if (/\b30\b|APLICACION DE ANTICIPOS/.test(clean)) return '30';
+    if (/\b31\b|INTERMEDIARIO/.test(clean)) return '31';
+    if (/\b99\b|POR DEFINIR/.test(clean)) return '99';
+    const code = clean.match(/\b(0[1-68]|1[2-57]|2[3-9]|3[01]|99)\b/);
+    return code ? code[1] : '';
+}
+
+function normalizeSatMetodoPago(val) {
+    if (!val) return '';
+    const clean = stripAccents(String(val)).toUpperCase().replace(/[^A-Z0-9]/g, ' ');
+    if (/\bPUE\b|UNA SOLA EXHIBICION|CONTADO/.test(clean)) return 'PUE';
+    if (/\bPPD\b|PARCIALIDADES|DIFERIDO/.test(clean)) return 'PPD';
+    return '';
+}
+
 /**
  * Convierte un expediente de COEPRISS en el JSON que espera Facturama (CFDI 4.0).
  */
@@ -121,10 +226,12 @@ function buildCFDIPayload(expediente) {
     const rawName = (expediente.receptorNombre || expediente.cliente || expediente.razonSocial || expediente.nombre || '').trim();
     const nombre  = cleanSatRazonSocial(rawName, rfc);
     const cp      = (expediente.receptorCodigoPostal || expediente.codigoPostal || expediente.cp || CP_EXPEDICION).trim();
-    const regimen = (expediente.receptorRegimenFiscal || expediente.regimenFiscal || expediente.regimen || (rfc.length === 12 ? '601' : '616')).trim();
+    const rawRegimen = (expediente.receptorRegimenFiscal || expediente.regimenFiscal || expediente.regimen || '').trim();
+    const regimen = normalizeSatRegimen(rawRegimen) || (rfc.length === 12 ? '601' : '616');
     
     // Reglas SAT para uso de CFDI según régimen
-    let usoCfdi = expediente.receptorUsoCfdi || expediente.usoCfdi;
+    const rawUso = (expediente.receptorUsoCfdi || expediente.usoCfdi || '').trim();
+    let usoCfdi = normalizeSatUsoCfdi(rawUso);
     if (!usoCfdi) {
         usoCfdi = (regimen === '616' || rfc === 'XAXX010101000') ? 'S01' : USO_CFDI;
     }
@@ -135,13 +242,16 @@ function buildCFDIPayload(expediente) {
     const concepto = expediente.cfdiConcepto || expediente.concepto || 'Derechos de Trámite Sanitario COEPRISS';
     const folio    = String(expediente.cfdiFolio || expediente.folio || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '');
 
+    const paymentForm = normalizeSatFormaPago(expediente.cfdiFormaPago || expediente.formaPago) || FORMA_PAGO;
+    const paymentMethod = normalizeSatMetodoPago(expediente.cfdiMetodoPago || expediente.metodoPago) || METODO_PAGO;
+
     const payload = {
         CfdiType:        'I',            // Ingreso
         NameId:          1,              // Factura
         ExpeditionPlace: CP_EXPEDICION,
         Exportation:     '01',           // No aplica
-        PaymentForm:     expediente.cfdiFormaPago  || expediente.formaPago   || FORMA_PAGO,
-        PaymentMethod:   expediente.cfdiMetodoPago || expediente.metodoPago  || METODO_PAGO,
+        PaymentForm:     paymentForm,
+        PaymentMethod:   paymentMethod,
         Currency:        expediente.cfdiMoneda     || expediente.moneda      || MONEDA,
         Folio:           folio,
         Issuer: {
@@ -393,5 +503,9 @@ module.exports = {
     obtenerCFDI,
     cancelarCFDI,
     listarFacturas,
+    normalizeSatRegimen,
+    normalizeSatUsoCfdi,
+    normalizeSatFormaPago,
+    normalizeSatMetodoPago,
     SANDBOX,
 };

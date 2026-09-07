@@ -300,20 +300,33 @@ app.patch('/api/expedientes/:folio/estatus', autenticarToken, async (req, res) =
 
 function sanitizeExpediente(data) {
     if (!data || typeof data !== 'object') return {};
+    const rawRegimen = data.receptorRegimenFiscal || data.regimenFiscal || '';
+    const rfcVal = (data.receptorRfc || data.rfc || '').trim();
+    const safeRegimen = facturama.normalizeSatRegimen(rawRegimen) || (rawRegimen && /^[0-9]{3}$/.test(rawRegimen.trim()) ? rawRegimen.trim() : (rfcVal.length === 12 ? '601' : (rfcVal ? '626' : null)));
+
+    const rawUso = data.receptorUsoCfdi || data.usoCfdi || '';
+    const safeUso = facturama.normalizeSatUsoCfdi(rawUso) || 'G03';
+
+    const rawForma = data.cfdiFormaPago || data.formaPago || '';
+    const safeForma = facturama.normalizeSatFormaPago(rawForma) || '03';
+
+    const rawMetodo = data.cfdiMetodoPago || data.metodoPago || '';
+    const safeMetodo = facturama.normalizeSatMetodoPago(rawMetodo) || 'PUE';
+
     const mapped = {
         receptorRfc: data.receptorRfc || data.rfc || null,
         receptorNombre: data.receptorNombre || data.cliente || null,
         receptorEmail: data.receptorEmail || data.correo || null,
-        receptorUsoCfdi: data.receptorUsoCfdi || data.usoCfdi || 'G03',
-        receptorRegimenFiscal: data.receptorRegimenFiscal || data.regimenFiscal || null,
+        receptorUsoCfdi: safeUso,
+        receptorRegimenFiscal: safeRegimen,
         receptorCodigoPostal: data.receptorCodigoPostal || data.codigoPostal || null,
         receptorDomicilio: data.receptorDomicilio || data.domicilio || null,
         cfdiUuid: data.cfdiUuid || data.uuid || null,
         cfdiTotal: (data.cfdiTotal !== undefined && data.cfdiTotal !== null) ? parseFloat(data.cfdiTotal) : ((data.importe !== undefined && data.importe !== null) ? parseFloat(data.importe) : null),
         cfdiSubtotal: (data.cfdiSubtotal !== undefined && data.cfdiSubtotal !== null) ? parseFloat(data.cfdiSubtotal) : ((data.subtotal !== undefined && data.subtotal !== null) ? parseFloat(data.subtotal) : null),
         cfdiConcepto: data.cfdiConcepto || data.concepto || null,
-        cfdiMetodoPago: data.cfdiMetodoPago || data.metodoPago || 'PUE',
-        cfdiFormaPago: data.cfdiFormaPago || data.formaPago || '03',
+        cfdiMetodoPago: safeMetodo,
+        cfdiFormaPago: safeForma,
         cfdiMoneda: data.cfdiMoneda || data.moneda || 'MXN',
         pagoMonto: (data.pagoMonto !== undefined && data.pagoMonto !== null) ? parseFloat(data.pagoMonto) : ((data.importePago !== undefined && data.importePago !== null) ? parseFloat(data.importePago) : null),
         pagoFecha: data.pagoFecha || data.fechaPago || null,
@@ -1531,6 +1544,36 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
         }
 
         if (!expediente) return res.status(404).json({ error: `Expediente ${expedienteId} no encontrado.` });
+
+        // Auto-reparar catálogo SAT (régimen fiscal, uso CFDI, forma de pago) si vienen como texto en BD
+        const fixedRegimen = facturama.normalizeSatRegimen(expediente.receptorRegimenFiscal);
+        const fixedUso = facturama.normalizeSatUsoCfdi(expediente.receptorUsoCfdi);
+        const fixedForma = facturama.normalizeSatFormaPago(expediente.cfdiFormaPago);
+        const fixedMetodo = facturama.normalizeSatMetodoPago(expediente.cfdiMetodoPago);
+
+        const updatesToPersist = {};
+        if (fixedRegimen && fixedRegimen !== expediente.receptorRegimenFiscal) {
+            expediente.receptorRegimenFiscal = fixedRegimen;
+            updatesToPersist.receptorRegimenFiscal = fixedRegimen;
+        }
+        if (fixedUso && fixedUso !== expediente.receptorUsoCfdi) {
+            expediente.receptorUsoCfdi = fixedUso;
+            updatesToPersist.receptorUsoCfdi = fixedUso;
+        }
+        if (fixedForma && fixedForma !== expediente.cfdiFormaPago) {
+            expediente.cfdiFormaPago = fixedForma;
+            updatesToPersist.cfdiFormaPago = fixedForma;
+        }
+        if (fixedMetodo && fixedMetodo !== expediente.cfdiMetodoPago) {
+            expediente.cfdiMetodoPago = fixedMetodo;
+            updatesToPersist.cfdiMetodoPago = fixedMetodo;
+        }
+        if (Object.keys(updatesToPersist).length > 0) {
+            await prisma.expediente.update({
+                where: { id: expediente.id },
+                data: updatesToPersist
+            }).catch(() => null);
+        }
 
         // ── CAPA AUTORITATIVA EN BASE DE DATOS: 1. ESTADO TERMINAL INMUTABLE ──
         const facturaExistente = await prisma.factura.findFirst({
