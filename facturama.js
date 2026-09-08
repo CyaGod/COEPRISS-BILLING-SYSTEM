@@ -99,7 +99,7 @@ function cleanSatRazonSocial(name, rfc = '') {
             .replace(/\s+/g, ' ')
             .trim();
     }
-    return clean || name.trim().toUpperCase();
+    return clean.trim() || name.trim().toUpperCase();
 }
 
 function stripAccents(str) {
@@ -220,7 +220,7 @@ function buildCFDIPayload(expediente) {
 
     // Desglose fiscal: Total = Subtotal + IVA (16%)
     const subtotal = parseFloat((totalBruto / 1.16).toFixed(2));
-    const iva      = parseFloat((totalBruto - subtotal).toFixed(2));
+    const iva      = parseFloat((subtotal * 0.16).toFixed(2));
 
     const rfc     = (expediente.receptorRfc || expediente.rfc || '').toUpperCase().trim();
     const rawName = (expediente.receptorNombre || expediente.cliente || expediente.razonSocial || expediente.nombre || '').trim();

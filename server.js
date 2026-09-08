@@ -1509,19 +1509,20 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
 
         if (!expediente && req.body.expediente) {
             const d = req.body.expediente;
+            const sanitized = sanitizeExpediente(d); // normalizar catálogos SAT antes de persistir
             expediente = await prisma.expediente.upsert({
                 where: { folio: expedienteId },
                 update: {
                     receptorRfc: d.rfc || d.receptorRfc,
                     receptorNombre: d.cliente || d.receptorNombre,
-                    receptorRegimenFiscal: d.regimenFiscal || d.receptorRegimenFiscal,
+                    receptorRegimenFiscal: sanitized.receptorRegimenFiscal || null,
                     receptorCodigoPostal: d.codigoPostal || d.receptorCodigoPostal,
-                    receptorUsoCfdi: d.usoCfdi || d.receptorUsoCfdi || 'G03',
+                    receptorUsoCfdi: sanitized.receptorUsoCfdi || 'G03',
                     cfdiTotal: parseFloat(d.importe || d.cfdiTotal || 0),
                     cfdiSubtotal: parseFloat(d.subtotal || (d.importe ? d.importe / 1.16 : 0)),
                     cfdiConcepto: d.concepto || d.cfdiConcepto,
-                    cfdiFormaPago: d.formaPago || d.cfdiFormaPago || '03',
-                    cfdiMetodoPago: d.metodoPago || d.cfdiMetodoPago || 'PUE',
+                    cfdiFormaPago: sanitized.cfdiFormaPago || '03',
+                    cfdiMetodoPago: sanitized.cfdiMetodoPago || 'PUE',
                     receptorEmail: d.correo || d.receptorEmail
                 },
                 create: {
@@ -1530,14 +1531,14 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
                     estatus: 'PENDIENTE',
                     receptorRfc: d.rfc || d.receptorRfc,
                     receptorNombre: d.cliente || d.receptorNombre,
-                    receptorRegimenFiscal: d.regimenFiscal || d.receptorRegimenFiscal,
+                    receptorRegimenFiscal: sanitized.receptorRegimenFiscal || null,
                     receptorCodigoPostal: d.codigoPostal || d.receptorCodigoPostal,
-                    receptorUsoCfdi: d.usoCfdi || d.receptorUsoCfdi || 'G03',
+                    receptorUsoCfdi: sanitized.receptorUsoCfdi || 'G03',
                     cfdiTotal: parseFloat(d.importe || d.cfdiTotal || 0),
                     cfdiSubtotal: parseFloat(d.subtotal || (d.importe ? d.importe / 1.16 : 0)),
                     cfdiConcepto: d.concepto || d.cfdiConcepto,
-                    cfdiFormaPago: d.formaPago || d.cfdiFormaPago || '03',
-                    cfdiMetodoPago: d.metodoPago || d.cfdiMetodoPago || 'PUE',
+                    cfdiFormaPago: sanitized.cfdiFormaPago || '03',
+                    cfdiMetodoPago: sanitized.cfdiMetodoPago || 'PUE',
                     receptorEmail: d.correo || d.receptorEmail
                 }
             });
