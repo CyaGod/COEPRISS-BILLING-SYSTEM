@@ -331,7 +331,8 @@ function sanitizeExpediente(data) {
         pagoMonto: (data.pagoMonto !== undefined && data.pagoMonto !== null) ? parseFloat(data.pagoMonto) : ((data.importePago !== undefined && data.importePago !== null) ? parseFloat(data.importePago) : null),
         pagoFecha: data.pagoFecha || data.fechaPago || null,
         pagoBanco: data.pagoBanco || data.banco || null,
-        pagoReferencia: data.pagoReferencia || data.referencia || null,
+        folioRecibo: data.folioRecibo || data.pagoReferencia || data.referencia || null,
+        pagoReferencia: data.pagoReferencia || data.referencia || data.folioRecibo || null,
         pagoCuenta: data.pagoCuenta || data.cuentaBeneficiaria || null,
         pagoTipo: data.pagoTipo || data.tipoPago || null,
         transferenciaClabe: data.transferenciaClabe || data.cuentaBeneficiaria || null,
@@ -1082,7 +1083,8 @@ app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
         const { estatus, desde, hasta, busqueda, anio, mes } = req.query;
         const where = {};
 
-        // Filtro por Estatus
+        // Filtro por Estatus: En el reporte Excel SOLO deben figurar comprobantes emitidos oficialmente (o cancelados).
+        // NUNCA expedientes en borrador o pendientes.
         if (estatus && estatus.trim() && estatus.toUpperCase() !== 'TODOS') {
             const estatusNorm = estatus.toUpperCase().trim();
             if (estatusNorm === 'TIMBRADA' || estatusNorm === 'TIMBRADO') {
@@ -1091,16 +1093,27 @@ app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
                     { cfdiUuid: { not: null } },
                     { facturas: { some: { estatus: 'TIMBRADA' } } }
                 ];
-            } else if (estatusNorm === 'PENDIENTE') {
-                where.estatus = 'PENDIENTE';
             } else if (estatusNorm === 'CANCELADA' || estatusNorm === 'CANCELADO') {
                 where.estatus = 'CANCELADO';
-            } else if (estatusNorm === 'ERROR') {
-                where.estatus = 'ERROR';
             } else {
                 where.estatus = estatusNorm;
             }
+        } else {
+            // Por defecto ("Todos los estatus"): Solo comprobantes oficiales timbrados (o cancelados)
+            where.OR = [
+                { estatus: 'TIMBRADO' },
+                { cfdiUuid: { not: null } },
+                { facturas: { some: { estatus: 'TIMBRADA' } } },
+                { estatus: 'CANCELADO' }
+            ];
         }
+
+        // Regla estricta: Jamás incluir expedientes en borrador o pendientes
+        where.NOT = [
+            { estatus: 'PENDIENTE' },
+            { estatus: 'EN_PROCESO' },
+            { cfdiUuid: null, facturas: { none: {} } }
+        ];
 
         // Filtro por Año y Mes / Rango de fechas
         let fechaInicio = null;
@@ -1184,9 +1197,11 @@ app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
 
             const fechaRegistro = e.createdAt ? new Date(e.createdAt).toLocaleString('es-MX') : '';
             const fechaTimbrado = fac?.fechaTimbrado ? new Date(fac.fechaTimbrado).toLocaleString('es-MX') : (isTimbrada ? fechaRegistro : 'Pendiente');
+            const folioRecibo = e.folioRecibo || e.pagoReferencia || e.transferenciaReferencia || '';
 
             return {
                 'Folio Interno': e.folio || '',
+                'Folio Recibo': folioRecibo,
                 'Folio Fiscal (UUID SAT)': uuid || 'Sin timbrar',
                 'Fecha de Timbrado': fechaTimbrado,
                 'Fecha de Registro': fechaRegistro,
@@ -1216,6 +1231,7 @@ app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(rows.length > 0 ? rows : [{
             'Folio Interno': 'Sin datos',
+            'Folio Recibo': '',
             'Folio Fiscal (UUID SAT)': '',
             'Fecha de Timbrado': '',
             'Fecha de Registro': '',
@@ -1332,6 +1348,7 @@ app.get('/api/db', autenticarToken, async (req, res) => {
             banco: e.pagoBanco || e.transferenciaBanco || '',
             claveRastreo: e.transferenciaReferencia || '',
             referencia: e.pagoReferencia || '',
+            folioRecibo: e.folioRecibo || e.pagoReferencia || '',
             cuentaBeneficiaria: e.pagoCuenta || e.transferenciaClabe || '',
             fechaPago: e.pagoFecha || '',
             fechaRecibo: e.createdAt ? new Date(e.createdAt).toLocaleDateString('es-MX') : ''
@@ -1343,6 +1360,7 @@ app.get('/api/db', autenticarToken, async (req, res) => {
                 ...f,
                 folioInterno: f.folio,
                 folio: f.folio,
+                folioRecibo: exp.folioRecibo || exp.pagoReferencia || '',
                 cliente: exp.receptorNombre || '',
                 rfc: exp.receptorRfc || '',
                 correo: exp.receptorEmail || '',
@@ -1523,7 +1541,9 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
                     cfdiConcepto: d.concepto || d.cfdiConcepto,
                     cfdiFormaPago: sanitized.cfdiFormaPago || '03',
                     cfdiMetodoPago: sanitized.cfdiMetodoPago || 'PUE',
-                    receptorEmail: d.correo || d.receptorEmail
+                    receptorEmail: d.correo || d.receptorEmail,
+                    folioRecibo: d.folioRecibo || d.pagoReferencia || d.referencia || null,
+                    pagoReferencia: d.folioRecibo || d.pagoReferencia || d.referencia || null
                 },
                 create: {
                     folio: expedienteId,
@@ -1539,7 +1559,9 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
                     cfdiConcepto: d.concepto || d.cfdiConcepto,
                     cfdiFormaPago: sanitized.cfdiFormaPago || '03',
                     cfdiMetodoPago: sanitized.cfdiMetodoPago || 'PUE',
-                    receptorEmail: d.correo || d.receptorEmail
+                    receptorEmail: d.correo || d.receptorEmail,
+                    folioRecibo: d.folioRecibo || d.pagoReferencia || d.referencia || null,
+                    pagoReferencia: d.folioRecibo || d.pagoReferencia || d.referencia || null
                 }
             });
         }
@@ -2177,6 +2199,14 @@ async function startServer() {
             dbEngine = 'PostgreSQL (Render)';
             console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
             await autoSeedDatabase();
+            // Limpieza preventiva de expedientes huérfanos que hayan quedado como PENDIENTE sin timbrar
+            await prisma.expediente.deleteMany({
+                where: {
+                    estatus: 'PENDIENTE',
+                    cfdiUuid: null,
+                    facturas: { none: {} }
+                }
+            }).catch(e => console.warn('[AUTO-CLEAN PENDIENTES]', e.message));
         } catch (err) {
             console.warn('⚠️ No se pudo conectar a PostgreSQL:', err.message);
             console.log('👉 Ejecutando con Motor de Almacenamiento Local de Render.');

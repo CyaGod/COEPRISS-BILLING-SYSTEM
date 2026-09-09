@@ -3435,7 +3435,7 @@ async function stampInvoiceViaPAC() {
             const newFactura = {
                 id: stampData.facturaId,
                 folioInterno: folio,
-                folioRecibo: stampData.folio || folio,
+                folioRecibo: state.activeExpediente.folioRecibo || state.activeExpediente.referencia || state.activeExpediente.pagoReferencia || '',
                 cliente: state.activeExpediente.cliente,
                 rfc: state.activeExpediente.rfc,
                 fecha: new Date().toLocaleDateString('es-MX'),
@@ -4446,9 +4446,15 @@ async function exportReportToExcel() {
 }
 
 function generateClientSideExcel(filename) {
-    const filteredList = getFilteredInvoicesList();
+    const rawList = getFilteredInvoicesList();
+    // Excluir estrictamente facturas pendientes
+    const filteredList = rawList.filter(f => {
+        const estatus = (f.estatus || '').toUpperCase();
+        return estatus !== 'PENDIENTE' && estatus !== 'EN_PROCESO' && (f.uuid || f.cfdiUuid || estatus === 'TIMBRADA' || estatus === 'TIMBRADO' || estatus === 'CANCELADA' || estatus === 'CANCELADO');
+    });
+
     if (filteredList.length === 0) {
-        showToast('No hay facturas que coincidan con los filtros seleccionados para exportar.', 'warning');
+        showToast('No hay facturas timbradas que coincidan con los filtros seleccionados para exportar.', 'warning');
         return;
     }
 
@@ -4463,9 +4469,11 @@ function generateClientSideExcel(filename) {
 
         const dObj = parseInvoiceDate(f);
         const fechaStr = dObj ? dObj.toLocaleString('es-MX') : (f.fecha || '');
+        const folioRecibo = f.folioRecibo || f.referencia || f.pagoReferencia || '';
 
         return {
             'Folio Interno': folio,
+            'Folio Recibo': folioRecibo,
             'Folio Fiscal (UUID SAT)': uuid || 'Sin timbrar',
             'Fecha de Timbrado': isTimbrada ? fechaStr : 'Pendiente',
             'Fecha de Registro': fechaStr,

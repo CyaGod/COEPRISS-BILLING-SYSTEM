@@ -123,6 +123,7 @@ model Cliente {
 model Expediente {
   id                  Int                 @id @default(autoincrement())
   folio               String              @unique @db.VarChar(50)
+  folioRecibo         String?             @db.VarChar(50)
   usuarioId           Int
   empresaId           Int?
   estatus             EstatusExpediente   @default(PENDIENTE)
