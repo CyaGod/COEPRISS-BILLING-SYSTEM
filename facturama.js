@@ -286,7 +286,7 @@ function buildCFDIPayload(expediente) {
                         IsRetention: false,
                     },
                 ],
-                Total: totalBruto,
+                Total: parseFloat((subtotal + iva).toFixed(2)),
             },
         ],
     };
