@@ -219,8 +219,11 @@ function buildCFDIPayload(expediente) {
     }
 
     // Desglose fiscal: Total = Subtotal + IVA (16%)
+    // El IVA se calcula como la diferencia (totalBruto - subtotal) para que la ecuación
+    // siempre cuadre exactamente sin importar el importe: subtotal + iva = totalBruto.
+    // Esto es práctica estándar SAT CFDI 4.0 para absorber centavos de redondeo.
     const subtotal = parseFloat((totalBruto / 1.16).toFixed(2));
-    const iva      = parseFloat((subtotal * 0.16).toFixed(2));
+    const iva      = parseFloat((totalBruto - subtotal).toFixed(2));
 
     const rfc     = (expediente.receptorRfc || expediente.rfc || '').toUpperCase().trim();
     const rawName = (expediente.receptorNombre || expediente.cliente || expediente.razonSocial || expediente.nombre || '').trim();
