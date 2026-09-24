@@ -95,7 +95,7 @@ function cleanSatRazonSocial(name, rfc = '') {
     if (rfc && rfc.length === 12) {
         clean = clean
             .replace(/\b(S\.?A\.?\s+DE\s+C\.?V\.?|S\.?A\.?P\.?I\.?\s+DE\s+C\.?V\.?|S\.?A\.?P\.?I\.?|S\.?A\.?|S\.?\s+DE\s+R\.?L\.?\s+DE\s+C\.?V\.?|S\.?\s+DE\s+R\.?L\.?|S\.?C\.?|A\.?C\.?|ASOCIACION\s+CIVIL|SOCIEDAD\s+ANONIMA(\s+DE\s+CAPITAL\s+VARIABLE)?|I\.?A\.?P\.?|S\.?N\.?C\.?|S\.?C\.?S\.?)\b/gi, '')
-            .replace(/[,.]/g, '')
+            .replace(/\./g, '')
             .replace(/\s+/g, ' ')
             .trim();
     }
