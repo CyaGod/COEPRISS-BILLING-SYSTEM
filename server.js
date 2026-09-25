@@ -1534,7 +1534,9 @@ app.post('/api/facturama/timbrar', autenticarToken, async (req, res) => {
             where: { folio: expedienteId }
         });
 
-        if (!expediente && req.body.expediente) {
+        // Siempre que vengan datos en el cuerpo, ejecutar upsert para asegurar que la BD
+        // tenga los datos más frescos capturados en pantalla por el facturista.
+        if (req.body.expediente) {
             const d = req.body.expediente;
             const sanitized = sanitizeExpediente(d); // normalizar catálogos SAT antes de persistir
             expediente = await prisma.expediente.upsert({

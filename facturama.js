@@ -258,10 +258,14 @@ function buildCFDIPayload(expediente) {
                                 : 0.16;
     const esRetencion   = expediente.cfdiEsRetencion  ?? expediente.esRetencion   ?? false;
 
-    // Cálculo fiscal: IVA = totalBruto - subtotal para que siempre cuadre exactamente
-    const precioUnitario = parseFloat((totalBruto / (1 + tasa) / cantidad).toFixed(6));
-    const subtotalItem   = parseFloat((precioUnitario * cantidad).toFixed(2));
+    // Cálculo fiscal: IVA = totalBruto - subtotal para que siempre cuadre exactamente al centavo.
+    // subtotalItem se deriva directamente de totalBruto, e ivaItem es la diferencia exacta.
+    // Esto garantiza por construcción matemática que subtotalItem + ivaItem = totalBruto SIEMPRE (cero distorsión).
+    const subtotalItem   = parseFloat((totalBruto / (1 + tasa)).toFixed(2));
     const ivaItem        = parseFloat((totalBruto - subtotalItem).toFixed(2));
+    const precioUnitario = (cantidad === 1)
+        ? subtotalItem
+        : parseFloat((subtotalItem / cantidad).toFixed(6));
 
     const payload = {
         CfdiType:        'I',
@@ -291,7 +295,7 @@ function buildCFDIPayload(expediente) {
                 Description:          concepto,
                 Unit:                 unidad,
                 UnitCode:             claveUnidad,
-                UnitPrice:            subtotalItem,
+                UnitPrice:            precioUnitario,
                 Quantity:             cantidad,
                 Subtotal:             subtotalItem,
                 TaxObject:            objetoImp,
