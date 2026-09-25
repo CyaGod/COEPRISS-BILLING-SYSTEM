@@ -218,12 +218,6 @@ function buildCFDIPayload(expediente) {
         throw new Error('El expediente no tiene un monto (Total) válido para facturar.');
     }
 
-    // Desglose fiscal: Total = Subtotal + IVA (16%)
-    // El IVA se calcula como la diferencia (totalBruto - subtotal) para que la ecuación
-    // siempre cuadre exactamente sin importar el importe: subtotal + iva = totalBruto.
-    // Esto es práctica estándar SAT CFDI 4.0 para absorber centavos de redondeo.
-    const subtotal = parseFloat((totalBruto / 1.16).toFixed(2));
-    const iva      = parseFloat((totalBruto - subtotal).toFixed(2));
 
     const rfc     = (expediente.receptorRfc || expediente.rfc || '').toUpperCase().trim();
     const rawName = (expediente.receptorNombre || expediente.cliente || expediente.razonSocial || expediente.nombre || '').trim();
@@ -248,14 +242,33 @@ function buildCFDIPayload(expediente) {
     const paymentForm = normalizeSatFormaPago(expediente.cfdiFormaPago || expediente.formaPago) || FORMA_PAGO;
     const paymentMethod = normalizeSatMetodoPago(expediente.cfdiMetodoPago || expediente.metodoPago) || METODO_PAGO;
 
+    // Campos avanzados — se usan los del expediente si el usuario los cambió, o los defaults del sistema
+    const exportacion   = expediente.exportacion   || '01';
+    const moneda        = expediente.cfdiMoneda     || expediente.moneda    || MONEDA;
+    const cantidad      = parseFloat(expediente.cantidad  || 1);
+    const claveProd     = expediente.claveProdServ  || '90101501';
+    const claveUnidad   = expediente.claveUnidad    || 'ACT';
+    const unidad        = expediente.unidad         || 'Actividad';
+    const objetoImp     = expediente.objetoImp      || '02';
+    const tipoImpuesto  = expediente.tipoImpuesto   || 'IVA';
+    const tasa          = (expediente.tasaImpuesto !== undefined && expediente.tasaImpuesto !== null)
+                            ? parseFloat(expediente.tasaImpuesto)
+                            : 0.16;
+    const esRetencion   = expediente.esRetencion    || false;
+
+    // Cálculo fiscal: IVA = totalBruto - subtotal para que siempre cuadre exactamente
+    const precioUnitario = parseFloat((totalBruto / (1 + tasa) / cantidad).toFixed(6));
+    const subtotalItem   = parseFloat((precioUnitario * cantidad).toFixed(2));
+    const ivaItem        = parseFloat((totalBruto - subtotalItem).toFixed(2));
+
     const payload = {
-        CfdiType:        'I',            // Ingreso
-        NameId:          1,              // Factura
+        CfdiType:        'I',
+        NameId:          1,
         ExpeditionPlace: CP_EXPEDICION,
-        Exportation:     '01',           // No aplica
+        Exportation:     exportacion,
         PaymentForm:     paymentForm,
         PaymentMethod:   paymentMethod,
-        Currency:        expediente.cfdiMoneda     || expediente.moneda      || MONEDA,
+        Currency:        moneda,
         Folio:           folio,
         Issuer: {
             Rfc:          EMISOR.Rfc,
@@ -271,25 +284,25 @@ function buildCFDIPayload(expediente) {
         },
         Items: [
             {
-                ProductCode:         '90101501', // Servicios de regulación y cumplimiento gubernamental
+                ProductCode:          claveProd,
                 IdentificationNumber: folio,
                 Description:          concepto,
-                Unit:                 'Actividad',
-                UnitCode:             'ACT',
-                UnitPrice:            subtotal,
-                Quantity:             1,
-                Subtotal:             subtotal,
-                TaxObject:            '02',       // Objeto de impuesto
+                Unit:                 unidad,
+                UnitCode:             claveUnidad,
+                UnitPrice:            subtotalItem,
+                Quantity:             cantidad,
+                Subtotal:             subtotalItem,
+                TaxObject:            objetoImp,
                 Taxes: [
                     {
-                        Total:       iva,
-                        Name:        'IVA',
-                        Base:        subtotal,
-                        Rate:        0.16,
-                        IsRetention: false,
+                        Total:       ivaItem,
+                        Name:        tipoImpuesto,
+                        Base:        subtotalItem,
+                        Rate:        tasa,
+                        IsRetention: esRetencion,
                     },
                 ],
-                Total: parseFloat((subtotal + iva).toFixed(2)),
+                Total: parseFloat((subtotalItem + ivaItem).toFixed(2)),
             },
         ],
     };

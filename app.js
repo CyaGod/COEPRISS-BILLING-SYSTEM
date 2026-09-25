@@ -3175,6 +3175,18 @@ async function proceedToStep4() {
     d.concepto = (document.getElementById('step3-concepto')?.value || d.concepto || 'Derechos de Trámite Sanitario COEPRISS').trim();
     d.importe = parseFloat(document.getElementById('step3-total')?.value || d.importe || 0);
 
+    // Campos avanzados del comprobante (con defaults si no se cambiaron)
+    d.moneda        = document.getElementById('step3-moneda')?.value        || d.moneda        || 'MXN';
+    d.exportacion   = document.getElementById('step3-exportacion')?.value   || d.exportacion   || '01';
+    d.cantidad      = parseFloat(document.getElementById('step3-cantidad')?.value  || d.cantidad  || 1);
+    d.claveProdServ = document.getElementById('step3-clave-prod')?.value    || d.claveProdServ || '90101501';
+    d.claveUnidad   = document.getElementById('step3-clave-unidad')?.value  || d.claveUnidad   || 'ACT';
+    d.unidad        = document.getElementById('step3-clave-unidad')?.selectedOptions[0]?.dataset?.desc || d.unidad || 'Actividad';
+    d.objetoImp     = document.getElementById('step3-objeto-imp')?.value    || d.objetoImp     || '02';
+    d.tipoImpuesto  = document.getElementById('step3-tipo-impuesto')?.value || d.tipoImpuesto  || 'IVA';
+    d.tasaImpuesto  = parseFloat(document.getElementById('step3-tasa-impuesto')?.value ?? d.tasaImpuesto ?? 0.16);
+    d.esRetencion   = document.getElementById('step3-retencion')?.value === 'true' ? true : (d.esRetencion || false);
+
     // Validaciones de negocio SAT 4.0
     if (!d.rfc || d.rfc.length < 12 || d.rfc.length > 13) {
         showToast('Captura un RFC válido (12 caracteres para Personas Morales o 13 para Físicas).', 'error');
@@ -3199,6 +3211,29 @@ async function proceedToStep4() {
 
     state.maxStepUnlocked = Math.max(state.maxStepUnlocked || 1, 4);
     goToStep(4);
+}
+
+/** Sincroniza la descripción de unidad automáticamente al cambiar la clave */
+function syncStep3ClaveUnidad(value) {
+    const sel = document.getElementById('step3-clave-unidad');
+    const desc = sel?.selectedOptions[0]?.dataset?.desc || value;
+    syncStep3Field('claveUnidad', value);
+    syncStep3Field('unidad', desc);
+}
+
+/** Ajusta las opciones de tasa disponibles al cambiar el tipo de impuesto */
+function syncStep3TipoImpuesto(value) {
+    syncStep3Field('tipoImpuesto', value);
+    const tasaSel = document.getElementById('step3-tasa-impuesto');
+    if (!tasaSel) return;
+    if (value === 'IVA') {
+        tasaSel.value = '0.16';
+    } else if (value === 'ISR') {
+        tasaSel.value = '0.10';
+    } else if (value === 'IEPS') {
+        tasaSel.value = '0.265';
+    }
+    syncStep3Field('tasaImpuesto', parseFloat(tasaSel.value));
 }
 
 // ─────────────────────────────────────────────

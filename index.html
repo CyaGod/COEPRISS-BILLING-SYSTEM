@@ -877,6 +877,135 @@
                         </div>
                     </div>
 
+                    <!-- SECCIÓN AVANZADA: CAMPOS PREDETERMINADOS EDITABLES -->
+                    <details id="step3-advanced-section" style="margin-top: 14px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
+                        <summary style="padding: 12px 18px; font-size: 0.82rem; font-weight: 700; color: var(--primary-color); cursor: pointer; user-select: none; background: #f8f9fa; border-bottom: 1px solid #dee2e6; list-style: none; display: flex; align-items: center; gap: 8px;">
+                            ⚙️ Configuración Avanzada del Comprobante
+                            <span style="font-size: 0.72rem; font-weight: 400; color: #6c757d;">(Opcional — valores predeterminados SAT ya cargados)</span>
+                        </summary>
+                        <div style="padding: 18px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+
+                            <!-- Moneda -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Moneda</label>
+                                <select class="form-control form-control-sm" id="step3-moneda" onchange="syncStep3Field('moneda', this.value)">
+                                    <option value="MXN" selected>MXN — Peso Mexicano</option>
+                                    <option value="USD">USD — Dólar americano</option>
+                                    <option value="EUR">EUR — Euro</option>
+                                    <option value="CAD">CAD — Dólar canadiense</option>
+                                    <option value="GBP">GBP — Libra esterlina</option>
+                                    <option value="JPY">JPY — Yen japonés</option>
+                                    <option value="CHF">CHF — Franco suizo</option>
+                                    <option value="XXX">XXX — Valores nacionales</option>
+                                </select>
+                            </div>
+
+                            <!-- Exportación -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Exportación</label>
+                                <select class="form-control form-control-sm" id="step3-exportacion" onchange="syncStep3Field('exportacion', this.value)">
+                                    <option value="01" selected>01 — No aplica</option>
+                                    <option value="02">02 — Definitiva</option>
+                                    <option value="03">03 — Temporal</option>
+                                    <option value="04">04 — Definitiva con retorno de divisas</option>
+                                </select>
+                            </div>
+
+                            <!-- Cantidad -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Cantidad</label>
+                                <input type="number" class="form-control form-control-sm" id="step3-cantidad" value="1" min="0.001" step="0.001" oninput="syncStep3Field('cantidad', parseFloat(this.value) || 1)">
+                            </div>
+
+                            <!-- Clave Producto/Servicio SAT -->
+                            <div class="form-group" style="grid-column: span 2;">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Clave Producto / Servicio SAT</label>
+                                <select class="form-control form-control-sm" id="step3-clave-prod" onchange="syncStep3Field('claveProdServ', this.value)">
+                                    <option value="90101501" selected>90101501 — Servicios de regulación y cumplimiento gubernamental</option>
+                                    <option value="90101502">90101502 — Servicios de cumplimiento normativo</option>
+                                    <option value="90101800">90101800 — Servicios de apoyo para el cumplimiento de regulaciones</option>
+                                    <option value="85101500">85101500 — Servicios de salud pública</option>
+                                    <option value="85101700">85101700 — Servicios de inspección sanitaria</option>
+                                    <option value="85121806">85121806 — Servicios de certificación sanitaria</option>
+                                    <option value="80141600">80141600 — Servicios de administración pública</option>
+                                    <option value="80141601">80141601 — Servicios de gobierno</option>
+                                    <option value="93141600">93141600 — Derechos gubernamentales</option>
+                                    <option value="93141601">93141601 — Derechos de licencias y permisos</option>
+                                    <option value="78102200">78102200 — Servicios de apoyo técnico</option>
+                                    <option value="81112200">81112200 — Servicios de consultoría técnica</option>
+                                </select>
+                            </div>
+
+                            <!-- Clave Unidad -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Clave Unidad SAT</label>
+                                <select class="form-control form-control-sm" id="step3-clave-unidad" onchange="syncStep3ClaveUnidad(this.value)">
+                                    <option value="ACT" data-desc="Actividad" selected>ACT — Actividad</option>
+                                    <option value="E48" data-desc="Unidad de servicio">E48 — Unidad de servicio</option>
+                                    <option value="H87" data-desc="Pieza">H87 — Pieza</option>
+                                    <option value="EA"  data-desc="Elemento">EA — Elemento</option>
+                                    <option value="SET" data-desc="Conjunto">SET — Conjunto</option>
+                                    <option value="KT"  data-desc="Kit">KT — Kit</option>
+                                    <option value="HUR" data-desc="Hora">HUR — Hora</option>
+                                    <option value="DAY" data-desc="Día">DAY — Día</option>
+                                    <option value="MON" data-desc="Mes">MON — Mes</option>
+                                    <option value="ANN" data-desc="Año">ANN — Año</option>
+                                    <option value="MTR" data-desc="Metro">MTR — Metro</option>
+                                    <option value="MTK" data-desc="Metro cuadrado">MTK — Metro cuadrado</option>
+                                    <option value="KGM" data-desc="Kilogramo">KGM — Kilogramo</option>
+                                    <option value="LTR" data-desc="Litro">LTR — Litro</option>
+                                    <option value="XBX" data-desc="Caja">XBX — Caja</option>
+                                </select>
+                            </div>
+
+                            <!-- Objeto de Impuesto -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Objeto de Impuesto</label>
+                                <select class="form-control form-control-sm" id="step3-objeto-imp" onchange="syncStep3Field('objetoImp', this.value)">
+                                    <option value="02" selected>02 — Sí objeto de impuesto</option>
+                                    <option value="01">01 — No objeto de impuesto</option>
+                                    <option value="03">03 — Objeto impuesto, no obligado desglose</option>
+                                    <option value="04">04 — Objeto impuesto, no causa impuesto</option>
+                                </select>
+                            </div>
+
+                            <!-- Tipo de Impuesto -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Tipo de Impuesto</label>
+                                <select class="form-control form-control-sm" id="step3-tipo-impuesto" onchange="syncStep3TipoImpuesto(this.value)">
+                                    <option value="IVA" selected>IVA — Impuesto al Valor Agregado</option>
+                                    <option value="IEPS">IEPS — Impuesto Especial sobre Producción y Servicios</option>
+                                    <option value="ISR">ISR — Impuesto sobre la Renta (retención)</option>
+                                </select>
+                            </div>
+
+                            <!-- Tasa del Impuesto -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Tasa del Impuesto</label>
+                                <select class="form-control form-control-sm" id="step3-tasa-impuesto" onchange="syncStep3Field('tasaImpuesto', parseFloat(this.value))">
+                                    <option value="0.16" selected>16% — Tasa general IVA</option>
+                                    <option value="0.08">8% — Tasa frontera IVA</option>
+                                    <option value="0.00">0% — Tasa cero IVA</option>
+                                    <option value="0.10">10% — ISR retención</option>
+                                    <option value="0.0125">1.25% — IEPS</option>
+                                    <option value="0.03">3% — IEPS</option>
+                                    <option value="0.06">6% — IEPS</option>
+                                    <option value="0.265">26.5% — IEPS</option>
+                                </select>
+                            </div>
+
+                            <!-- Retención -->
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">¿Es Retención?</label>
+                                <select class="form-control form-control-sm" id="step3-retencion" onchange="syncStep3Field('esRetencion', this.value === 'true')">
+                                    <option value="false" selected>No — Impuesto trasladado</option>
+                                    <option value="true">Sí — Impuesto retenido</option>
+                                </select>
+                            </div>
+
+                        </div>
+                    </details>
+
                     <div class="btn-container" style="justify-content: space-between; border-top: none; padding-top: 5px;">
                         <button class="btn btn-secondary" onclick="goToStep(2)" style="padding: 10px 24px; border-radius: 4px; font-weight: 500;">&larr; Regresar a Extracción</button>
                         <button class="btn btn-primary" onclick="proceedToStep4()" style="background-color: var(--primary-color); padding: 10px 24px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
