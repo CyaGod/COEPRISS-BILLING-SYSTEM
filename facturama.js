@@ -242,19 +242,21 @@ function buildCFDIPayload(expediente) {
     const paymentForm = normalizeSatFormaPago(expediente.cfdiFormaPago || expediente.formaPago) || FORMA_PAGO;
     const paymentMethod = normalizeSatMetodoPago(expediente.cfdiMetodoPago || expediente.metodoPago) || METODO_PAGO;
 
-    // Campos avanzados — se usan los del expediente si el usuario los cambió, o los defaults del sistema
-    const exportacion   = expediente.exportacion   || '01';
-    const moneda        = expediente.cfdiMoneda     || expediente.moneda    || MONEDA;
-    const cantidad      = parseFloat(expediente.cantidad  || 1);
-    const claveProd     = expediente.claveProdServ  || '90101501';
-    const claveUnidad   = expediente.claveUnidad    || 'ACT';
-    const unidad        = expediente.unidad         || 'Actividad';
-    const objetoImp     = expediente.objetoImp      || '02';
-    const tipoImpuesto  = expediente.tipoImpuesto   || 'IVA';
-    const tasa          = (expediente.tasaImpuesto !== undefined && expediente.tasaImpuesto !== null)
-                            ? parseFloat(expediente.tasaImpuesto)
-                            : 0.16;
-    const esRetencion   = expediente.esRetencion    || false;
+    // Campos avanzados — primero busca el nombre de BD (cfdi-prefijo), luego el del frontend (sin prefijo)
+    const exportacion   = expediente.cfdiExportacion  || expediente.exportacion   || '01';
+    const moneda        = expediente.cfdiMoneda        || expediente.moneda        || MONEDA;
+    const cantidad      = parseFloat(expediente.cfdiCantidad   ?? expediente.cantidad   ?? 1);
+    const claveProd     = expediente.cfdiClaveProdServ || expediente.claveProdServ || '90101501';
+    const claveUnidad   = expediente.cfdiClaveUnidad   || expediente.claveUnidad   || 'ACT';
+    const unidad        = expediente.cfdiUnidad        || expediente.unidad        || 'Actividad';
+    const objetoImp     = expediente.cfdiObjetoImp     || expediente.objetoImp     || '02';
+    const tipoImpuesto  = expediente.cfdiTipoImpuesto  || expediente.tipoImpuesto  || 'IVA';
+    const tasa          = (expediente.cfdiTasaImpuesto != null)
+                            ? parseFloat(expediente.cfdiTasaImpuesto)
+                            : (expediente.tasaImpuesto != null)
+                                ? parseFloat(expediente.tasaImpuesto)
+                                : 0.16;
+    const esRetencion   = expediente.cfdiEsRetencion  ?? expediente.esRetencion   ?? false;
 
     // Cálculo fiscal: IVA = totalBruto - subtotal para que siempre cuadre exactamente
     const precioUnitario = parseFloat((totalBruto / (1 + tasa) / cantidad).toFixed(6));

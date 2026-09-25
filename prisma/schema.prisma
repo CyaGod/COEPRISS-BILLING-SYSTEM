@@ -153,6 +153,18 @@ model Expediente {
   cfdiCertificado     String?             @db.VarChar(30)
   cfdiNoCertificado   String?             @db.VarChar(30)
 
+  // Campos avanzados del comprobante (editables en Paso 3)
+  cfdiExportacion     String?             @db.VarChar(2)   @default("01")
+  cfdiClaveProdServ   String?             @db.VarChar(20)  @default("90101501")
+  cfdiClaveUnidad     String?             @db.VarChar(10)  @default("ACT")
+  cfdiUnidad          String?             @db.VarChar(100) @default("Actividad")
+  cfdiCantidad        Decimal?            @db.Decimal(15, 6) @default(1)
+  cfdiObjetoImp       String?             @db.VarChar(2)   @default("02")
+  cfdiTipoImpuesto    String?             @db.VarChar(10)  @default("IVA")
+  cfdiTasaImpuesto    Decimal?            @db.Decimal(8, 6) @default(0.160000)
+  cfdiEsRetencion     Boolean?            @default(false)
+
+
   // Datos del pago
   pagoMonto           Decimal?            @db.Decimal(15, 2)
   pagoFecha           String?             @db.VarChar(30)
