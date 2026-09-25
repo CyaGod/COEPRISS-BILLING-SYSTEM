@@ -3040,6 +3040,16 @@ function updateStep3UIFromActiveExpediente() {
     }
     updateStep3Summary(totalVal);
 
+    // Inicializar campos avanzados con valores del expediente (si los tienen)
+    const claveProdInput = document.getElementById('step3-clave-prod');
+    if (claveProdInput && d.claveProdServ) {
+        claveProdInput.value = d.claveProdServ;
+    }
+    const cantidadInput = document.getElementById('step3-cantidad');
+    if (cantidadInput && d.cantidad != null) {
+        cantidadInput.value = d.cantidad;
+    }
+
     // Verificar si ya existe en clientes del directorio institucional (SOLO mostrar badge si existe, SIN sobreescribir los datos actuales del expediente)
     if (d.rfc) {
         buscarClientePorRfc(d.rfc, false, false);
@@ -3179,7 +3189,7 @@ async function proceedToStep4() {
     d.moneda        = document.getElementById('step3-moneda')?.value        || d.moneda        || 'MXN';
     d.exportacion   = document.getElementById('step3-exportacion')?.value   || d.exportacion   || '01';
     d.cantidad      = parseFloat(document.getElementById('step3-cantidad')?.value  || d.cantidad  || 1);
-    d.claveProdServ = document.getElementById('step3-clave-prod')?.value    || d.claveProdServ || '90101501';
+    d.claveProdServ = (document.getElementById('step3-clave-prod')?.value || '').split(' ')[0].trim() || d.claveProdServ || '90101501';
     d.claveUnidad   = document.getElementById('step3-clave-unidad')?.value  || d.claveUnidad   || 'ACT';
     d.unidad        = document.getElementById('step3-clave-unidad')?.selectedOptions[0]?.dataset?.desc || d.unidad || 'Actividad';
     d.objetoImp     = document.getElementById('step3-objeto-imp')?.value    || d.objetoImp     || '02';
