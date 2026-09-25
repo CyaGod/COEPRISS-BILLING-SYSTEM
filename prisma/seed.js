@@ -139,6 +139,32 @@ async function main() {
         }
     });
 
+    // Sincronizar clientes cuyo nombre legal oficial contenga comas en expedientes
+    try {
+        const expedientesConComa = await prisma.expediente.findMany({
+            where: {
+                receptorRfc: { not: null },
+                receptorNombre: { contains: ',' }
+            },
+            select: { receptorRfc: true, receptorNombre: true },
+            orderBy: { updatedAt: 'desc' }
+        });
+        for (const exp of expedientesConComa) {
+            if (!exp.receptorRfc || !exp.receptorNombre) continue;
+            const rfcNorm = exp.receptorRfc.toUpperCase().trim();
+            const cliente = await prisma.cliente.findUnique({ where: { rfc: rfcNorm } });
+            if (cliente && !cliente.razonSocial.includes(',')) {
+                await prisma.cliente.update({
+                    where: { rfc: rfcNorm },
+                    data: { razonSocial: exp.receptorNombre.trim() }
+                });
+                console.log(`[SEED/SYNC] ✓ Restaurada coma en Directorio para ${rfcNorm}: "${cliente.razonSocial}" -> "${exp.receptorNombre.trim()}"`);
+            }
+        }
+    } catch (e) {
+        console.warn('[SEED/SYNC WARN]', e.message);
+    }
+
     console.log('✅ Seed completado:');
     console.log(`   - Rol Admin creado (id: ${rolAdmin.id})`);
     console.log(`   - Rol Auditor creado (id: ${rolAuditor.id})`);

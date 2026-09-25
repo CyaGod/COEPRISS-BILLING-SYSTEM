@@ -2221,6 +2221,40 @@ async function vaciarFacturasYExpedientesPrueba() {
     }
 }
 
+async function syncClientesNombresConComas() {
+    try {
+        const expedientesConComa = await prisma.expediente.findMany({
+            where: {
+                receptorRfc: { not: null },
+                receptorNombre: { contains: ',' }
+            },
+            select: {
+                receptorRfc: true,
+                receptorNombre: true
+            },
+            orderBy: { updatedAt: 'desc' }
+        });
+
+        if (expedientesConComa.length === 0) return;
+
+        console.log(`[SYNC CLIENTES] Revisando ${expedientesConComa.length} expedientes con comas para asegurar consistencia en Directorio...`);
+        for (const exp of expedientesConComa) {
+            if (!exp.receptorRfc || !exp.receptorNombre) continue;
+            const rfcNorm = exp.receptorRfc.toUpperCase().trim();
+            const cliente = await prisma.cliente.findUnique({ where: { rfc: rfcNorm } });
+            if (cliente && !cliente.razonSocial.includes(',')) {
+                await prisma.cliente.update({
+                    where: { rfc: rfcNorm },
+                    data: { razonSocial: exp.receptorNombre.trim() }
+                });
+                console.log(`[SYNC CLIENTES] ✓ Restaurada coma en Directorio para ${rfcNorm}: "${cliente.razonSocial}" -> "${exp.receptorNombre.trim()}"`);
+            }
+        }
+    } catch (e) {
+        console.warn('[SYNC CLIENTES ERROR]', e.message);
+    }
+}
+
 async function startServer() {
     if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') {
         try {
@@ -2228,6 +2262,11 @@ async function startServer() {
             dbEngine = 'PostgreSQL (Render)';
             console.log('✅ Base de Datos PostgreSQL conectada correctamente en Render.');
             await autoSeedDatabase();
+            
+            // Sincronización curativa: Si algún cliente en el Directorio quedó sin coma pero en algún expediente/registro
+            // su nombre oficial fue capturado con coma, restaurar el nombre completo con coma en el Directorio.
+            await syncClientesNombresConComas();
+
             // Limpieza preventiva de expedientes huérfanos que hayan quedado como PENDIENTE sin timbrar
             await prisma.expediente.deleteMany({
                 where: {
