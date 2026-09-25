@@ -919,21 +919,126 @@
 
                             <!-- Clave Producto/Servicio SAT -->
                             <div class="form-group" style="grid-column: span 2;">
-                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">Clave Producto / Servicio SAT</label>
-                                <select class="form-control form-control-sm" id="step3-clave-prod" onchange="syncStep3Field('claveProdServ', this.value)">
-                                    <option value="90101501" selected>90101501 — Servicios de regulación y cumplimiento gubernamental</option>
+                                <label class="form-label" style="font-size: 0.75rem; font-weight: 700; color: #333;">
+                                    Clave Producto / Servicio SAT
+                                    <span style="font-weight:400; color:#6c757d;">(escribe el código o busca por nombre)</span>
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="step3-clave-prod"
+                                    list="datalist-clave-prod"
+                                    value="90101501"
+                                    placeholder="Ej: 90101501 o escribe la descripción..."
+                                    oninput="syncStep3Field('claveProdServ', this.value.split(' ')[0].trim())"
+                                    style="font-family: monospace;">
+                                <datalist id="datalist-clave-prod">
+                                    <!-- GOBIERNO Y ADMINISTRACIÓN PÚBLICA -->
+                                    <option value="90101501">90101501 — Servicios de regulación y cumplimiento gubernamental</option>
                                     <option value="90101502">90101502 — Servicios de cumplimiento normativo</option>
+                                    <option value="90101503">90101503 — Servicios de licencias y permisos gubernamentales</option>
+                                    <option value="90101504">90101504 — Servicios de inspección y certificación gubernamental</option>
                                     <option value="90101800">90101800 — Servicios de apoyo para el cumplimiento de regulaciones</option>
-                                    <option value="85101500">85101500 — Servicios de salud pública</option>
-                                    <option value="85101700">85101700 — Servicios de inspección sanitaria</option>
-                                    <option value="85121806">85121806 — Servicios de certificación sanitaria</option>
-                                    <option value="80141600">80141600 — Servicios de administración pública</option>
-                                    <option value="80141601">80141601 — Servicios de gobierno</option>
+                                    <option value="90102300">90102300 — Servicios de protección pública y seguridad</option>
+                                    <option value="90111500">90111500 — Servicios de bienestar social</option>
                                     <option value="93141600">93141600 — Derechos gubernamentales</option>
                                     <option value="93141601">93141601 — Derechos de licencias y permisos</option>
-                                    <option value="78102200">78102200 — Servicios de apoyo técnico</option>
+                                    <option value="93141602">93141602 — Derechos de registro</option>
+                                    <option value="93141603">93141603 — Derechos de certificación</option>
+                                    <option value="93141604">93141604 — Derechos de inspección</option>
+                                    <option value="80141600">80141600 — Servicios de administración pública</option>
+                                    <option value="80141601">80141601 — Servicios de gobierno</option>
+                                    <option value="80141602">80141602 — Servicios de política y planeación gubernamental</option>
+                                    <!-- SALUD Y SERVICIOS SANITARIOS -->
+                                    <option value="85101500">85101500 — Servicios de salud pública</option>
+                                    <option value="85101501">85101501 — Servicios de salud preventiva</option>
+                                    <option value="85101502">85101502 — Servicios de medicina general</option>
+                                    <option value="85101700">85101700 — Servicios de inspección sanitaria</option>
+                                    <option value="85101800">85101800 — Servicios de epidemiología</option>
+                                    <option value="85101900">85101900 — Servicios de control de enfermedades</option>
+                                    <option value="85121500">85121500 — Servicios de análisis clínico</option>
+                                    <option value="85121806">85121806 — Servicios de certificación sanitaria</option>
+                                    <option value="85122000">85122000 — Servicios de laboratorio clínico</option>
+                                    <option value="85141500">85141500 — Servicios de administración de salud</option>
+                                    <option value="85151500">85151500 — Servicios de farmacia</option>
+                                    <option value="85161500">85161500 — Servicios de nutrición</option>
+                                    <!-- EDUCACIÓN Y CAPACITACIÓN -->
+                                    <option value="86101500">86101500 — Servicios de enseñanza y entrenamiento</option>
+                                    <option value="86101600">86101600 — Servicios de capacitación técnica y profesional</option>
+                                    <option value="86101700">86101700 — Servicios de capacitación vocacional no-científica</option>
+                                    <option value="86101800">86101800 — Servicios de educación especial</option>
+                                    <option value="86102000">86102000 — Servicios de educación continua</option>
+                                    <option value="86111500">86111500 — Servicios de evaluación educativa</option>
+                                    <option value="86121500">86121500 — Servicios de orientación educativa</option>
+                                    <option value="86131500">86131500 — Servicios de educación primaria</option>
+                                    <option value="86131600">86131600 — Servicios de enseñanza superior</option>
+                                    <option value="86131700">86131700 — Servicios de educación de posgrado</option>
+                                    <option value="86140000">86140000 — Servicios de apoyo a la educación</option>
+                                    <!-- RECURSOS HUMANOS -->
+                                    <option value="80111500">80111500 — Desarrollo de recursos humanos</option>
+                                    <option value="80111501">80111501 — Servicios de capacitación y desarrollo de personal</option>
+                                    <option value="80111502">80111502 — Servicios de evaluación de personal</option>
+                                    <option value="80111503">80111503 — Servicios de reclutamiento y selección</option>
+                                    <option value="80111504">80111504 — Servicios de gestión del desempeño</option>
+                                    <option value="80111600">80111600 — Servicios de compensación y beneficios</option>
+                                    <option value="80131500">80131500 — Servicios de nómina</option>
+                                    <!-- CONSULTORÍA Y SERVICIOS PROFESIONALES -->
                                     <option value="81112200">81112200 — Servicios de consultoría técnica</option>
-                                </select>
+                                    <option value="81112201">81112201 — Servicios de asesoría especializada</option>
+                                    <option value="81112202">81112202 — Servicios de consultoría en gestión</option>
+                                    <option value="81141600">81141600 — Servicios de consultoría de gestión</option>
+                                    <option value="81141700">81141700 — Servicios de consultoría de procesos</option>
+                                    <option value="81141800">81141800 — Servicios de consultoría organizacional</option>
+                                    <option value="81161500">81161500 — Servicios de consultoría ambiental</option>
+                                    <option value="81161600">81161600 — Servicios de auditoría ambiental</option>
+                                    <!-- TECNOLOGÍAS DE INFORMACIÓN -->
+                                    <option value="81111500">81111500 — Servicios de tecnología de la información</option>
+                                    <option value="81111501">81111501 — Servicios de desarrollo de software</option>
+                                    <option value="81111502">81111502 — Servicios de mantenimiento de software</option>
+                                    <option value="81111600">81111600 — Servicios de soporte técnico</option>
+                                    <option value="81111700">81111700 — Servicios de redes y comunicaciones</option>
+                                    <option value="81121500">81121500 — Servicios de internet</option>
+                                    <option value="81161900">81161900 — Servicios de base de datos</option>
+                                    <option value="81162000">81162000 — Servicios de seguridad informática</option>
+                                    <!-- SERVICIOS JURÍDICOS -->
+                                    <option value="80111700">80111700 — Servicios jurídicos</option>
+                                    <option value="80111701">80111701 — Servicios de representación legal</option>
+                                    <option value="80111702">80111702 — Servicios notariales</option>
+                                    <option value="80111703">80111703 — Servicios de arbitraje y mediación</option>
+                                    <!-- SERVICIOS FINANCIEROS Y CONTABLES -->
+                                    <option value="84131500">84131500 — Servicios de contabilidad</option>
+                                    <option value="84131501">84131501 — Servicios de auditoría</option>
+                                    <option value="84131502">84131502 — Servicios de contabilidad fiscal</option>
+                                    <option value="84121700">84121700 — Servicios financieros</option>
+                                    <option value="84101500">84101500 — Servicios bancarios</option>
+                                    <!-- SERVICIOS DE APOYO ADMINISTRATIVO -->
+                                    <option value="78102200">78102200 — Servicios de apoyo técnico</option>
+                                    <option value="78121500">78121500 — Servicios de apoyo administrativo</option>
+                                    <option value="78131600">78131600 — Servicios de archivo y gestión documental</option>
+                                    <option value="78141500">78141500 — Servicios de traducción e interpretación</option>
+                                    <!-- INGENIERÍA Y ARQUITECTURA -->
+                                    <option value="71101500">71101500 — Servicios de ingeniería</option>
+                                    <option value="71101501">71101501 — Servicios de ingeniería civil</option>
+                                    <option value="71101502">71101502 — Servicios de ingeniería industrial</option>
+                                    <option value="71141500">71141500 — Servicios de arquitectura</option>
+                                    <option value="71141501">71141501 — Servicios de diseño arquitectónico</option>
+                                    <option value="71151500">71151500 — Servicios de planificación urbana</option>
+                                    <!-- INVESTIGACIÓN Y DESARROLLO -->
+                                    <option value="73111700">73111700 — Investigación y desarrollo científico</option>
+                                    <option value="73131500">73131500 — Investigación aplicada</option>
+                                    <option value="73141500">73141500 — Servicios de investigación de mercados</option>
+                                    <!-- SERVICIOS GENERALES Y MANTENIMIENTO -->
+                                    <option value="76111500">76111500 — Servicios de limpieza y mantenimiento</option>
+                                    <option value="76111501">76111501 — Servicios de mantenimiento de instalaciones</option>
+                                    <option value="76141500">76141500 — Servicios de seguridad</option>
+                                    <option value="76141501">76141501 — Servicios de vigilancia</option>
+                                    <!-- COMUNICACIONES Y MEDIOS -->
+                                    <option value="82101500">82101500 — Servicios de publicidad</option>
+                                    <option value="82101501">82101501 — Servicios de diseño gráfico</option>
+                                    <option value="82111500">82111500 — Servicios de relaciones públicas</option>
+                                    <option value="82141600">82141600 — Servicios de imprenta y reproducción</option>
+                                    <!-- TRANSPORTE Y LOGÍSTICA -->
+                                    <option value="78101500">78101500 — Servicios de transporte de carga</option>
+                                    <option value="78101600">78101600 — Servicios de mensajería y paquetería</option>
+                                    <option value="78131500">78131500 — Servicios de almacenamiento</option>
+                                </datalist>
                             </div>
 
                             <!-- Clave Unidad -->
