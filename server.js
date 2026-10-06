@@ -380,7 +380,9 @@ app.get('/api/facturas', autenticarToken, apiLimiter, async (req, res) => {
                 { uuid: { contains: b, mode: 'insensitive' } },
                 { expediente: { receptorNombre: { contains: b, mode: 'insensitive' } } },
                 { expediente: { receptorRfc: { contains: b, mode: 'insensitive' } } },
-                { expediente: { folio: { contains: b, mode: 'insensitive' } } }
+                { expediente: { folio: { contains: b, mode: 'insensitive' } } },
+                { expediente: { folioRecibo: { contains: b, mode: 'insensitive' } } },
+                { expediente: { pagoReferencia: { contains: b, mode: 'insensitive' } } }
             ];
         }
 
@@ -395,6 +397,8 @@ app.get('/api/facturas', autenticarToken, apiLimiter, async (req, res) => {
                     expediente: {
                         select: {
                             folio: true,
+                            folioRecibo: true,
+                            pagoReferencia: true,
                             receptorNombre: true,
                             receptorRfc: true,
                             receptorEmail: true,
@@ -1151,6 +1155,8 @@ app.get('/api/reportes/excel', autenticarToken, async (req, res) => {
             const b = busqueda.trim();
             const searchConditions = [
                 { folio: { contains: b, mode: 'insensitive' } },
+                { folioRecibo: { contains: b, mode: 'insensitive' } },
+                { pagoReferencia: { contains: b, mode: 'insensitive' } },
                 { receptorNombre: { contains: b, mode: 'insensitive' } },
                 { receptorRfc: { contains: b, mode: 'insensitive' } },
                 { cfdiUuid: { contains: b, mode: 'insensitive' } },

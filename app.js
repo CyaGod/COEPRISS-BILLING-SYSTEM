@@ -4093,6 +4093,7 @@ function getFilteredInvoicesList() {
 
     return list.filter(f => {
         const folio = f.folioInterno || f.folio || '';
+        const folioRecibo = f.folioRecibo || f.referencia || f.pagoReferencia || '';
         const uuid = f.uuid || f.cfdiUuid || '';
         const cliente = f.cliente || f.receptorNombre || '';
         const rfc = f.rfc || f.receptorRfc || '';
@@ -4103,7 +4104,7 @@ function getFilteredInvoicesList() {
         const isCancelada = estatus === 'CANCELADA' || estatus === 'CANCELADO';
 
         // 1. Filtro por texto
-        const matchText = !busqueda || [folio, uuid, cliente, rfc, concepto].some(val => (val || '').toLowerCase().includes(busqueda));
+        const matchText = !busqueda || [folio, folioRecibo, uuid, cliente, rfc, concepto].some(val => (val || '').toLowerCase().includes(busqueda));
 
         // 2. Filtro por estatus
         let matchEstatus = false;
@@ -4167,6 +4168,7 @@ function filterReportTable() {
 
     filteredList.forEach(f => {
         const folio = f.folioInterno || f.folio || '';
+        const folioRecibo = f.folioRecibo || f.referencia || f.pagoReferencia || '';
         const uuid = f.uuid || f.cfdiUuid || '';
         const cliente = f.cliente || f.receptorNombre || '';
         const rfc = f.rfc || f.receptorRfc || '';
@@ -4185,7 +4187,10 @@ function filterReportTable() {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td style="font-weight:700;color:#1B365D;">${folio}</td>
+            <td style="font-weight:700;color:#1B365D;">
+                ${folio}
+                ${folioRecibo ? `<div style="font-size:0.72rem;font-weight:600;color:#6c757d;margin-top:2px;">Recibo: ${folioRecibo}</div>` : ''}
+            </td>
             <td style="font-family:monospace;font-size:0.75rem;color:#495057;">${uuid ? uuid.substring(0, 18) + '...' : '—'}</td>
             <td class="col-cliente">${cliente}</td>
             <td style="font-family:monospace;font-weight:600;">${rfc}</td>
